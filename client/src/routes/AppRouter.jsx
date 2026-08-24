@@ -33,6 +33,7 @@ const ManageOrders = lazy(() => import('../pages/admin/ManageOrders'));
 const ManageBanners = lazy(() => import('../pages/admin/ManageBanners'));
 const ManageSubjects = lazy(() => import('../pages/admin/ManageSubjects'));
 const ManageChapters = lazy(() => import('../pages/admin/ManageChapters'));
+const ManageClasses = lazy(() => import('../pages/admin/ManageClasses'));
 
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
 
@@ -75,6 +76,7 @@ const AppRouter = () => {
           <Route path="banners" element={<ManageBanners />} />
           <Route path="subjects" element={<ManageSubjects />} />
           <Route path="chapters" element={<ManageChapters />} />
+          <Route path="classes" element={<ManageClasses />} />
         </Route>
 
         <Route path="*" element={<PublicLayout><NotFoundPage /></PublicLayout>} />

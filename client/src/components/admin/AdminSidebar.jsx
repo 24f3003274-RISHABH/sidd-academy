@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { FiGrid, FiBook, FiList, FiFileText, FiUsers, FiDollarSign, FiImage, FiLogOut, FiFolder } from 'react-icons/fi';
+import { FiGrid, FiBook, FiList, FiFileText, FiUsers, FiDollarSign, FiImage, FiLogOut, FiFolder, FiVideo } from 'react-icons/fi';
 
 const AdminSidebar = () => {
   const { logout } = useAuth();
@@ -17,10 +17,11 @@ const AdminSidebar = () => {
     { name: 'Courses', path: '/admin/courses', icon: <FiBook /> },
     { name: 'Subjects', path: '/admin/subjects', icon: <FiFolder /> },
     { name: 'Chapters', path: '/admin/chapters', icon: <FiList /> },
-    { name: 'Notes', path: '/admin/notes', icon: <FiFileText /> },
+    { name: 'Video Lectures', path: '/admin/classes', icon: <FiVideo /> },
+    { name: 'Notes & PDFs', path: '/admin/notes', icon: <FiFileText /> },
+    { name: 'Banners', path: '/admin/banners', icon: <FiImage /> },
     { name: 'Users', path: '/admin/users', icon: <FiUsers /> },
     { name: 'Orders', path: '/admin/orders', icon: <FiDollarSign /> },
-    { name: 'Banners', path: '/admin/banners', icon: <FiImage /> },
   ];
 
   return (

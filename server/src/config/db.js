@@ -22,16 +22,17 @@ const connectDB = async () => {
       if (userCount === 0) {
         console.log('🌱 [Sidd Academy] Seeding initial Admin & Student users to MongoDB...');
         for (const u of mockData.users) {
+          const rawPassword = u.email === 'admin@siddacademy.com' ? 'admin123' : 'password123';
           await User.create({
             name: u.name,
             email: u.email,
-            password: u.password,
-            role: u.role,
+            password: rawPassword,
+            role: u.role === 'user' ? 'student' : u.role,
             phone: u.phone,
             avatar: u.avatar,
             isActive: u.isActive,
-            purchasedCourses: u.purchasedCourses,
-            purchasedNotes: u.purchasedNotes,
+            purchasedCourses: [],
+            purchasedNotes: [],
           });
         }
       }

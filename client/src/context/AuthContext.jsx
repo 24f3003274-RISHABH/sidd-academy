@@ -12,14 +12,25 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('siddToken');
-      if (token) {
+      if (token && token !== 'undefined' && token !== 'null') {
         try {
           const res = await getMe();
-          setUser(res.data.user || res.data); // depends on backend response
-          setIsAuthenticated(true);
+          const userData = res.data?.data?.user || res.data?.user || res.data;
+          if (userData && (userData.id || userData._id || userData.email)) {
+            setUser(userData);
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem('siddToken');
+            setUser(null);
+            setIsAuthenticated(false);
+          }
         } catch (error) {
           localStorage.removeItem('siddToken');
+          setUser(null);
+          setIsAuthenticated(false);
         }
+      } else {
+        localStorage.removeItem('siddToken');
       }
       setIsLoading(false);
     };
@@ -28,18 +39,28 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const res = await apiLogin(credentials);
-    localStorage.setItem('siddToken', res.data.token);
-    setUser(res.data.user);
+    const payload = res.data?.data || res.data;
+    const token = payload?.token;
+    const userData = payload?.user;
+    if (token) {
+      localStorage.setItem('siddToken', token);
+    }
+    setUser(userData);
     setIsAuthenticated(true);
-    return res.data;
+    return payload;
   };
 
   const register = async (data) => {
     const res = await apiRegister(data);
-    localStorage.setItem('siddToken', res.data.token);
-    setUser(res.data.user);
+    const payload = res.data?.data || res.data;
+    const token = payload?.token;
+    const userData = payload?.user;
+    if (token) {
+      localStorage.setItem('siddToken', token);
+    }
+    setUser(userData);
     setIsAuthenticated(true);
-    return res.data;
+    return payload;
   };
 
   const logout = async () => {

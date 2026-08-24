@@ -11,17 +11,31 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
     setLoading(true);
     try {
-      await register({ name: formData.name, email: formData.email, phone: formData.phone, password: formData.password });
-      toast.success('Registration successful');
-      navigate('/student/dashboard');
+      const data = await register({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+      });
+      toast.success('Registration successful! Welcome to Sidd Academy.');
+      if (data?.user?.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/student/dashboard');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
+      const msg = err.response?.data?.message || err.message || 'Registration failed';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

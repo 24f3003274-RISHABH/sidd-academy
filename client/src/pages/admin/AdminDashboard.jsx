@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getDashboardStats, getAllOrders } from '../../api/adminApi';
 import Loader from '../../components/common/Loader';
 import { formatPrice, formatDate } from '../../utils/helpers';
-import { FiUsers, FiDollarSign, FiBook, FiFileText } from 'react-icons/fi';
+import { FiUsers, FiDollarSign, FiBook, FiFileText, FiVideo, FiImage, FiFolder, FiList, FiArrowRight } from 'react-icons/fi';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
@@ -42,7 +43,76 @@ const AdminDashboard = () => {
 
   return (
     <div>
-      <h1 style={{ marginBottom: '2rem' }}>Dashboard Overview</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: 0 }}>Admin Dashboard</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0.25rem 0 0 0' }}>
+            Logged in as <strong>admin@siddacademy.com</strong> • Full control over Courses, Banners, YouTube Lectures & Notes
+          </p>
+        </div>
+        <Link to="/" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          View Live Website <FiArrowRight />
+        </Link>
+      </div>
+
+      {/* Quick Action Hub */}
+      <div className="grid-4" style={{ marginBottom: '2.5rem' }}>
+        <Link 
+          to="/admin/banners" 
+          className="card-glass" 
+          style={{ padding: '1.25rem', borderRadius: '12px', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid rgba(255, 101, 132, 0.2)', transition: 'transform 0.2s' }}
+        >
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(255, 101, 132, 0.15)', borderRadius: '10px', color: '#ff6584' }}>
+            <FiImage size={24} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Course Banners</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Add/Remove sliders</div>
+          </div>
+        </Link>
+
+        <Link 
+          to="/admin/classes" 
+          className="card-glass" 
+          style={{ padding: '1.25rem', borderRadius: '12px', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid rgba(255, 0, 0, 0.2)', transition: 'transform 0.2s' }}
+        >
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(255, 0, 0, 0.15)', borderRadius: '10px', color: '#ff4d4d' }}>
+            <FiVideo size={24} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>YouTube Lectures</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>@A2CCENTRE Videos</div>
+          </div>
+        </Link>
+
+        <Link 
+          to="/admin/notes" 
+          className="card-glass" 
+          style={{ padding: '1.25rem', borderRadius: '12px', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid rgba(255, 215, 0, 0.2)', transition: 'transform 0.2s' }}
+        >
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(255, 215, 0, 0.15)', borderRadius: '10px', color: '#ffd700' }}>
+            <FiFileText size={24} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Notes & PDFs</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Modular PDFs library</div>
+          </div>
+        </Link>
+
+        <Link 
+          to="/admin/courses" 
+          className="card-glass" 
+          style={{ padding: '1.25rem', borderRadius: '12px', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid rgba(108, 99, 255, 0.2)', transition: 'transform 0.2s' }}
+        >
+          <div style={{ padding: '0.75rem', backgroundColor: 'rgba(108, 99, 255, 0.15)', borderRadius: '10px', color: '#6c63ff' }}>
+            <FiBook size={24} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Manage Courses</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Classes & Subjects</div>
+          </div>
+        </Link>
+      </div>
       
       <div className="grid-4" style={{ marginBottom: '3rem' }}>
         <div className="stat-card" style={{ backgroundColor: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>

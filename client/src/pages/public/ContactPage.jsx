@@ -53,11 +53,11 @@ const ContactPage = () => {
             </div>
             <div>
               <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Phone</h4>
-              <p>+91 9876543210</p>
+              <p>+91 8756940318</p>
             </div>
             <div>
               <h4 style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Address</h4>
-              <p>123 Education Hub, New Delhi, India 110001</p>
+              <p>Rajapur, Prayagraj, U.P., India, 100002</p>
             </div>
           </div>
           

@@ -14,16 +14,19 @@ const createTransporter = () => {
 
 export const sendWelcomeEmail = async (to, name) => {
   try {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return; // Skip email silently in development or when SMTP is not configured
+    }
     const transporter = createTransporter();
     await transporter.sendMail({
-      from: `"${process.env.FROM_NAME || 'Sidd Academy'}" <${process.env.FROM_EMAIL}>`,
+      from: `"${process.env.FROM_NAME || 'Sidd Academy'}" <${process.env.FROM_EMAIL || 'no-reply@siddacademy.com'}>`,
       to,
       subject: 'Welcome to Sidd Academy!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 32px; border-radius: 12px;">
           <h1 style="color: #6c63ff; margin-bottom: 8px;">Welcome to Sidd Academy!</h1>
           <p style="color: #333; font-size: 16px;">Hi ${name}, your account is ready. Start learning today!</p>
-          <a href="${process.env.CLIENT_URL}/courses"
+          <a href="${process.env.CLIENT_URL || ''}/courses"
              style="display: inline-block; margin-top: 20px; background: #6c63ff; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             Browse Courses
           </a>
@@ -31,16 +34,19 @@ export const sendWelcomeEmail = async (to, name) => {
       `,
     });
   } catch (err) {
-    console.error('Email send failed:', err.message);
+    console.warn('Email send skipped/failed:', err.message);
   }
 };
 
 export const sendPurchaseConfirmation = async (to, name, items, total) => {
   try {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return;
+    }
     const transporter = createTransporter();
     const itemList = items.map(i => `<li style="padding: 4px 0;">${i.title} — ₹${i.price}</li>`).join('');
     await transporter.sendMail({
-      from: `"${process.env.FROM_NAME || 'Sidd Academy'}" <${process.env.FROM_EMAIL}>`,
+      from: `"${process.env.FROM_NAME || 'Sidd Academy'}" <${process.env.FROM_EMAIL || 'no-reply@siddacademy.com'}>`,
       to,
       subject: 'Purchase Successful — Sidd Academy',
       html: `
@@ -50,7 +56,7 @@ export const sendPurchaseConfirmation = async (to, name, items, total) => {
           <h3 style="margin-top: 20px;">Items Purchased:</h3>
           <ul style="padding-left: 20px; color: #555;">${itemList}</ul>
           <p style="font-weight: bold; font-size: 18px; margin-top: 16px;">Total: ₹${total}</p>
-          <a href="${process.env.CLIENT_URL}/student/dashboard"
+          <a href="${process.env.CLIENT_URL || ''}/student/dashboard"
              style="display: inline-block; margin-top: 20px; background: #6c63ff; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             Access Your Content
           </a>
@@ -58,6 +64,6 @@ export const sendPurchaseConfirmation = async (to, name, items, total) => {
       `,
     });
   } catch (err) {
-    console.error('Email send failed:', err.message);
+    console.warn('Email send skipped/failed:', err.message);
   }
 };

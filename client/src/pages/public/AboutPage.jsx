@@ -50,7 +50,7 @@ const AboutPage = () => {
           <h2 style={{ marginBottom: '3rem' }}>Meet the Founder</h2>
           <div style={{ display: 'inline-block', textAlign: 'center' }}>
             <img src="https://via.placeholder.com/150" alt="Founder" style={{ width: '150px', height: '150px', borderRadius: '50%', marginBottom: '1rem', border: '4px solid var(--primary)' }} />
-            <h3 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Siddharth</h3>
+            <h3 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Siddhant Pandey</h3>
             <p style={{ color: 'var(--text-muted)' }}>Founder & Lead Educator</p>
             <p style={{ maxWidth: '600px', margin: '1rem auto 0 auto', color: 'var(--text-muted)' }}>With over 10 years of experience in education, Siddharth founded Sidd Academy to bring high-quality learning resources to students everywhere.</p>
           </div>

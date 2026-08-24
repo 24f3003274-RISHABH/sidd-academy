@@ -10,6 +10,10 @@ const bannerSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    badge: {
+      type: String,
+      default: '',
+    },
     imageUrl: {
       type: String,
       default: '',
