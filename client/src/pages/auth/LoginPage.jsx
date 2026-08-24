@@ -21,15 +21,16 @@ const LoginPage = () => {
     }
     setLoading(true);
     try {
-      const data = await login({ email, password });
-      toast.success('Login successful');
+      const data = await login({ email: email.trim(), password: password.trim() });
+      toast.success('Login successful! Welcome back.');
       if (data?.user?.role === 'admin') {
         navigate('/admin/dashboard');
       } else {
         navigate(from);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      const msg = err.response?.data?.message || err.message || 'Login failed. Please check credentials.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

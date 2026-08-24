@@ -20,11 +20,15 @@ export const generateRefreshToken = (userId) => {
 };
 
 export const setRefreshTokenCookie = (res, token) => {
-  res.cookie('refreshToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  try {
+    res.cookie('refreshToken', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+  } catch (err) {
+    console.error('Failed to set cookie', err);
+  }
 };
 

@@ -9,7 +9,11 @@ export default defineConfig({
       name: 'express-api-middleware',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          app(req, res, next);
+          if (req.url && (req.url.startsWith('/api') || req.url.startsWith('/uploads'))) {
+            app(req, res, next);
+          } else {
+            next();
+          }
         });
       },
     },
