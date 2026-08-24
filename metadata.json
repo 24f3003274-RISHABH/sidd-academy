@@ -1,0 +1,6 @@
+{
+  "name": "Sidd Academy",
+  "description": "Online Coaching, Courses & Digital Notes Platform with interactive video classes, chapter notes, and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -3,15 +3,18 @@
   "version": "1.0.0",
   "description": "Sidd Academy — Online Coaching, Courses & Digital Notes Platform",
   "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" --names \"SERVER,CLIENT\" --prefix-colors \"magenta,cyan\"",
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
-    "build": "cd client && npm run build",
-    "start": "cd server && npm start"
+    "dev": "npm --workspace=client run dev",
+    "build": "npm --workspace=client run build",
+    "lint": "npm --workspace=client run lint",
+    "start": "node server/server.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
   }
 }
+

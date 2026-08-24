@@ -16,11 +16,16 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('siddToken');
-      window.location.href = '/login';
+      // Don't auto-redirect for optional check or if already on login/register
+      const isAuthCheck = error.config && error.config.url && error.config.url.includes('/auth/me');
+      const pathname = window.location.pathname;
+      if (!isAuthCheck && !pathname.includes('/login') && !pathname.includes('/register')) {
+        localStorage.removeItem('siddToken');
+      }
     }
     return Promise.reject(error);
   }
 );
 
 export default axiosInstance;
+
