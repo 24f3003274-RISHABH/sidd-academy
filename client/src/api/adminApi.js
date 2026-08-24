@@ -7,6 +7,7 @@ export const toggleUserStatus = (id) => axiosInstance.put(`/admin/users/${id}/st
 export const getAllOrders = (params) => axiosInstance.get('/admin/orders', { params });
 
 export const getAllBanners = () => axiosInstance.get('/banners');
+export const getActiveBanners = () => axiosInstance.get('/banners/active');
 export const createBanner = (data) => axiosInstance.post('/banners', data);
 export const updateBanner = (id, data) => axiosInstance.put(`/banners/${id}`, data);
 export const deleteBanner = (id) => axiosInstance.delete(`/banners/${id}`);

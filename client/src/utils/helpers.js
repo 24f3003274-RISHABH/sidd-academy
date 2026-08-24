@@ -26,13 +26,32 @@ export const truncateText = (text, length) => {
   return text.substring(0, length) + '...';
 };
 
-export const getYouTubeEmbedUrl = (url) => {
+export const getYouTubeVideoId = (url) => {
   if (!url) return '';
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = url.match(regExp);
-  return (match && match[2].length === 11)
-    ? `https://www.youtube.com/embed/${match[2]}`
-    : url;
+  return (match && match[2].length === 11) ? match[2] : '';
+};
+
+export const getYouTubeThumbnail = (url, quality = 'hqdefault') => {
+  const videoId = getYouTubeVideoId(url);
+  if (videoId) {
+    return `https://img.youtube.com/vi/${videoId}/${quality}.jpg`;
+  }
+  return 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80';
+};
+
+export const getYouTubeWatchUrl = (url) => {
+  const videoId = getYouTubeVideoId(url);
+  if (videoId) {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }
+  return url || 'https://www.youtube.com';
+};
+
+export const getYouTubeEmbedUrl = (url) => {
+  const videoId = getYouTubeVideoId(url);
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : url;
 };
 
 export const debounce = (fn, delay) => {

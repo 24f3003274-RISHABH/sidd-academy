@@ -45,16 +45,48 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="form-group">
             <label className="form-label">Email</label>
-            <input type="email" className="form-input" value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter your email" />
+            <input type="email" className="form-input" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter your email" />
           </div>
           <div className="form-group">
             <label className="form-label">Password</label>
-            <input type="password" className="form-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" />
+            <input type="password" className="form-input" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" />
           </div>
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
+
+        {/* Quick Demo Login Fillers for Admin and Student */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', textAlign: 'center', marginBottom: '0.75rem' }}>
+            Quick Demo Logins:
+          </span>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@siddacademy.com');
+                setPassword('admin123');
+              }}
+              className="btn btn-sm btn-outline"
+              style={{ flex: 1, borderColor: '#939aff', color: '#939aff', fontSize: '0.8rem' }}
+            >
+              👑 Fill Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('student@siddacademy.com');
+                setPassword('password123');
+              }}
+              className="btn btn-sm btn-outline"
+              style={{ flex: 1, fontSize: '0.8rem' }}
+            >
+              🎓 Fill Student
+            </button>
+          </div>
+        </div>
+
         <div style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-muted)' }}>
           <p>Don't have an account? <Link to="/register" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Register</Link></p>
         </div>

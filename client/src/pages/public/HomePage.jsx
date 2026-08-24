@@ -1,42 +1,77 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiCheck, FiBook, FiVideo, FiFileText, FiStar } from 'react-icons/fi';
+import { FiCheck, FiBook, FiVideo, FiFileText, FiStar, FiYoutube, FiArrowRight } from 'react-icons/fi';
 import { getAllCourses } from '../../api/courseApi';
-import { formatPrice } from '../../utils/helpers';
+import { getActiveBanners } from '../../api/adminApi';
+import HeroSection from '../../components/home/HeroSection';
+import FeaturedBanners from '../../components/home/FeaturedBanners';
+import CourseCard from '../../components/course/CourseCard';
+import YouTubeVideoCard from '../../components/video/YouTubeVideoCard';
 
 const HomePage = () => {
   const [courses, setCourses] = useState([]);
+  const [banners, setBanners] = useState([]);
 
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchCoursesAndBanners = async () => {
       try {
-        const res = await getAllCourses({ limit: 6 });
-        if (res.data && res.data.courses) {
-          setCourses(res.data.courses);
+        const [courseRes, bannerRes] = await Promise.allSettled([
+          getAllCourses({ limit: 6 }),
+          getActiveBanners()
+        ]);
+        if (courseRes.status === 'fulfilled' && courseRes.value.data?.courses) {
+          setCourses(courseRes.value.data.courses);
+        }
+        if (bannerRes.status === 'fulfilled' && bannerRes.value.data?.banners) {
+          setBanners(bannerRes.value.data.banners);
         }
       } catch (err) {
-        console.error('Error fetching courses', err);
+        console.error('Error loading home data', err);
       }
     };
-    fetchCourses();
+    fetchCoursesAndBanners();
   }, []);
+
+  const sampleVideoLectures = [
+    {
+      _id: 'yt_sample_1',
+      title: 'Class 10 Real Numbers & Fundamental Theorem (Complete Lecture)',
+      description: 'Master CBSE Class 10 chapter 1 concepts, proofs, and high-scoring shortcuts.',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      duration: '45 mins',
+      isFree: true,
+      chapterTitle: 'Class 10 • Mathematics',
+      notesUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    },
+    {
+      _id: 'yt_sample_2',
+      title: 'Class 12 Electrostatics & Coulomb Law (Board & JEE Numerical solving)',
+      description: 'Step-by-step vector mechanics and board derivation marking breakdown.',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      duration: '52 mins',
+      isFree: true,
+      chapterTitle: 'Class 12 • Physics',
+      notesUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    },
+    {
+      _id: 'yt_sample_3',
+      title: 'Chemical Reactions & Balancing Equations with 3D Animations',
+      description: 'Visualizing reaction kinetics, redox reactions, and color precipitate tests.',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      duration: '48 mins',
+      isFree: true,
+      chapterTitle: 'Class 10 • Science',
+      notesUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    },
+  ];
 
   return (
     <div>
-      <section className="hero" style={{ padding: '6rem 0', textAlign: 'center' }}>
-        <div className="container">
-          <h1 className="hero-title text-gradient" style={{ fontSize: '4rem', marginBottom: '1rem' }}>Learn Smarter. Grow Faster.</h1>
-          <p className="hero-subtitle" style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginBottom: '2rem', maxWidth: '600px', margin: '0 auto 2rem auto' }}>
-            Join Sidd Academy to master your subjects with expert teachers, structured notes, and high-quality video classes.
-          </p>
-          <div className="hero-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <Link to="/courses" className="btn btn-primary btn-lg">Browse Courses</Link>
-            <Link to="/notes" className="btn btn-outline btn-lg">View Notes</Link>
-          </div>
-        </div>
-      </section>
+      <HeroSection />
 
-      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '3rem 0' }}>
+      {banners.length > 0 && <FeaturedBanners banners={banners} />}
+
+      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '3rem 0', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="container grid-4">
           <div className="stat-card" style={{ textAlign: 'center' }}>
             <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>10k+</div>
@@ -44,115 +79,103 @@ const HomePage = () => {
           </div>
           <div className="stat-card" style={{ textAlign: 'center' }}>
             <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>50+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Courses</div>
+            <div style={{ color: 'var(--text-muted)' }}>Modular Courses</div>
           </div>
           <div className="stat-card" style={{ textAlign: 'center' }}>
             <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>500+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Notes Available</div>
+            <div style={{ color: 'var(--text-muted)' }}>Modular PDFs & Notes</div>
           </div>
           <div className="stat-card" style={{ textAlign: 'center' }}>
             <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>1000+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Video Classes</div>
+            <div style={{ color: 'var(--text-muted)' }}>YouTube Video Classes</div>
           </div>
         </div>
       </section>
 
-      <section className="section container" style={{ padding: '5rem 0' }}>
+      {/* Featured Courses */}
+      <section className="section container" style={{ padding: '4.5rem 0' }}>
         <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
-          <h2 className="section-title">Featured Courses</h2>
-          <p className="section-subtitle" style={{ color: 'var(--text-muted)' }}>Start your journey with our top-rated courses</p>
+          <h2 className="section-title" style={{ fontSize: '2.2rem', fontWeight: 800 }}>Featured Academic Courses</h2>
+          <p className="section-subtitle" style={{ color: 'var(--text-muted)' }}>Comprehensive curriculum designed for board exams & competitive tests</p>
         </div>
         <div className="grid-3">
           {courses.map(course => (
-            <div key={course._id} className="course-card card-glass">
-              <img src={course.thumbnail || 'https://via.placeholder.com/300x200'} alt={course.title} className="course-card-img" style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '8px 8px 0 0' }} />
-              <div className="course-card-body" style={{ padding: '1.5rem' }}>
-                <h3 className="course-card-title" style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{course.title}</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>{course.instructor}</p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="price-tag" style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{course.isFree ? 'Free' : formatPrice(course.price)}</span>
-                  <Link to={`/courses/${course._id}`} className="btn btn-sm btn-primary">View Details</Link>
-                </div>
-              </div>
-            </div>
+            <CourseCard key={course._id} course={course} />
           ))}
         </div>
       </section>
 
-      <section className="section" style={{ backgroundColor: 'var(--bg-secondary)', padding: '5rem 0' }}>
+      {/* YouTube Video Classes Showcase */}
+      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0' }}>
         <div className="container">
-          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <h2 className="section-title">Why Sidd Academy</h2>
-          </div>
-          <div className="grid-4">
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiStar size={40} color="var(--accent-gold)" style={{ marginBottom: '1rem' }} />
-              <h3>Expert Teachers</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Learn from industry experts and experienced educators.</p>
-            </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiFileText size={40} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-              <h3>Structured Notes</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Get comprehensive and easy-to-understand study materials.</p>
-            </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiVideo size={40} color="var(--secondary)" style={{ marginBottom: '1rem' }} />
-              <h3>Video Classes</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>High-quality video lectures accessible anytime, anywhere.</p>
-            </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiCheck size={40} color="var(--accent)" style={{ marginBottom: '1rem' }} />
-              <h3>Affordable Prices</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Premium education that doesn't break the bank.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section container" style={{ padding: '5rem 0', textAlign: 'center' }}>
-        <div className="card-glass" style={{ padding: '4rem 2rem', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(255, 101, 132, 0.1) 100%)' }}>
-          <h2 style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>Need Study Materials?</h2>
-          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', maxWidth: '600px', margin: '0 auto 2rem auto' }}>
-            We have a huge library of digital notes for various subjects. Download free notes or purchase premium ones.
-          </p>
-          <Link to="/notes" className="btn btn-primary btn-lg">Browse Notes Library</Link>
-        </div>
-      </section>
-
-      <section className="section" style={{ backgroundColor: 'var(--bg-secondary)', padding: '5rem 0' }}>
-        <div className="container">
-          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <h2 className="section-title">What Our Students Say</h2>
-          </div>
-          <div className="grid-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="card-glass" style={{ padding: '2rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', color: 'var(--accent-gold)', marginBottom: '1rem' }}>
-                  <FiStar /><FiStar /><FiStar /><FiStar /><FiStar />
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '1.5rem' }}>
-                  "Sidd Academy has completely transformed my learning experience. The notes are top-notch and the video classes are extremely helpful."
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>S</div>
-                  <div>
-                    <h4 style={{ margin: 0 }}>Student {i}</h4>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Enrolled Student</span>
-                  </div>
-                </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#ff4d4d', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                <FiYoutube size={18} /> Interactive Video Classes
               </div>
+              <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: 0 }}>Free Video Lectures on YouTube</h2>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', margin: 0 }}>
+                Touch or click any video thumbnail to stream the full video lesson directly or open on YouTube.
+              </p>
+            </div>
+            <Link to="/courses" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              All Lectures <FiArrowRight />
+            </Link>
+          </div>
+
+          <div className="grid-3">
+            {sampleVideoLectures.map(video => (
+              <YouTubeVideoCard key={video._id} video={video} />
             ))}
           </div>
         </div>
       </section>
 
-      <section className="section container" style={{ padding: '5rem 0', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Ready to Start Your Journey?</h2>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Join thousands of students and boost your career today.</p>
-        <Link to="/register" className="btn btn-primary btn-lg">Get Started Now</Link>
+      {/* Modular Study Material Banner */}
+      <section className="section container" style={{ padding: '4.5rem 0', textAlign: 'center' }}>
+        <div className="card-glass" style={{ padding: '3.5rem 2rem', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.12) 0%, rgba(255, 101, 132, 0.12) 100%)' }}>
+          <h2 style={{ fontSize: '2.4rem', fontWeight: 800, marginBottom: '1rem' }}>Modular Notes & Formula PDFs</h2>
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', maxWidth: '650px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
+            Organized hierarchically: <strong>Subject &rarr; Chapter &rarr; PDF 1 / PDF 2</strong>. Download printable formulas, derivations, mind-maps, and question banks.
+          </p>
+          <Link to="/notes" className="btn btn-primary btn-lg" style={{ padding: '0.8rem 2rem' }}>
+            Open Modular Notes Library
+          </Link>
+        </div>
+      </section>
+
+      <section className="section" style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0' }}>
+        <div className="container">
+          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2 className="section-title">Why Students Choose Sidd Academy</h2>
+          </div>
+          <div className="grid-4">
+            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
+              <FiStar size={36} color="var(--accent-gold)" style={{ marginBottom: '1rem' }} />
+              <h3>Expert Faculty</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Learn from experienced educators and gold medalists.</p>
+            </div>
+            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
+              <FiFileText size={36} color="var(--primary)" style={{ marginBottom: '1rem' }} />
+              <h3>Modular PDFs</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Structured notes: Subject &rarr; Chapter &rarr; PDF 1/2 format.</p>
+            </div>
+            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
+              <FiVideo size={36} color="var(--secondary)" style={{ marginBottom: '1rem' }} />
+              <h3>YouTube Lectures</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>High-definition video lectures with instant YouTube links.</p>
+            </div>
+            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
+              <FiCheck size={36} color="var(--accent)" style={{ marginBottom: '1rem' }} />
+              <h3>Board Preparation</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Proven question banks and previous 10-year paper solutions.</p>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );
 };
 
 export default HomePage;
+

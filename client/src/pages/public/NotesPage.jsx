@@ -3,15 +3,16 @@ import { getAllNotes, downloadNote } from '../../api/noteApi';
 import { createOrder, verifyPayment } from '../../api/paymentApi';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
-import { formatPrice, formatFileSize } from '../../utils/helpers';
+import ModularNoteViewer from '../../components/notes/ModularNoteViewer';
 import toast from 'react-hot-toast';
-import { FiDownload, FiDollarSign, FiFileText } from 'react-icons/fi';
+import { FiLayers, FiGrid, FiBookOpen } from 'react-icons/fi';
 
 const NotesPage = () => {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isAuthenticated, user } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [viewMode, setViewMode] = useState('modular'); // 'modular' | 'grid'
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -88,7 +89,6 @@ const NotesPage = () => {
               razorpay_signature: response.razorpay_signature,
             });
             toast.success('Payment successful! You can now download the note.');
-            // Ideally, refresh user data or note status
           } catch (err) {
             toast.error('Payment verification failed');
           }
@@ -110,62 +110,34 @@ const NotesPage = () => {
   };
 
   return (
-    <div className="container" style={{ padding: '4rem 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>Notes Library</h1>
-        <p style={{ color: 'var(--text-muted)' }}>High-quality, structured notes for all subjects</p>
+    <div className="container" style={{ padding: '3.5rem 0' }}>
+      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#939aff', backgroundColor: 'rgba(108, 99, 255, 0.15)', padding: '0.35rem 0.9rem', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+          <FiBookOpen /> Modular Study Materials (Subject &rarr; Chapter &rarr; PDF 1 / PDF 2)
+        </div>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '0.75rem', fontWeight: 800 }}>
+          Modular Notes & Formula PDFs
+        </h1>
+        <p style={{ color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>
+          Access organized handwritten notes, formula cheat-sheets, chapter summaries, and solved practice questions organized by Subject and Chapter.
+        </p>
       </div>
 
       {loading ? (
         <Loader fullPage />
       ) : (
-        <div className="grid-3">
-          {notes.map(note => {
-            const hasPurchased = isAuthenticated && user?.purchasedNotes?.includes(note._id);
-            const canDownload = note.isFree || hasPurchased;
-
-            return (
-              <div key={note._id} className="note-card card-glass" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
-                  <div style={{ padding: '1rem', backgroundColor: 'rgba(108, 99, 255, 0.1)', borderRadius: '8px', color: 'var(--primary)' }}>
-                    <FiFileText size={24} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.2rem' }}>{note.title}</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{note.subject?.name || 'Subject'}</p>
-                  </div>
-                </div>
-                
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', flex: 1 }}>{note.description}</p>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div>
-                    <span style={{ fontWeight: 'bold', color: note.isFree ? 'var(--accent)' : 'var(--primary)' }}>
-                      {note.isFree ? 'Free' : formatPrice(note.price)}
-                    </span>
-                    {note.fileSize && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>({formatFileSize(note.fileSize)})</span>}
-                  </div>
-                  
-                  {canDownload ? (
-                    <button onClick={() => handleDownload(note._id, note.title)} className="btn btn-sm btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FiDownload /> Download
-                    </button>
-                  ) : (
-                    <button onClick={() => handlePurchase(note)} disabled={paymentLoading} className="btn btn-sm btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FiDollarSign /> {paymentLoading ? 'Wait' : 'Buy Now'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {!loading && notes.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No notes available right now.</div>
+        <ModularNoteViewer
+          notes={notes}
+          onDownload={handleDownload}
+          onPurchase={handlePurchase}
+          isAuthenticated={isAuthenticated}
+          user={user}
+          isPurchasing={paymentLoading}
+        />
       )}
     </div>
   );
 };
 
 export default NotesPage;
+

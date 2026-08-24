@@ -12,7 +12,7 @@ const ManageNotes = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   
-  const [formData, setFormData] = useState({ title: '', description: '', price: 0, isFree: false });
+  const [formData, setFormData] = useState({ title: '', description: '', price: 0, isFree: false, subject: '', level: 'Class 10', chapterTitle: '' });
   const [selectedFile, setSelectedFile] = useState(null);
 
   const fetchNotes = async () => {
@@ -44,12 +44,15 @@ const ManageNotes = () => {
       data.append('description', formData.description);
       data.append('price', formData.price);
       data.append('isFree', formData.isFree);
+      data.append('subject', formData.subject);
+      data.append('level', formData.level);
+      data.append('chapterTitle', formData.chapterTitle);
       data.append('file', selectedFile);
       
       await createNote(data);
       toast.success('Note uploaded successfully');
       setIsModalOpen(false);
-      setFormData({ title: '', description: '', price: 0, isFree: false });
+      setFormData({ title: '', description: '', price: 0, isFree: false, subject: '', level: 'Class 10', chapterTitle: '' });
       setSelectedFile(null);
       fetchNotes();
     } catch (err) {
@@ -112,13 +115,24 @@ const ManageNotes = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Upload New Note">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="form-group">
-            <label className="form-label">Title</label>
-            <input type="text" className="form-input" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+            <label className="form-label">Title (e.g. PDF 1: Formula Sheet or Chapter Notes)</label>
+            <input type="text" className="form-input" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. PDF 1: Handwritten Topper Notes" />
+          </div>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Subject</label>
+              <input type="text" className="form-input" required value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} placeholder="e.g. Mathematics or Physics" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Chapter / Topic</label>
+              <input type="text" className="form-input" value={formData.chapterTitle} onChange={e => setFormData({...formData, chapterTitle: e.target.value})} placeholder="e.g. Chapter 1: Real Numbers" />
+            </div>
           </div>
           
           <div className="form-group">
             <label className="form-label">Description</label>
-            <textarea className="form-textarea" rows="3" required value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
+            <textarea className="form-textarea" rows="2" required value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Brief overview of the PDF"></textarea>
           </div>
 
           <div className="grid-2">
