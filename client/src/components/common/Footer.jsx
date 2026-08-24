@@ -29,8 +29,8 @@ const Footer = () => {
           <h3 style={{ marginBottom: '1rem' }}>Contact Info</h3>
           <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem', color: 'var(--text-muted)' }}>
             <li>support@siddacademy.com</li>
-            <li>+91 9876543210</li>
-            <li>New Delhi, India</li>
+            <li>+91 8756940318</li>
+            <li>Rajapur, Prayagraj, U.P., India</li>
           </ul>
         </div>
       </div>
