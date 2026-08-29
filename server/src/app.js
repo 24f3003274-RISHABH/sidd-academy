@@ -86,7 +86,7 @@ app.use(cors({
       }
       return false;
     });
-    return callback(null, isMatch ? true : true);
+    return callback(null, isMatch);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -107,6 +107,16 @@ if (ENV.NODE_ENV === 'development') {
  */
 const uploadsDir = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
+
+// Root API Status Endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Sidd Academy API is running',
+    frontend: ENV.CLIENT_URL,
+    health: '/api/v1/health',
+  });
+});
 
 // API Routes
 app.use('/api/v1/health', healthRoutes);

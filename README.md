@@ -15,6 +15,16 @@ An enterprise-grade, full-stack educational platform for online coaching, struct
 
 ---
 
+## Production Architecture
+
+The platform is architected for decoupled, scalable production deployment across dedicated cloud providers:
+
+- **Frontend (Vercel)**: Hosts the React 18 / Vite single-page application (SPA) with edge CDN routing.
+- **Backend API (Render)**: Hosts the Node.js / Express REST API (`server/server.js`) with health monitoring, dynamic PORT binding, and CORS controls.
+- **Database (Supabase)**: Hosts the managed PostgreSQL relational database with SSL-encrypted connection pooling.
+
+---
+
 ## Features
 
 ### 🎓 Student Experience
