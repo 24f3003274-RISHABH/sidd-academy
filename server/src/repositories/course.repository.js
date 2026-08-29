@@ -368,6 +368,32 @@ export class CourseRepository {
   }
 
   /**
+   * Count total courses with optional published filter
+   */
+  async count({ isPublished } = {}) {
+    if (ENV.DATABASE_URL) {
+      try {
+        let sql = `SELECT COUNT(*) FROM courses`;
+        const params = [];
+        if (isPublished !== undefined) {
+          sql += ` WHERE is_published = $1`;
+          params.push(isPublished);
+        }
+        const res = await query(sql, params);
+        return parseInt(res.rows[0]?.count || 0, 10);
+      } catch (err) {
+        console.warn('CourseRepository count fallback to mockStore:', err.message);
+      }
+    }
+
+    let list = [...(mockData.courses || [])];
+    if (isPublished !== undefined) {
+      list = list.filter(c => (c.isPublished ?? true) === isPublished);
+    }
+    return list.length;
+  }
+
+  /**
    * Delete a Course
    */
   async delete(id) {

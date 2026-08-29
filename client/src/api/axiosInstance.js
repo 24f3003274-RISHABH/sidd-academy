@@ -1,12 +1,12 @@
 import axios from 'axios';
 
-// Ensure baseURL uses relative path '/api/v1' in browser preview/deployment
+// Ensure baseURL uses VITE_API_URL or defaults to relative '/api/v1'
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl || envUrl.includes('localhost:5000') || envUrl.includes('127.0.0.1:5000')) {
-    return '/api/v1';
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
   }
-  return envUrl;
+  return '/api/v1';
 };
 
 const axiosInstance = axios.create({

@@ -1,5 +1,6 @@
 import express from 'express';
 import { checkDatabaseHealth } from '../config/db.js';
+import ENV from '../config/env.js';
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   const dbHealth = await checkDatabaseHealth();
+  const isProd = (process.env.NODE_ENV || ENV.NODE_ENV) === 'production';
   
   res.status(200).json({
     success: true,
@@ -18,9 +20,12 @@ router.get('/', async (req, res) => {
     database: {
       connected: dbHealth.isConnected,
       latencyMs: dbHealth.latencyMs,
-      error: dbHealth.error,
+      ...(dbHealth.error && {
+        error: isProd ? 'Database connection unavailable' : dbHealth.error,
+      }),
     },
   });
 });
 
 export default router;
+

@@ -293,6 +293,32 @@ export class NoteRepository {
   }
 
   /**
+   * Count total notes with optional published filter
+   */
+  async count({ isPublished } = {}) {
+    if (ENV.DATABASE_URL) {
+      try {
+        let sql = `SELECT COUNT(*) FROM notes`;
+        const params = [];
+        if (isPublished !== undefined) {
+          sql += ` WHERE is_published = $1`;
+          params.push(isPublished);
+        }
+        const res = await query(sql, params);
+        return parseInt(res.rows[0]?.count || 0, 10);
+      } catch (err) {
+        console.warn('NoteRepository count fallback to mockStore:', err.message);
+      }
+    }
+
+    let list = [...(mockData.notes || [])];
+    if (isPublished !== undefined) {
+      list = list.filter(n => (n.isPublished ?? true) === isPublished);
+    }
+    return list.length;
+  }
+
+  /**
    * Delete a note
    */
   async delete(id) {

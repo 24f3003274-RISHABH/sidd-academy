@@ -1,156 +1,95 @@
-import mongoose from 'mongoose';
-import User from '../models/User.model.js';
-import Course from '../models/Course.model.js';
-import Note from '../models/Note.model.js';
-import Order from '../models/Order.model.js';
-import { AppError, sendSuccess } from '../utils/apiResponse.js';
-import { mockData } from '../data/mockStore.js';
-import { orderService } from '../services/order.service.js';
+import { adminService } from '../services/admin.service.js';
+import { sendSuccess } from '../utils/apiResponse.js';
 
+/**
+ * Admin Controller
+ * Handles administrative dashboard statistics, user management, and order monitoring.
+ * Adheres strictly to PERN architecture: route -> controller -> service -> repository -> PostgreSQL.
+ */
+
+/**
+ * GET /api/v1/admin/dashboard
+ * Aggregated analytics and stats for the admin control panel
+ */
 export const getDashboardStats = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const [totalUsers, totalCourses, totalNotes, totalOrders] = await Promise.all([
-        User.countDocuments({ role: 'user' }),
-        Course.countDocuments(),
-        Note.countDocuments(),
-        Order.countDocuments({ paymentStatus: 'paid' })
-      ]);
-
-      const revenueResult = await Order.aggregate([
-        { $match: { paymentStatus: 'paid' } },
-        { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
-      ]);
-      const totalRevenue = revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
-
-      const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5).populate('user', 'name email');
-
-      return sendSuccess(res, 200, 'Dashboard stats fetched', {
-        totalUsers,
-        totalCourses,
-        totalNotes,
-        totalOrders,
-        totalRevenue,
-        recentOrders
-      });
-    }
-
-    // In-memory fallback stats
-    const totalUsers = mockData.users.filter(u => u.role !== 'admin').length;
-    const totalCourses = mockData.courses.length;
-    const totalNotes = mockData.notes.length;
-    const paidOrders = mockData.orders.filter(o => o.paymentStatus === 'paid');
-    const totalOrders = paidOrders.length;
-    const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const recentOrders = mockData.orders.slice(0, 5);
-
-    return sendSuccess(res, 200, 'Dashboard stats fetched', {
-      totalUsers,
-      totalCourses,
-      totalNotes,
-      totalOrders,
-      totalRevenue,
-      recentOrders
-    });
+    const stats = await adminService.getDashboardStats();
+    return sendSuccess(res, 200, 'Dashboard stats fetched', stats);
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/admin/users
+ * Paginated student and user list with search support
+ */
 export const getAllUsers = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const search = req.query.search;
 
-    if (mongoose.connection.readyState === 1) {
-      const query = { role: { $ne: 'admin' } };
-      if (req.query.search) {
-        query.$or = [
-          { name: { $regex: req.query.search, $options: 'i' } },
-          { email: { $regex: req.query.search, $options: 'i' } }
-        ];
-      }
-
-      const total = await User.countDocuments(query);
-      const users = await User.find(query).skip(skip).limit(limit).sort({ createdAt: -1 });
-
-      return sendSuccess(res, 200, 'Users fetched', { users, total, page, pages: Math.ceil(total / limit) });
-    }
-
-    let filtered = mockData.users.filter(u => u.role !== 'admin');
-    if (req.query.search) {
-      const s = req.query.search.toLowerCase();
-      filtered = filtered.filter(u => u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s));
-    }
-    const total = filtered.length;
-    const users = filtered.slice(skip, skip + limit);
-    return sendSuccess(res, 200, 'Users fetched', { users, total, page, pages: Math.ceil(total / limit) || 1 });
+    const result = await adminService.getAllUsers({ page, limit, search });
+    return sendSuccess(res, 200, 'Users fetched', result);
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/admin/users/:id
+ * Detailed user information by ID
+ */
 export const getUserById = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const user = await User.findById(req.params.id);
-      if (!user) throw new AppError('User not found', 404);
-      return sendSuccess(res, 200, 'User fetched', { user });
-    }
-    const user = mockData.users.find(u => u._id === req.params.id);
-    if (!user) throw new AppError('User not found', 404);
+    const user = await adminService.getUserById(req.params.id);
     return sendSuccess(res, 200, 'User fetched', { user });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/admin/users/:id/role
+ * Modify user access role (e.g., student, admin, instructor)
+ */
 export const updateUserRole = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const user = await User.findByIdAndUpdate(req.params.id, { role: req.body.role }, { new: true });
-      if (!user) throw new AppError('User not found', 404);
-      return sendSuccess(res, 200, 'User role updated', { user });
-    }
-    const user = mockData.users.find(u => u._id === req.params.id);
-    if (!user) throw new AppError('User not found', 404);
-    user.role = req.body.role;
+    const user = await adminService.updateUserRole(req.params.id, req.body.role);
     return sendSuccess(res, 200, 'User role updated', { user });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/admin/users/:id/status
+ * Toggle user active/suspended account state
+ */
 export const toggleUserStatus = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const user = await User.findById(req.params.id);
-      if (!user) throw new AppError('User not found', 404);
-      user.isActive = !user.isActive;
-      await user.save();
-      return sendSuccess(res, 200, 'User status toggled', { user });
-    }
-    const user = mockData.users.find(u => u._id === req.params.id);
-    if (!user) throw new AppError('User not found', 404);
-    user.isActive = !user.isActive;
+    const user = await adminService.toggleUserStatus(req.params.id);
     return sendSuccess(res, 200, 'User status toggled', { user });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/admin/orders
+ * Paginated list of all platform orders with search and status filters
+ */
 export const getAllOrders = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const status = req.query.status || req.query.paymentStatus;
     const search = req.query.search;
 
-    const result = await orderService.getAllOrders({ page, limit, status, search });
+    const result = await adminService.getAllOrders({ page, limit, status, search });
     return sendSuccess(res, 200, 'Orders fetched', result);
   } catch (error) {
     next(error);
   }
 };
-

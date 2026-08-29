@@ -742,6 +742,81 @@ export class OrderRepository {
     order.paymentStatus = 'cancelled';
     return order;
   }
+
+  /**
+   * Count total paid orders
+   */
+  async countPaid() {
+    if (ENV.DATABASE_URL) {
+      try {
+        const sql = `SELECT COUNT(*) FROM orders WHERE payment_status = 'paid' OR status = 'PAID'`;
+        const res = await query(sql);
+        return parseInt(res.rows[0]?.count || 0, 10);
+      } catch (err) {
+        console.warn('OrderRepository countPaid fallback to mockStore:', err.message);
+      }
+    }
+
+    const paid = (mockData.orders || []).filter(o => (o.paymentStatus || o.payment_status || o.status || '').toLowerCase() === 'paid');
+    return paid.length;
+  }
+
+  /**
+   * Get total revenue from paid orders
+   */
+  async getTotalRevenue() {
+    if (ENV.DATABASE_URL) {
+      try {
+        const sql = `SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE payment_status = 'paid' OR status = 'PAID'`;
+        const res = await query(sql);
+        return parseFloat(res.rows[0]?.total || 0);
+      } catch (err) {
+        console.warn('OrderRepository getTotalRevenue fallback to mockStore:', err.message);
+      }
+    }
+
+    const paid = (mockData.orders || []).filter(o => (o.paymentStatus || o.payment_status || o.status || '').toLowerCase() === 'paid');
+    return paid.reduce((sum, o) => sum + (o.totalAmount || o.total_amount || 0), 0);
+  }
+
+  /**
+   * Get recent orders with user details (Admin Dashboard)
+   */
+  async getRecentOrders(limit = 5) {
+    if (ENV.DATABASE_URL) {
+      try {
+        const sql = `
+          SELECT o.*, u.name as user_name, u.email as user_email
+          FROM orders o
+          LEFT JOIN users u ON o.user_id = u.id
+          ORDER BY o.created_at DESC
+          LIMIT $1
+        `;
+        const res = await query(sql, [limit]);
+        const orders = [];
+        for (const o of res.rows) {
+          const itemsRes = await query(`SELECT * FROM order_items WHERE order_id = $1`, [o.id]);
+          const paymentsRes = await query(`SELECT * FROM payments WHERE order_id = $1`, [o.id]);
+          orders.push(this.normalizeOrder(o, itemsRes.rows, paymentsRes.rows));
+        }
+        return orders;
+      } catch (err) {
+        console.warn('OrderRepository getRecentOrders fallback to mockStore:', err.message);
+      }
+    }
+
+    const slice = (mockData.orders || []).slice(0, limit);
+    return slice.map(o => {
+      const items = (mockData.orderItems || []).filter(i => i.orderId === (o._id || o.id));
+      const payments = (mockData.payments || []).filter(p => p.orderId === (o._id || o.id));
+      const userId = o.user_id || (typeof o.user === 'object' ? o.user._id || o.user.id : o.user) || o.userId;
+      const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
+      if (user) {
+        o.user = { id: user._id || user.id, _id: user._id || user.id, name: user.name, email: user.email };
+      }
+      return this.normalizeOrder(o, items.length > 0 ? items : (o.items || []), payments);
+    });
+  }
 }
 
 export const orderRepository = new OrderRepository();

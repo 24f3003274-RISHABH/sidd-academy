@@ -1,81 +1,73 @@
-import mongoose from 'mongoose';
-import Banner from '../models/Banner.model.js';
-import { AppError, sendSuccess } from '../utils/apiResponse.js';
-import { mockData } from '../data/mockStore.js';
+import { bannerService } from '../services/banner.service.js';
+import { sendSuccess } from '../utils/apiResponse.js';
 
+/**
+ * Banner Controller
+ * Endpoints for public hero banner carousel and administrative banner CRUD.
+ * Adheres strictly to PERN architecture: route -> controller -> service -> repository -> PostgreSQL.
+ */
+
+/**
+ * GET /api/v1/banners/active
+ * Fetch active banners ordered for home page carousel
+ */
 export const getActiveBanners = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const banners = await Banner.find({ isActive: true }).sort({ order: 1 });
-      return sendSuccess(res, 200, 'Active banners fetched', { banners });
-    }
-    const banners = mockData.banners.filter(b => b.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const banners = await bannerService.getActiveBanners();
     return sendSuccess(res, 200, 'Active banners fetched', { banners });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/banners
+ * Fetch all banners (Admin only)
+ */
 export const getAllBanners = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const banners = await Banner.find().sort({ order: 1 });
-      return sendSuccess(res, 200, 'All banners fetched', { banners });
-    }
-    return sendSuccess(res, 200, 'All banners fetched', { banners: mockData.banners });
+    const banners = await bannerService.getAllBanners();
+    return sendSuccess(res, 200, 'All banners fetched', { banners });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * POST /api/v1/banners
+ * Create new banner (Admin only)
+ */
 export const createBanner = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const banner = await Banner.create(req.body);
-      return sendSuccess(res, 201, 'Banner created', { banner });
-    }
-    const newBanner = {
-      _id: `banner_${Date.now()}`,
-      ...req.body,
-      isActive: req.body.isActive !== undefined ? req.body.isActive : true,
-      order: req.body.order || mockData.banners.length + 1
-    };
-    mockData.banners.push(newBanner);
-    return sendSuccess(res, 201, 'Banner created', { banner: newBanner });
+    const banner = await bannerService.createBanner(req.body);
+    return sendSuccess(res, 201, 'Banner created', { banner });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/banners/:id
+ * Update banner (Admin only)
+ */
 export const updateBanner = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const banner = await Banner.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-      if (!banner) throw new AppError('Banner not found', 404);
-      return sendSuccess(res, 200, 'Banner updated', { banner });
-    }
-    const idx = mockData.banners.findIndex(b => b._id === req.params.id);
-    if (idx === -1) throw new AppError('Banner not found', 404);
-    mockData.banners[idx] = { ...mockData.banners[idx], ...req.body };
-    return sendSuccess(res, 200, 'Banner updated', { banner: mockData.banners[idx] });
+    const banner = await bannerService.updateBanner(req.params.id, req.body);
+    return sendSuccess(res, 200, 'Banner updated', { banner });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * DELETE /api/v1/banners/:id
+ * Delete banner (Admin only)
+ */
 export const deleteBanner = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const banner = await Banner.findByIdAndDelete(req.params.id);
-      if (!banner) throw new AppError('Banner not found', 404);
-      return sendSuccess(res, 200, 'Banner deleted');
-    }
-    const idx = mockData.banners.findIndex(b => b._id === req.params.id);
-    if (idx === -1) throw new AppError('Banner not found', 404);
-    mockData.banners.splice(idx, 1);
+    await bannerService.deleteBanner(req.params.id);
     return sendSuccess(res, 200, 'Banner deleted');
   } catch (error) {
     next(error);
   }
 };
-

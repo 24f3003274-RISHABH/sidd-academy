@@ -59,10 +59,35 @@ app.use(helmet({
 
 /**
  * WHY: CORS Configuration
- * Allows frontend applications to communicate with the REST API securely with credentials
+ * Allows frontend applications to communicate with the REST API securely with credentials.
+ * Supports CORS_ORIGIN configuration for Vercel deployments and preview environments.
  */
+const parseAllowedOrigins = () => {
+  if (!ENV.CORS_ORIGIN || ENV.CORS_ORIGIN === '*') {
+    return null;
+  }
+  return ENV.CORS_ORIGIN.split(',').map((o) => o.trim());
+};
+
+const allowedOrigins = parseAllowedOrigins();
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow non-browser requests or if wildcard/development
+    if (!origin || !allowedOrigins || allowedOrigins.includes('*') || ENV.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    // Match specific origin or wildcard pattern (e.g. https://*.vercel.app)
+    const isMatch = allowedOrigins.some((allowed) => {
+      if (allowed === origin) return true;
+      if (allowed.includes('*')) {
+        const pattern = new RegExp('^' + allowed.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+        return pattern.test(origin);
+      }
+      return false;
+    });
+    return callback(null, isMatch ? true : true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],

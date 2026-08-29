@@ -24,8 +24,9 @@ export const getPool = () => {
       connectionTimeoutMillis: 5000,
     };
 
-    // If using remote connection with SSL (e.g., Supabase / Neon / Cloud SQL)
-    if (ENV.DATABASE_URL && ENV.DATABASE_URL.includes('sslmode=require')) {
+    // If using remote connection with SSL (e.g., Supabase / Neon / Cloud SQL / AWS RDS)
+    const isLocalhost = !ENV.DATABASE_URL || ENV.DATABASE_URL.includes('localhost') || ENV.DATABASE_URL.includes('127.0.0.1');
+    if (ENV.DATABASE_URL && (!isLocalhost || ENV.DATABASE_URL.includes('sslmode=require') || ENV.DATABASE_URL.includes('supabase'))) {
       config.ssl = { rejectUnauthorized: false };
     }
 

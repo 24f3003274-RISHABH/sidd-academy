@@ -1,4 +1,5 @@
 import { AppError } from '../utils/apiResponse.js';
+import ENV from '../config/env.js';
 
 export const notFound = (req, res, next) => {
   next(new AppError(`Route not found: ${req.originalUrl}`, 404));
@@ -12,17 +13,16 @@ export const errorHandler = (err, req, res, next) => {
     message = `Invalid ${err.path}: ${err.value}`;
     statusCode = 400;
   }
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`;
+  if (err.code === '23505' || err.code === 11000) {
+    message = 'A record with these details already exists.';
     statusCode = 400;
   }
   if (err.name === 'ValidationError') {
-    message = Object.values(err.errors).map(val => val.message).join(', ');
+    message = Object.values(err.errors || {}).map(val => val.message).join(', ');
     statusCode = 400;
   }
   if (err.name === 'JsonWebTokenError') {
-    message = 'Invalid token. Please log in again.';
+    message = 'Invalid authentication token. Please log in again.';
     statusCode = 401;
   }
   if (err.name === 'TokenExpiredError') {
@@ -30,13 +30,23 @@ export const errorHandler = (err, req, res, next) => {
     statusCode = 401;
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  // Sanitize message in production to prevent leaking sensitive DB credentials or table details
+  const isProd = (process.env.NODE_ENV || ENV.NODE_ENV) === 'production';
+  if (isProd && statusCode >= 500) {
+    message = 'An internal server error occurred. Please try again later.';
+  } else if (typeof message === 'string') {
+    // Strip connection string credentials or keys if present in error message
+    message = message.replace(/postgresql:\/\/[^@]+@/gi, 'postgresql://***:***@');
+  }
+
+  if (!isProd) {
     console.error('ERROR STACK:', err.stack);
   }
 
   res.status(statusCode).json({
     success: false,
     message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    ...(!isProd && { stack: err.stack }),
   });
 };
+

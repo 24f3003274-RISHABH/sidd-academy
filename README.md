@@ -39,6 +39,15 @@ An enterprise-grade, full-stack educational platform for online coaching, struct
 
 ---
 
+## MERN → PERN Conversion
+
+- removed remaining Mongoose dependencies
+- admin controller uses PostgreSQL
+- banner controller uses PostgreSQL
+- PostgreSQL is the only database
+
+---
+
 ## Technology Stack
 
 ### Frontend
@@ -184,44 +193,90 @@ npm install
 
 ---
 
-## Environment Variables
+## Environment Variables & Deployment Configuration
 
-Configure `.env` in the project root:
-
-```env
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sidd_academy
-CORS_ORIGIN=http://localhost:3000
-
-# Authentication Secrets
-JWT_SECRET=your_super_secret_jwt_key
-JWT_ACCESS_SECRET=your_access_secret_key
-JWT_REFRESH_SECRET=your_refresh_secret_key
-JWT_ACCESS_EXPIRES=15m
-JWT_REFRESH_EXPIRES=7d
-
-# Razorpay Gateway
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_secret_key
-
-# Vite Frontend Variables
-VITE_API_URL=http://localhost:3000/api/v1
-VITE_RAZORPAY_KEY_ID=rzp_test_your_key_id
-```
+### Deployment Target Topology
+- **Frontend SPA**: Vercel (Vite React Build)
+- **Backend API**: Render (Node.js & Express)
+- **Database**: Supabase (PostgreSQL with SSL)
 
 ---
 
+### 1. Backend Environment Variables (Render)
+
+Configure these in the Render Dashboard under **Environment**:
+
+| Variable Name | Required | Description | Example / Default |
+|---|---|---|---|
+| `PORT` | Optional | Port for the Express HTTP server | `5000` (Render sets automatically) |
+| `NODE_ENV` | Yes | Runtime environment mode | `production` |
+| `DATABASE_URL` | Yes | Supabase PostgreSQL URI connection string | `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require` |
+| `CORS_ORIGIN` | Yes | Allowed client origin(s) for CORS | `https://your-app.vercel.app` |
+| `CLIENT_URL` | Yes | Frontend application base URL for email links | `https://your-app.vercel.app` |
+| `JWT_SECRET` | Yes | Primary secret for JWT signature verification | Min 32 random characters |
+| `JWT_ACCESS_SECRET` | Yes | Secret for short-lived access tokens | Min 32 random characters |
+| `JWT_REFRESH_SECRET` | Yes | Secret for long-lived refresh tokens | Min 32 random characters |
+| `JWT_ACCESS_EXPIRES` | Optional | Access token expiration duration | `15m` |
+| `JWT_REFRESH_EXPIRES` | Optional | Refresh token expiration duration | `7d` |
+| `RAZORPAY_KEY_ID` | Yes | Razorpay API Key ID | `rzp_live_...` or `rzp_test_...` |
+| `RAZORPAY_KEY_SECRET` | Yes | Razorpay Secret Key for HMAC-SHA256 signature verification | Your secret key |
+| `SMTP_HOST` | Optional | Outgoing SMTP server hostname | `smtp.gmail.com` |
+| `SMTP_PORT` | Optional | Outgoing SMTP server port | `587` |
+| `SMTP_USER` | Optional | SMTP username / sender email | `admin@siddacademy.com` |
+| `SMTP_PASS` | Optional | SMTP password or app-specific password | Your SMTP password |
+| `FROM_NAME` | Optional | Display name for system transactional emails | `Sidd Academy` |
+| `FROM_EMAIL` | Optional | Sender email address for notifications | `no-reply@siddacademy.com` |
+
+---
+
+### 2. Frontend Environment Variables (Vercel)
+
+Configure these in the Vercel Dashboard under **Project Settings → Environment Variables**:
+
+| Variable Name | Required | Description | Example / Default |
+|---|---|---|---|
+| `VITE_API_URL` | Yes | Full URL pointing to your Render backend API v1 endpoint | `https://your-backend.onrender.com/api/v1` |
+| `VITE_RAZORPAY_KEY_ID` | Yes | Public Razorpay Key ID for client-side modal checkout | `rzp_live_...` or `rzp_test_...` |
+
+> ⚠️ **Critical Security Warning**:
+> - Never expose `DATABASE_URL`, `JWT_SECRET`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RAZORPAY_KEY_SECRET`, or SMTP credentials in frontend code or `VITE_*` environment variables.
+> - Only variables with the `VITE_` prefix are compiled into the client bundle.
+> - Never commit `.env` files to git repositories. Ensure `.gitignore` ignores all `.env` and `.env.*` files.
+
+---
+
+
 ## Database Setup
 
+The database runs on PostgreSQL (fully compatible with Supabase, Cloud SQL, and self-hosted PostgreSQL).
+
+### Setup & Migration Commands
+
 ```bash
-# Execute 15 versioned migrations
+# 1. Execute all 15 versioned PostgreSQL migrations in sequential order
 npm run db:migrate
 
-# Seed initial courses, subjects, chapters, notes, and demo accounts
+# 2. Seed development courses, curriculum trees, study notes, and demo accounts
 npm run db:seed
 ```
+
+### Database Tables Created (15 Tables)
+
+1. `users` — Administrator & student accounts
+2. `courses` — Published & draft course catalogs
+3. `subjects` — Course syllabus topics
+4. `chapters` — Academic topic units
+5. `lessons` — Scheduled daily lectures & classes
+6. `videos` — Video streaming URLs & YouTube IDs
+7. `notes` — Digital PDF study notes & pricing
+8. `enrollments` — Student course subscriptions
+9. `orders` — Checkout transactions & pricing
+10. `order_items` — Itemized line items per order
+11. `payments` — Razorpay gateway audit records
+12. `note_purchases` — Standalone digital note ownership
+13. `banners` — Hero promotional carousels
+14. `lesson_progress` — Per-student lecture completion tracking
+15. `schema_migrations` — Version-controlled migration registry
 
 ---
 
@@ -357,6 +412,73 @@ Admin CMS Dashboard (/admin/dashboard)
 
 ### Phase 9 — Final QA, Security, Documentation & Production Polish
 - Comprehensive QA, parameterized query audits, security hardening, full documentation suite, and zero-error production build.
+
+---
+
+## Vercel Frontend Deployment Guide
+
+The React 18 + Vite frontend is pre-configured for one-click deployment on **Vercel**.
+
+### Vercel Project Settings
+
+1. **Framework Preset**: `Vite`
+2. **Root Directory**: `./` (or `client` if deploying frontend repo separately)
+3. **Build Command**: `npm run build`
+4. **Output Directory**: `dist`
+5. **Install Command**: `npm install`
+
+### Environment Variables on Vercel
+
+In Vercel Dashboard → **Project Settings** → **Environment Variables**:
+
+| Variable | Value | Description |
+|---|---|---|
+| `VITE_API_URL` | `https://your-backend.onrender.com/api/v1` | URL to your deployed Render Express backend |
+| `VITE_RAZORPAY_KEY_ID` | `rzp_live_...` or `rzp_test_...` | Public Razorpay key for checkout modal |
+
+### Client-Side SPA Routing
+
+All client routes are configured with single-page application (SPA) rewrites via `vercel.json`:
+
+- `/` — Homepage & Featured Catalogs
+- `/courses` & `/courses/:id` — Course Catalog & Curriculum Details
+- `/courses/:id/watch` — Video Classroom Player
+- `/notes` — Digital Study Notes Hub
+- `/login` & `/register` — Authentication Pages
+- `/student/*` (`/student/dashboard`, `/student/my-courses`, `/student/notes`, `/student/orders`, `/student/profile`)
+- `/admin/*` (`/admin/dashboard`, `/admin/courses`, `/admin/subjects`, `/admin/chapters`, `/admin/classes`, `/admin/videos`, `/admin/notes`, `/admin/banners`, `/admin/users`, `/admin/orders`)
+
+---
+
+## Render Backend Deployment Guide
+
+The Node.js + Express backend is pre-configured for deployment as a **Web Service** on **Render**.
+
+### Render Web Service Settings
+
+1. **Environment**: `Node`
+2. **Region**: `Singapore` (or region closest to your Supabase PostgreSQL instance)
+3. **Root Directory**: `./` (or `server`)
+4. **Build Command**: `npm install` (or `npm --workspace=server install`)
+5. **Start Command**: `npm start` (or `node server/server.js`)
+6. **Health Check Path**: `/api/v1/health`
+
+### Environment Variables on Render
+
+In Render Dashboard → **Environment**:
+
+| Key | Example Value | Description |
+|---|---|---|
+| `NODE_ENV` | `production` | Enables production optimizations & error masking |
+| `PORT` | `5000` | Render injects this port dynamically |
+| `DATABASE_URL` | `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres?sslmode=require` | Supabase PostgreSQL pooled or direct connection string |
+| `CORS_ORIGIN` | `https://your-app.vercel.app` | Allowed Vercel client origin |
+| `CLIENT_URL` | `https://your-app.vercel.app` | Frontend base URL for email links |
+| `JWT_SECRET` | `your-32-char-random-secret` | Primary token signature secret |
+| `JWT_ACCESS_SECRET` | `your-32-char-random-secret` | Access token signature secret |
+| `JWT_REFRESH_SECRET` | `your-32-char-random-secret` | Refresh token signature secret |
+| `RAZORPAY_KEY_ID` | `rzp_live_...` | Razorpay Key ID |
+| `RAZORPAY_KEY_SECRET` | `your-razorpay-secret` | Razorpay Secret Key for HMAC signature verification |
 
 ---
 

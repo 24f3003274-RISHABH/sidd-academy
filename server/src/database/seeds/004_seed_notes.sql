@@ -9,12 +9,12 @@ INSERT INTO notes (
 )
 VALUES 
 (
-    'n0000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000001',
     'Complete PostgreSQL Schema & Querying Cheat Sheet',
     'Comprehensive handwritten and typed notes covering DDL, DML, Indexes, Constraints, and Transaction ACID properties.',
     'c0000000-0000-0000-0000-000000000001',
-    's0000000-0000-0000-0000-000000000001',
-    'ch000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'c1000000-0000-0000-0000-000000000001',
     '/uploads/notes/postgresql-cheatsheet.pdf',
     'postgresql-cheatsheet.pdf',
     '4.2 MB',
@@ -26,12 +26,12 @@ VALUES
     342
 ),
 (
-    'n0000000-0000-0000-0000-000000000002',
+    'd0000000-0000-0000-0000-000000000002',
     'Full Stack PERN Architecture Master Guide (Premium)',
     'In-depth architectural blueprints, security checklists, repository patterns, and JWT token rotation implementation.',
     'c0000000-0000-0000-0000-000000000001',
-    's0000000-0000-0000-0000-000000000002',
-    'ch000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002',
+    'c1000000-0000-0000-0000-000000000002',
     '/uploads/notes/pern-architecture-guide.pdf',
     'pern-architecture-guide.pdf',
     '8.5 MB',
@@ -43,12 +43,12 @@ VALUES
     128
 ),
 (
-    'n0000000-0000-0000-0000-000000000003',
+    'd0000000-0000-0000-0000-000000000003',
     'DSA in Java: 100 Must-Solve Interview Questions & Solutions',
     'Curated collection of 100 LeetCode Medium/Hard algorithmic challenges with annotated Java code and complexity analysis.',
     'c0000000-0000-0000-0000-000000000002',
-    's0000000-0000-0000-0000-000000000003',
-    'ch000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
+    'c1000000-0000-0000-0000-000000000003',
     '/uploads/notes/dsa-java-100-questions.pdf',
     'dsa-java-100-questions.pdf',
     '12.1 MB',

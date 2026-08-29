@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import app from './src/app.js';
+import ENV from './src/config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ app.get('*', (req, res, next) => {
   });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || ENV.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [Sidd Academy] Server running on http://0.0.0.0:${PORT}`);
