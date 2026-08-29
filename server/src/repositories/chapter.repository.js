@@ -16,10 +16,10 @@ export class ChapterRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT id, subject_id, title, order_index, created_at, updated_at
+          SELECT id, subject_id, title, order_num as order_index, created_at, updated_at
           FROM chapters
           WHERE subject_id = $1
-          ORDER BY order_index ASC, created_at ASC
+          ORDER BY order_num ASC, created_at ASC
         `;
         const res = await query(sql, [subjectId]);
         return res.rows.map(this.normalizeChapter);

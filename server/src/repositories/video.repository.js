@@ -44,7 +44,7 @@ export class VideoRepository {
                  v.created_at, v.updated_at,
                  l.title as lesson_title,
                  c.title as course_title,
-                 s.name as subject_title
+                 s.title as subject_title
           FROM videos v
           LEFT JOIN lessons l ON v.lesson_id = l.id
           LEFT JOIN chapters ch ON l.chapter_id = ch.id
@@ -61,8 +61,14 @@ export class VideoRepository {
         }
 
         if (courseId) {
-          sql += ` AND c.id = $${pIndex++}`;
-          params.push(courseId);
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId);
+          if (isUUID) {
+            sql += ` AND c.id = $${pIndex++}`;
+            params.push(courseId);
+          } else {
+            sql += ` AND c.slug = $${pIndex++}`;
+            params.push(courseId);
+          }
         }
 
         if (provider) {
@@ -117,7 +123,7 @@ export class VideoRepository {
                  v.created_at, v.updated_at,
                  l.title as lesson_title,
                  c.title as course_title,
-                 s.name as subject_title
+                 s.title as subject_title
           FROM videos v
           LEFT JOIN lessons l ON v.lesson_id = l.id
           LEFT JOIN chapters ch ON l.chapter_id = ch.id

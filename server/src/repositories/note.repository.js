@@ -48,7 +48,7 @@ export class NoteRepository {
                  n.file_url, n.file_name, n.file_size, n.thumbnail, n.price, n.is_free, n.is_published,
                  n.page_count, n.download_count, n.created_at, n.updated_at,
                  c.title as course_title,
-                 s.name as subject_title,
+                 s.title as subject_title,
                  ch.title as chapter_title
           FROM notes n
           LEFT JOIN courses c ON n.course_id = c.id
@@ -144,7 +144,7 @@ export class NoteRepository {
                  n.file_url, n.file_name, n.file_size, n.thumbnail, n.price, n.is_free, n.is_published,
                  n.page_count, n.download_count, n.created_at, n.updated_at,
                  c.title as course_title,
-                 s.name as subject_title,
+                 s.title as subject_title,
                  ch.title as chapter_title
           FROM notes n
           LEFT JOIN courses c ON n.course_id = c.id

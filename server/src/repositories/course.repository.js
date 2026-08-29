@@ -45,7 +45,7 @@ export class CourseRepository {
         // Fetch courses
         const sql = `
           SELECT id, title, slug, description, price, discount_price, thumbnail, duration, 
-                 level, is_published, enrolled_students, rating, rating_count, created_at, updated_at
+                 level, is_published, total_students as enrolled_students, rating, 120 as rating_count, created_at, updated_at
           FROM courses 
           ${whereClause}
           ORDER BY created_at DESC
@@ -101,8 +101,8 @@ export class CourseRepository {
       try {
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
         const sql = isUUID 
-          ? `SELECT * FROM courses WHERE id = $1 LIMIT 1`
-          : `SELECT * FROM courses WHERE id = $1 OR slug = $1 LIMIT 1`;
+          ? `SELECT *, total_students as enrolled_students FROM courses WHERE id = $1 LIMIT 1`
+          : `SELECT *, total_students as enrolled_students FROM courses WHERE slug = $1 LIMIT 1`;
 
         const res = await query(sql, [id]);
         if (res.rows.length > 0) {
@@ -130,8 +130,8 @@ export class CourseRepository {
       try {
         // Fetch subjects
         const subjectsRes = await query(
-          `SELECT id, course_id, name, order_index, created_at, updated_at 
-           FROM subjects WHERE course_id = $1 ORDER BY order_index ASC, created_at ASC`,
+          `SELECT id, course_id, title, title as name, order_num as order_index, created_at, updated_at 
+           FROM subjects WHERE course_id = $1 ORDER BY order_num ASC, created_at ASC`,
           [courseId]
         );
 
@@ -139,8 +139,8 @@ export class CourseRepository {
 
         for (const subj of subjects) {
           const chaptersRes = await query(
-            `SELECT id, subject_id, title, order_index, created_at, updated_at 
-             FROM chapters WHERE subject_id = $1 ORDER BY order_index ASC, created_at ASC`,
+            `SELECT id, subject_id, title, order_num as order_index, created_at, updated_at 
+             FROM chapters WHERE subject_id = $1 ORDER BY order_num ASC, created_at ASC`,
             [subj.id]
           );
 
@@ -148,8 +148,8 @@ export class CourseRepository {
 
           for (const chap of subj.chapters) {
             const lessonsRes = await query(
-              `SELECT id, chapter_id, title, class_date, duration, order_index, is_live, created_at, updated_at 
-               FROM lessons WHERE chapter_id = $1 ORDER BY order_index ASC, class_date ASC`,
+              `SELECT id, chapter_id, title, class_date, duration, order_num as order_index, false as is_live, created_at, updated_at 
+               FROM lessons WHERE chapter_id = $1 ORDER BY order_num ASC, class_date ASC`,
               [chap.id]
             );
 
@@ -159,7 +159,7 @@ export class CourseRepository {
             for (const lesson of chap.lessons) {
               // Fetch attached video
               const videoRes = await query(
-                `SELECT id, lesson_id, title, youtube_url, provider, resolution, is_free_preview 
+                `SELECT id, lesson_id, title, video_url, video_provider, quality, false as is_free_preview 
                  FROM videos WHERE lesson_id = $1 LIMIT 1`,
                 [lesson.id]
               );

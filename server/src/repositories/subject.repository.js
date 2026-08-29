@@ -15,11 +15,12 @@ export class SubjectRepository {
 
     if (ENV.DATABASE_URL) {
       try {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId);
         const sql = `
-          SELECT id, course_id, name, order_index, created_at, updated_at
+          SELECT id, course_id, title, title as name, order_num as order_index, created_at, updated_at
           FROM subjects
-          WHERE course_id = $1
-          ORDER BY order_index ASC, created_at ASC
+          WHERE ${isUUID ? 'course_id = $1' : 'course_id IN (SELECT id FROM courses WHERE slug = $1)'}
+          ORDER BY order_num ASC, created_at ASC
         `;
         const res = await query(sql, [courseId]);
         return res.rows.map(this.normalizeSubject);
@@ -42,10 +43,13 @@ export class SubjectRepository {
 
     if (ENV.DATABASE_URL) {
       try {
-        const sql = `SELECT * FROM subjects WHERE id = $1 LIMIT 1`;
-        const res = await query(sql, [id]);
-        if (res.rows.length > 0) {
-          return this.normalizeSubject(res.rows[0]);
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUUID) {
+          const sql = `SELECT *, title as name, order_num as order_index FROM subjects WHERE id = $1 LIMIT 1`;
+          const res = await query(sql, [id]);
+          if (res.rows.length > 0) {
+            return this.normalizeSubject(res.rows[0]);
+          }
         }
       } catch (err) {
         console.warn('SubjectRepository findById fallback to mockStore:', err.message);
@@ -173,9 +177,10 @@ export class SubjectRepository {
       _id: id,
       courseId,
       course: courseId,
-      name: s.name,
-      order: s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0),
-      order_index: s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0),
+      title: s.title || s.name,
+      name: s.name || s.title,
+      order: s.order_num !== undefined ? Number(s.order_num) : (s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0)),
+      order_index: s.order_num !== undefined ? Number(s.order_num) : (s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0)),
       createdAt: s.created_at || s.createdAt,
       updatedAt: s.updated_at || s.updatedAt,
     };

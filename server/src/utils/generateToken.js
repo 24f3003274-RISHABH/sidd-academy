@@ -1,21 +1,21 @@
 import jwt from 'jsonwebtoken';
-
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'sidd_academy_access_secret_2024_secure_key';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'sidd_academy_refresh_secret_2024_secure_key';
+import ENV from '../config/env.js';
 
 export const generateAccessToken = (userId, role) => {
+  const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET || 'sidd_academy_access_secret_2024_secure_key';
   return jwt.sign(
     { id: userId, role },
-    ACCESS_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m' }
+    secret,
+    { expiresIn: ENV.JWT_ACCESS_EXPIRES || '15m' }
   );
 };
 
 export const generateRefreshToken = (userId) => {
+  const secret = ENV.JWT_REFRESH_SECRET || ENV.JWT_SECRET || 'sidd_academy_refresh_secret_2024_secure_key';
   return jwt.sign(
     { id: userId },
-    REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d' }
+    secret,
+    { expiresIn: ENV.JWT_REFRESH_EXPIRES || '7d' }
   );
 };
 

@@ -16,12 +16,12 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_index, l.is_live, l.created_at, l.updated_at,
-                 v.id as video_id, v.title as video_title, v.youtube_url as video_url, v.provider as video_provider, v.is_free_preview
+          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
+                 v.id as video_id, v.title as video_title, v.video_url, v.video_provider, false as is_free_preview
           FROM lessons l
           LEFT JOIN videos v ON v.lesson_id = l.id
           WHERE l.chapter_id = $1
-          ORDER BY l.order_index ASC, l.class_date ASC
+          ORDER BY l.order_num ASC, l.class_date ASC
         `;
         const res = await query(sql, [chapterId]);
         return res.rows.map(this.normalizeLesson);
@@ -45,8 +45,8 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_index, l.is_live, l.created_at, l.updated_at,
-                 v.id as video_id, v.title as video_title, v.youtube_url as video_url, v.provider as video_provider, v.is_free_preview
+          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
+                 v.id as video_id, v.title as video_title, v.video_url, v.video_provider, false as is_free_preview
           FROM lessons l
           LEFT JOIN videos v ON v.lesson_id = l.id
           WHERE l.id = $1
@@ -75,18 +75,18 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO lessons (id, chapter_id, title, class_date, duration, order_index, is_live, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+          INSERT INTO lessons (id, chapter_id, title, class_date, duration, order_num, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, chapterId, title.trim(), dateVal, Number(duration), Number(order), Boolean(isLive)]);
+        const res = await query(sql, [id, chapterId, title.trim(), dateVal, `${duration} mins`, Number(order)]);
         const createdLesson = res.rows[0];
 
         if (videoUrl) {
           const videoId = uuidv4();
           await query(
-            `INSERT INTO videos (id, lesson_id, title, youtube_url, provider, resolution, is_free_preview, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, '1080p', false, NOW(), NOW())`,
+            `INSERT INTO videos (id, lesson_id, title, video_url, video_provider, quality, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, '1080p', NOW(), NOW())`,
             [videoId, id, title.trim(), videoUrl.trim(), videoProvider]
           );
         }
