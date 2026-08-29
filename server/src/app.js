@@ -3,16 +3,15 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import mongoSanitize from 'express-mongo-sanitize';
-import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
-import connectDB from './config/db.js';
+import ENV from './config/env.js';
+import { initDB } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
-// Import Routes
+// Route Imports
+import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import courseRoutes from './routes/course.routes.js';
 import subjectRoutes from './routes/subject.routes.js';
@@ -23,24 +22,29 @@ import paymentRoutes from './routes/payment.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 
-// Setup __dirname in ES modules
+// Setup __dirname in ES module scope
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load env vars
-dotenv.config();
-
-// Connect to database (gracefully falls back to mockStore if MONGODB_URI is not set)
-connectDB();
+// Initialize PostgreSQL connection pool on startup
+initDB();
 
 export const app = express();
 
-// Body parsers and cookie parser
+/**
+ * WHY: Body Parsers
+ * express.json parses incoming requests with JSON payloads
+ * express.urlencoded parses URL-encoded bodies for form submissions
+ */
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Security Middleware (configured for iframe / cloud environments)
+/**
+ * WHY: Helmet Security Configuration
+ * Configured to protect standard headers while allowing safe iframe embedding
+ * and cross-origin resource requests for interactive applet preview environments.
+ */
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: false,
@@ -49,9 +53,11 @@ app.use(helmet({
   originAgentCluster: false,
   frameguard: false,
 }));
-app.use(mongoSanitize());
 
-// CORS config
+/**
+ * WHY: CORS Configuration
+ * Allows frontend applications to communicate with the REST API securely with credentials
+ */
 app.use(cors({
   origin: true,
   credentials: true,
@@ -59,16 +65,23 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 }));
 
-// Dev logging
-if (process.env.NODE_ENV === 'development') {
+/**
+ * WHY: Request Logging
+ * Morgan provides development and production request latency logs
+ */
+if (ENV.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Static uploads folder
+/**
+ * WHY: Static File Serving
+ * Exposes uploaded PDFs and assets for course previews
+ */
 const uploadsDir = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsDir));
 
 // API Routes
+app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/courses', courseRoutes);
 app.use('/api/v1/subjects', subjectRoutes);
@@ -79,20 +92,15 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/banners', bannerRoutes);
 
-// Health check
-app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({ status: 'success', message: 'Sidd Academy API Server is healthy' });
-});
-
-// API 404 handler for unmatched /api routes
+// Fallback 404 handler for unmatched /api routes
 app.use('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
-    message: `API Route not found - ${req.originalUrl}`
+    message: `API Route not found - ${req.originalUrl}`,
   });
 });
 
-// Error handling middleware
+// Centralized Error Handling Middleware
 app.use(errorHandler);
 
 export default app;
