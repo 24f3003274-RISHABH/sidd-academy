@@ -1,13 +1,51 @@
 import express from 'express';
-import { protect, adminOnly } from '../middleware/auth.middleware.js';
 import * as chapterController from '../controllers/chapter.controller.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
+import { createChapterValidator, updateChapterValidator } from '../validators/chapter.validator.js';
+import { validateRequest } from '../middleware/validate.middleware.js';
 
 const router = express.Router();
 
-router.get('/subject/:subjectId', chapterController.getChaptersBySubject);
+/**
+ * Public / Student Endpoints
+ */
+router.get('/', chapterController.getChaptersBySubject);
+router.get('/:id', chapterController.getChapterById);
 
-router.post('/', protect, adminOnly, chapterController.createChapter);
-router.put('/:id', protect, adminOnly, chapterController.updateChapter);
-router.delete('/:id', protect, adminOnly, chapterController.deleteChapter);
+/**
+ * Admin Only Management Endpoints
+ */
+router.post(
+  '/',
+  authenticate,
+  authorize('ADMIN'),
+  createChapterValidator,
+  validateRequest,
+  chapterController.createChapter
+);
+
+router.put(
+  '/reorder',
+  authenticate,
+  authorize('ADMIN'),
+  chapterController.reorderChapters
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  authorize('ADMIN'),
+  updateChapterValidator,
+  validateRequest,
+  chapterController.updateChapter
+);
+
+router.delete(
+  '/:id',
+  authenticate,
+  authorize('ADMIN'),
+  chapterController.deleteChapter
+);
 
 export default router;

@@ -1,10 +1,12 @@
 import express from 'express';
-import { protect, adminOnly } from '../middleware/auth.middleware.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
 import * as adminController from '../controllers/admin.controller.js';
 
 const router = express.Router();
 
-router.use(protect, adminOnly); // Apply to all admin routes
+// Enforce authentication AND admin role for all admin routes
+router.use(authenticate, authorize('ADMIN'));
 
 router.get('/dashboard', adminController.getDashboardStats);
 router.get('/users', adminController.getAllUsers);

@@ -66,7 +66,7 @@ const FeaturedBanners = ({ banners = [] }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#ffb703', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
             <FiZap className="animate-pulse" /> Trending Crash Courses & Announcements
           </div>
-          {user?.role === 'admin' && (
+          {(user?.role || '').toLowerCase() === 'admin' && (
             <Link 
               to="/admin/banners" 
               className="badge badge-primary"

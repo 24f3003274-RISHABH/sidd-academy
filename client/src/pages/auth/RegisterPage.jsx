@@ -28,7 +28,8 @@ const RegisterPage = () => {
         password: formData.password,
       });
       toast.success('Registration successful! Welcome to Sidd Academy.');
-      if (data?.user?.role === 'admin') {
+      const role = (data?.user?.role || '').toLowerCase();
+      if (role === 'admin') {
         navigate('/admin/dashboard');
       } else {
         navigate('/student/dashboard');

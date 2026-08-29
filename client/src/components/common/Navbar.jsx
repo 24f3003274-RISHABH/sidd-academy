@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { FiMenu, FiX, FiUser, FiLogOut, FiBook, FiGrid } from 'react-icons/fi';
+import { FiMenu, FiX, FiUser, FiLogOut, FiBook, FiGrid, FiShoppingBag } from 'react-icons/fi';
 
 const Navbar = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -45,11 +45,12 @@ const Navbar = () => {
               </div>
               {dropdownOpen && (
                 <div style={{ position: 'absolute', top: '100%', right: 0, backgroundColor: 'var(--bg-card)', padding: '1rem', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', width: '200px', display: 'flex', flexDirection: 'column', gap: '0.5rem', zIndex: 100 }}>
-                  {user?.role === 'admin' && (
+                  {(user?.role || '').toLowerCase() === 'admin' && (
                     <Link to="/admin/dashboard" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiGrid /> Admin Dashboard</Link>
                   )}
                   <Link to="/student/dashboard" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiUser /> Dashboard</Link>
                   <Link to="/student/my-courses" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiBook /> My Courses</Link>
+                  <Link to="/student/orders" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiShoppingBag /> My Orders</Link>
                   <button onClick={handleLogout} className="btn btn-danger" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><FiLogOut /> Logout</button>
                 </div>
               )}
@@ -76,9 +77,10 @@ const Navbar = () => {
           <Link to="/contact" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
           {isAuthenticated ? (
             <>
-              {user?.role === 'admin' && <Link to="/admin/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>}
+              {(user?.role || '').toLowerCase() === 'admin' && <Link to="/admin/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>}
               <Link to="/student/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
               <Link to="/student/my-courses" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Courses</Link>
+              <Link to="/student/orders" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Orders</Link>
               <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="btn btn-danger" style={{ width: '100%' }}>Logout</button>
             </>
           ) : (

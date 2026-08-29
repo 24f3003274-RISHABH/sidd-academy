@@ -10,7 +10,9 @@ const AdminRoute = ({ children }) => {
     return <Loader fullPage />;
   }
 
-  if (!isAuthenticated || user?.role !== 'admin') {
+  const role = (user?.role || '').toLowerCase();
+
+  if (!isAuthenticated || role !== 'admin') {
     return <Navigate to="/" replace />;
   }
 

@@ -18,6 +18,7 @@ const AdminSidebar = () => {
     { name: 'Subjects', path: '/admin/subjects', icon: <FiFolder /> },
     { name: 'Chapters', path: '/admin/chapters', icon: <FiList /> },
     { name: 'Video Lectures', path: '/admin/classes', icon: <FiVideo /> },
+    { name: 'YouTube Streams', path: '/admin/videos', icon: <FiVideo /> },
     { name: 'Notes & PDFs', path: '/admin/notes', icon: <FiFileText /> },
     { name: 'Banners', path: '/admin/banners', icon: <FiImage /> },
     { name: 'Users', path: '/admin/users', icon: <FiUsers /> },

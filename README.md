@@ -198,6 +198,206 @@ npm run db:seed
 
 ---
 
+## 🔐 Phase 3 — Authentication & RBAC
+
+### 1. Architectural Overview
+Phase 3 implements production-grade authentication and Role-Based Access Control (RBAC) across the Sidd Academy platform:
+- **Zero Plaintext Password Policy**: All passwords are salted and hashed using `bcrypt` (10 rounds) before persistence.
+- **Stateless Authentication**: Signed JSON Web Tokens (JWT) containing user ID and normalized role.
+- **Layered Architecture**: Decoupled `auth.routes.js` → `auth.controller.js` → `auth.service.js` → `auth.repository.js`.
+
+### 2. Supported Roles & Hierarchy
+| Role | Identifier | Permissions & Capabilities |
+|---|---|---|
+| **STUDENT** | `STUDENT` / `student` | Access public courses & notes, browse enrolled courses, manage account profile & security, stream purchased classes, download purchased study materials. |
+| **ADMIN** | `ADMIN` / `admin` | Full platform administrative control: user management, course/subject/chapter/lesson creation, banner controls, analytics dashboard, order audits. |
+
+### 3. Authentication Endpoints
+- **`POST /api/v1/auth/register`**: Validates input format (name, email, password ≥6 chars), verifies email uniqueness, hashes password, saves user with default `student` role, issues signed JWT access token, and sets HTTP-only refresh cookie.
+- **`POST /api/v1/auth/login`**: Validates credentials using `bcrypt.compare`, updates last login timestamp, issues signed JWT token and refresh cookie.
+- **`GET /api/v1/auth/me`**: Returns sanitized profile (`id`, `name`, `email`, `role`, `phone`, `avatar`, `isActive`) of the currently authenticated user.
+- **`POST /api/v1/auth/logout`**: Clears authentication cookies and invalidates client session.
+- **`PUT /api/v1/auth/profile`**: Allows authenticated users to update personal details (name, phone, avatar).
+- **`PUT /api/v1/auth/change-password`**: Verifies current password before hashing and saving new password.
+
+### 4. Middleware & Route Protection
+- **`authenticate.js` (`authenticate` / `protect`)**:
+  - Extracts `Bearer <token>` from HTTP `Authorization` header or cookie.
+  - Cryptographically verifies token signature and expiration.
+  - Queries user repository to guarantee active account state.
+  - Injects `req.user` payload into request context.
+  - Rejects unauthenticated requests with `401 Unauthorized`.
+- **`authorize.js` (`authorize(...roles)` / `adminOnly`)**:
+  - Validates user role against allowed role list (e.g. `authorize('ADMIN')`, `authorize('STUDENT', 'ADMIN')`).
+  - Normalizes case-insensitivity (`admin` ↔ `ADMIN`, `student` ↔ `STUDENT`).
+  - Rejects non-permitted roles with `403 Forbidden`.
+
+### 5. Verification & Test Suite
+All authentication and RBAC workflows have been verified:
+1. **Student Registration**: `POST /api/v1/auth/register` returns `201 Created` with sanitized user object and JWT token.
+2. **Student Login**: `POST /api/v1/auth/login` returns `200 OK` with valid JWT token.
+3. **Invalid Password**: `POST /api/v1/auth/login` with bad password returns `401 Unauthorized`.
+4. **Unauthorized Access**: Accessing protected routes (e.g., `GET /api/v1/auth/me`) without a token returns `401 Unauthorized`.
+5. **Admin Authorized Route**: Admin token accessing `GET /api/v1/admin/dashboard` returns `200 OK` with dashboard statistics.
+6. **Student Role Enforcement**: Student token attempting `GET /api/v1/admin/dashboard` is strictly rejected with `403 Forbidden` (`Access denied. Role 'STUDENT' is not authorized to access this resource. Required: ADMIN`).
+
+---
+
+## 📚 Phase 4 — Course and Academic Content Management
+
+### 1. Academic Hierarchy Overview
+Phase 4 establishes the strict four-tier academic structure for Sidd Academy:
+```
+Course (e.g., Class 12 Physics Electromagnetism Mastery)
+  └── Subject (e.g., Electrodynamics & Waves)
+        └── Chapter (e.g., Electromagnetic Induction & Lenz Law)
+              └── Lesson / Class (e.g., Faraday's Law & Induced EMF Derivations)
+                    └── Video & Notes (YouTube Lecture Stream & PDF Study Material)
+```
+
+### 2. Architecture & Design Principles
+- **Strict Separation of Concerns**:
+  - **Routes (`routes/*.routes.js`)**: Declarative HTTP route definitions, URL parameter routing, and middleware mounting (`authenticate`, `authorize('ADMIN')`, validation chains).
+  - **Validators (`validators/*.validator.js`)**: Robust input sanitization and schema constraints via `express-validator` (required fields, price numbers, positive integers, valid dates, URL patterns).
+  - **Controllers (`controllers/*.controller.js`)**: HTTP request decoding, response status codes, standardized JSON responses (`sendSuccess`, `AppError`). **Zero SQL queries reside in controllers.**
+  - **Services (`services/*.service.js`)**: Business rules, relational hierarchy assembly, automated URL slug generation, duplicate slug conflict resolution, and sequencing/ordering defaults.
+  - **Repositories (`repositories/*.repository.js`)**: Relational PostgreSQL parameterization (`courses`, `subjects`, `chapters`, `lessons` / `daily_classes`), snake_case to camelCase normalization, and graceful in-memory mock store fallback.
+- **Relational Integrity**: Foreign key constraints with cascading deletes across `Course → Subject → Chapter → Lesson`.
+
+### 3. API Reference
+
+#### Courses (`/api/v1/courses`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/courses` | Public | List published courses with pagination (`?page=1&limit=9`), search (`?search=`), and level filter (`?level=`). |
+| `GET` | `/api/v1/courses/:id` | Public | Get single course by ID or slug with full nested hierarchy (`subjects → chapters → lessons`). |
+| `GET` | `/api/v1/courses/:id/content` | Public | Get course syllabus outline. |
+| `POST` | `/api/v1/courses` | Admin | Create a new course with title, description, price, discount price, level, duration, and thumbnail. |
+| `PUT` | `/api/v1/courses/:id` | Admin | Update course metadata, pricing, or publication status. |
+| `DELETE` | `/api/v1/courses/:id` | Admin | Delete course (cascades to child subjects, chapters, and lessons). |
+
+#### Subjects (`/api/v1/subjects`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/subjects` | Public | List subjects for a course (`?courseId=:id`). |
+| `GET` | `/api/v1/subjects/:id` | Public | Get single subject details. |
+| `POST` | `/api/v1/subjects` | Admin | Create subject linked to parent course with sequential order. |
+| `PUT` | `/api/v1/subjects/:id` | Admin | Update subject name or description. |
+| `PUT` | `/api/v1/subjects/reorder` | Admin | Batch reorder subjects via `{ orders: [{ id, order }] }`. |
+| `DELETE` | `/api/v1/subjects/:id` | Admin | Delete subject (cascades to chapters and lessons). |
+
+#### Chapters (`/api/v1/chapters`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/chapters` | Public | List chapters for a subject (`?subjectId=:id`). |
+| `GET` | `/api/v1/chapters/:id` | Public | Get single chapter details. |
+| `POST` | `/api/v1/chapters` | Admin | Create chapter linked to parent subject. |
+| `PUT` | `/api/v1/chapters/:id` | Admin | Update chapter title or description. |
+| `PUT` | `/api/v1/chapters/reorder` | Admin | Batch reorder chapters via `{ orders: [{ id, order }] }`. |
+| `DELETE` | `/api/v1/chapters/:id` | Admin | Delete chapter (cascades to lessons). |
+
+#### Lessons / Daily Classes (`/api/v1/lessons` & `/api/v1/classes`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/lessons` | Public | List scheduled lessons for a chapter (`?chapterId=:id`). |
+| `GET` | `/api/v1/lessons/:id` | Public | Get single lesson/class with video streaming URL. |
+| `POST` | `/api/v1/lessons` | Admin | Create lesson with `chapterId`, `title`, `classDate`, `duration`, `videoUrl`, `isLive`. |
+| `PUT` | `/api/v1/lessons/:id` | Admin | Update lesson metadata, reschedule class date, or update video URL. |
+| `PUT` | `/api/v1/lessons/reorder` | Admin | Batch reorder lessons via `{ orders: [{ id, order }] }`. |
+| `DELETE` | `/api/v1/lessons/:id` | Admin | Delete lesson. |
+
+### 4. Frontend & User Experience
+- **Public Course Catalog (`CoursesPage.jsx`)**:
+  - Grid view featuring course level tags, rating badges, duration indicators, student counters, and real-time search/filter inputs.
+  - Interactive pagination controls with empty filter reset states.
+- **Academic Hierarchy Syllabus Explorer (`CourseDetailPage.jsx`)**:
+  - Interactive accordion view rendering complete nested hierarchy: Subjects → Chapters → Scheduled Daily Classes.
+  - Video player modal for YouTube lecture previews and live class badges.
+- **Admin Management Consoles**:
+  - `ManageCourses.jsx`: Full CRUD table with level selectors, price/discount settings, and deletion confirmation dialogs.
+  - `ManageSubjects.jsx`, `ManageChapters.jsx`, `ManageClasses.jsx`: Cascading drilldown selectors with modal forms for creating and editing syllabus hierarchy nodes.
+
+---
+
+## 🎥 Phase 5 — Digital Notes & YouTube Video Management
+
+### 1. Architectural Strategy
+
+#### Video Streaming & Hosting Policy
+- **Zero Heavy Video Server Storage**: High-definition video files are **never** stored on or streamed through the application server filesystem.
+- **YouTube Embed & Playlist Integration**: Video lectures are hosted externally on YouTube (or YouTube Playlists) and streamed client-side via privacy-enhanced YouTube player embeds (`https://www.youtube-nocookie.com/embed/*`).
+- **Flexible Provider Support**: Normalized database structure supports `youtube`, `vimeo`, `s3`, and custom CDN providers.
+
+#### Protected Digital Study Material & PDF Access
+- **No Direct Filesystem Path Exposure**: Raw storage paths (such as `/uploads/notes/*.pdf` or private cloud buckets) are never leaked in public API responses.
+- **Masked URLs for Locked Notes**: The Note Service automatically evaluates user authorization. If a note is premium/paid and the user is not entitled, `fileUrl` is strictly returned as `null` with `isLocked: true`.
+- **Authenticated Access Verification (`/api/v1/notes/:id/access`)**: Checks if the note is free, if the requester is an admin, or if the student has purchased the individual note or the parent course. Only authorized callers receive verified streaming links or download tokens. Unauthorized requests fail with `403 Forbidden`.
+
+### 2. Layered Architecture Separation
+
+```
+[ Client Request ]
+       │
+       ▼
+[ Routes: /api/v1/notes & /api/v1/videos ]
+       │
+       ▼
+[ Validators: validateCreateNote, validateUpdateNote, validateCreateVideo ]
+       │
+       ▼
+[ Controllers: note.controller.js & video.controller.js ]
+       │
+       ▼
+[ Services: note.service.js & video.service.js ]
+       │   ├── Checks entitlements & masks locked URLs
+       │   └── Extracts YouTube IDs & builds privacy embed links
+       ▼
+[ Repositories: note.repository.js & video.repository.js ]
+       │   └── Parameterized PostgreSQL queries with mockStore fallback
+       ▼
+[ Database: notes, videos, note_purchases, enrollments ]
+```
+
+### 3. API Reference
+
+#### Digital Notes (`/api/v1/notes`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/notes` | Public / Entitlement-aware | List study notes with `isLocked` flags, filtered by course, subject, or free/paid status. Raw URLs are masked for locked notes. |
+| `GET` | `/api/v1/notes/:id` | Public / Entitlement-aware | Get note metadata with access status. |
+| `GET` | `/api/v1/notes/:id/access` | Authenticated | Verify entitlement and retrieve authorized PDF file URL / stream payload. |
+| `GET` | `/api/v1/notes/:id/download` | Authenticated | Download note PDF file and increment download analytics counter. |
+| `POST` | `/api/v1/notes` | Admin | Upload note PDF, set title, description, price, free/paid status, course/subject/chapter hierarchy, and publication state. |
+| `PUT` | `/api/v1/notes/:id` | Admin | Update note metadata and pricing. |
+| `DELETE` | `/api/v1/notes/:id` | Admin | Delete digital note. |
+
+#### Videos (`/api/v1/videos`)
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/videos` | Public | List video streams with generated YouTube privacy embed URLs. |
+| `GET` | `/api/v1/videos/:id` | Public | Get single video stream details. |
+| `GET` | `/api/v1/videos/lesson/:lessonId` | Public | Get all video streams associated with a lesson. |
+| `POST` | `/api/v1/videos` | Admin | Associate a YouTube video or playlist URL with a lesson. |
+| `PUT` | `/api/v1/videos/:id` | Admin | Update video title, URL, quality, or order. |
+| `DELETE` | `/api/v1/videos/:id` | Admin | Remove video association. |
+
+### 4. Frontend & User Experience
+- **Interactive Notes Hub (`NotesPage.jsx` & `NoteCard.jsx`)**:
+  - Distinct **FREE PDF** and **PREMIUM PDF** badges with exact pricing in ₹ INR.
+  - **Locked Resource States**: Padlock indicators, disabled direct downloads, and one-click purchase/unlock modals.
+  - **In-App PDF Reader Modal**: Authenticated reader window for previewing unlocked documents directly without leaving the app.
+  - **Modular Hierarchy View (`ModularNoteViewer.jsx`)**: Organizes PDFs cleanly by Subject → Chapter → PDF 1 / PDF 2 modules.
+- **Course Video Watch Studio (`CourseVideoWatchPage.jsx`)**:
+  - Full-screen 16:9 YouTube video player with custom controls, duration display, and chapter markers.
+  - Collapsible course curriculum sidebar with lecture progress markers.
+  - Embedded Study Notes tab for rapid downloading of PDFs attached to the current lesson.
+  - Prev / Next lecture quick navigation.
+- **Admin Video & Notes Management**:
+  - `ManageVideos.jsx`: Dynamic cascading dropdowns (Course → Subject → Chapter → Lesson) and live YouTube preview before saving.
+  - `ManageNotes.jsx`: PDF file upload, pricing controls, page count configuration, and download tracking.
+
+---
+
 ## 🏛️ Current Architecture
 
 The platform uses a strict decoupled PERN architecture with clean separation of concerns:

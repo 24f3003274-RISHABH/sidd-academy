@@ -5,6 +5,7 @@ import Note from '../models/Note.model.js';
 import Order from '../models/Order.model.js';
 import { AppError, sendSuccess } from '../utils/apiResponse.js';
 import { mockData } from '../data/mockStore.js';
+import { orderService } from '../services/order.service.js';
 
 export const getDashboardStats = async (req, res, next) => {
   try {
@@ -143,31 +144,11 @@ export const getAllOrders = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const status = req.query.status || req.query.paymentStatus;
+    const search = req.query.search;
 
-    if (mongoose.connection.readyState === 1) {
-      const query = {};
-      if (req.query.paymentStatus) {
-        query.paymentStatus = req.query.paymentStatus;
-      }
-
-      const total = await Order.countDocuments(query);
-      const orders = await Order.find(query)
-        .populate('user', 'name email')
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-
-      return sendSuccess(res, 200, 'Orders fetched', { orders, total, page, pages: Math.ceil(total / limit) });
-    }
-
-    let filtered = [...mockData.orders];
-    if (req.query.paymentStatus) {
-      filtered = filtered.filter(o => o.paymentStatus === req.query.paymentStatus);
-    }
-    const total = filtered.length;
-    const orders = filtered.slice(skip, skip + limit);
-    return sendSuccess(res, 200, 'Orders fetched', { orders, total, page, pages: Math.ceil(total / limit) || 1 });
+    const result = await orderService.getAllOrders({ page, limit, status, search });
+    return sendSuccess(res, 200, 'Orders fetched', result);
   } catch (error) {
     next(error);
   }

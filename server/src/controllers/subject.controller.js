@@ -1,87 +1,94 @@
-import mongoose from 'mongoose';
-import Subject from '../models/Subject.model.js';
-import Course from '../models/Course.model.js';
-import { AppError, sendSuccess } from '../utils/apiResponse.js';
-import { mockData } from '../data/mockStore.js';
+import { subjectService } from '../services/subject.service.js';
+import { sendSuccess } from '../utils/apiResponse.js';
 
+/**
+ * Subject Controller - Handles subject API endpoints
+ */
+
+/**
+ * GET /api/v1/subjects or GET /api/v1/subjects/:courseId
+ */
 export const getSubjectsByCourse = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const subjects = await Subject.find({ course: req.params.courseId }).populate('chapters').sort({ order: 1 });
-      return sendSuccess(res, 200, 'Subjects fetched successfully', { subjects });
+    const target = req.params.id || req.params.courseId || req.query.courseId || req.query.course;
+    if (!target) {
+      return sendSuccess(res, 200, 'Subjects fetched', { subjects: [] });
+    }
+    
+    // Check if target is a subject ID or course ID
+    try {
+      const single = await subjectService.getSubjectById(target);
+      if (single && single.courseId !== target) {
+        // It's a single subject
+        return sendSuccess(res, 200, 'Subject fetched successfully', { subject: single, subjects: [single] });
+      }
+    } catch {
+      // Not a single subject, treat as courseId
     }
 
-    const subjects = mockData.subjects
-      .filter(s => s.course === req.params.courseId)
-      .map(s => ({
-        ...s,
-        chapters: mockData.chapters.filter(ch => ch.subject === s._id)
-      }))
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
-
+    const subjects = await subjectService.getSubjectsByCourse(target);
     return sendSuccess(res, 200, 'Subjects fetched successfully', { subjects });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/subjects/:id
+ */
+export const getSubjectById = async (req, res, next) => {
+  try {
+    const subject = await subjectService.getSubjectById(req.params.id);
+    return sendSuccess(res, 200, 'Subject fetched successfully', { subject });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/subjects (Admin only)
+ */
 export const createSubject = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const subject = await Subject.create(req.body);
-      await Course.findByIdAndUpdate(subject.course, { $push: { subjects: subject._id } });
-      return sendSuccess(res, 201, 'Subject created successfully', { subject });
-    }
-
-    const newSubj = {
-      _id: `subj_${Date.now()}`,
-      ...req.body,
-      chapters: [],
-      order: req.body.order || mockData.subjects.length + 1
-    };
-    mockData.subjects.push(newSubj);
-    return sendSuccess(res, 201, 'Subject created successfully', { subject: newSubj });
+    const subject = await subjectService.createSubject(req.body);
+    return sendSuccess(res, 201, 'Subject created successfully', { subject });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/subjects/:id (Admin only)
+ */
 export const updateSubject = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-      if (!subject) {
-        throw new AppError('Subject not found', 404);
-      }
-      return sendSuccess(res, 200, 'Subject updated successfully', { subject });
-    }
-
-    const idx = mockData.subjects.findIndex(s => s._id === req.params.id);
-    if (idx === -1) throw new AppError('Subject not found', 404);
-    mockData.subjects[idx] = { ...mockData.subjects[idx], ...req.body };
-    return sendSuccess(res, 200, 'Subject updated successfully', { subject: mockData.subjects[idx] });
+    const subject = await subjectService.updateSubject(req.params.id, req.body);
+    return sendSuccess(res, 200, 'Subject updated successfully', { subject });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/subjects/reorder (Admin only)
+ */
+export const reorderSubjects = async (req, res, next) => {
+  try {
+    await subjectService.reorderSubjects(req.body.orders || req.body);
+    return sendSuccess(res, 200, 'Subjects reordered successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/v1/subjects/:id (Admin only)
+ */
 export const deleteSubject = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const subject = await Subject.findByIdAndDelete(req.params.id);
-      if (!subject) {
-        throw new AppError('Subject not found', 404);
-      }
-      await Course.findByIdAndUpdate(subject.course, { $pull: { subjects: subject._id } });
-      return sendSuccess(res, 200, 'Subject deleted successfully');
-    }
-
-    const idx = mockData.subjects.findIndex(s => s._id === req.params.id);
-    if (idx === -1) throw new AppError('Subject not found', 404);
-    mockData.subjects.splice(idx, 1);
+    await subjectService.deleteSubject(req.params.id);
     return sendSuccess(res, 200, 'Subject deleted successfully');
   } catch (error) {
     next(error);
   }
 };
-

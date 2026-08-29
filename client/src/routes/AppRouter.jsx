@@ -12,6 +12,7 @@ const HomePage = lazy(() => import('../pages/public/HomePage'));
 const AboutPage = lazy(() => import('../pages/public/AboutPage'));
 const CoursesPage = lazy(() => import('../pages/public/CoursesPage'));
 const CourseDetailPage = lazy(() => import('../pages/public/CourseDetailPage'));
+const CourseVideoWatchPage = lazy(() => import('../pages/public/CourseVideoWatchPage'));
 const NotesPage = lazy(() => import('../pages/public/NotesPage'));
 const ContactPage = lazy(() => import('../pages/public/ContactPage'));
 
@@ -22,12 +23,14 @@ const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
 // Student Pages
 const DashboardPage = lazy(() => import('../pages/student/DashboardPage'));
 const MyCoursesPage = lazy(() => import('../pages/student/MyCoursesPage'));
+const MyOrdersPage = lazy(() => import('../pages/student/MyOrdersPage'));
 const ProfilePage = lazy(() => import('../pages/student/ProfilePage'));
 
 // Admin Pages
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
 const ManageCourses = lazy(() => import('../pages/admin/ManageCourses'));
 const ManageNotes = lazy(() => import('../pages/admin/ManageNotes'));
+const ManageVideos = lazy(() => import('../pages/admin/ManageVideos'));
 const ManageUsers = lazy(() => import('../pages/admin/ManageUsers'));
 const ManageOrders = lazy(() => import('../pages/admin/ManageOrders'));
 const ManageBanners = lazy(() => import('../pages/admin/ManageBanners'));
@@ -54,6 +57,7 @@ const AppRouter = () => {
         <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
         <Route path="/courses" element={<PublicLayout><CoursesPage /></PublicLayout>} />
         <Route path="/courses/:id" element={<PublicLayout><CourseDetailPage /></PublicLayout>} />
+        <Route path="/courses/:id/watch" element={<PublicLayout><CourseVideoWatchPage /></PublicLayout>} />
         <Route path="/notes" element={<PublicLayout><NotesPage /></PublicLayout>} />
         <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
 
@@ -64,19 +68,21 @@ const AppRouter = () => {
         {/* Student Routes */}
         <Route path="/student/dashboard" element={<ProtectedRoute><PublicLayout><DashboardPage /></PublicLayout></ProtectedRoute>} />
         <Route path="/student/my-courses" element={<ProtectedRoute><PublicLayout><MyCoursesPage /></PublicLayout></ProtectedRoute>} />
+        <Route path="/student/orders" element={<ProtectedRoute><PublicLayout><MyOrdersPage /></PublicLayout></ProtectedRoute>} />
         <Route path="/student/profile" element={<ProtectedRoute><PublicLayout><ProfilePage /></PublicLayout></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="courses" element={<ManageCourses />} />
-          <Route path="notes" element={<ManageNotes />} />
-          <Route path="users" element={<ManageUsers />} />
-          <Route path="orders" element={<ManageOrders />} />
-          <Route path="banners" element={<ManageBanners />} />
           <Route path="subjects" element={<ManageSubjects />} />
           <Route path="chapters" element={<ManageChapters />} />
           <Route path="classes" element={<ManageClasses />} />
+          <Route path="videos" element={<ManageVideos />} />
+          <Route path="notes" element={<ManageNotes />} />
+          <Route path="banners" element={<ManageBanners />} />
+          <Route path="users" element={<ManageUsers />} />
+          <Route path="orders" element={<ManageOrders />} />
         </Route>
 
         <Route path="*" element={<PublicLayout><NotFoundPage /></PublicLayout>} />

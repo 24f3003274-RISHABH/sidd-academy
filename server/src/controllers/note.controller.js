@@ -1,195 +1,129 @@
-import fs from 'fs';
-import path from 'path';
-import mongoose from 'mongoose';
-import Note from '../models/Note.model.js';
-import { AppError, sendSuccess } from '../utils/apiResponse.js';
-import { mockData } from '../data/mockStore.js';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { noteService } from '../services/note.service.js';
+import { sendSuccess } from '../utils/apiResponse.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+/**
+ * Controller for Digital Notes & Study Materials
+ */
 
+/**
+ * GET /api/v1/notes
+ * Public listing of digital notes with free/paid status & locked resource indicators
+ */
 export const getAllNotes = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      let notes = await Note.find({ isPublished: true }).sort({ createdAt: -1 }).lean();
-      
-      notes = notes.map((note) => {
-        const isPaid = !note.isFree;
-        let hasPurchased = false;
-        if (req.user) {
-          hasPurchased = req.user.role === 'admin' || (req.user.purchasedNotes && req.user.purchasedNotes.includes(note._id.toString()));
-        }
-        if (isPaid && !hasPurchased) {
-          delete note.fileUrl;
-        }
-        return note;
-      });
+    const { courseId, subjectId, chapterId, isFree, search, page = 1, limit = 50 } = req.query;
+    const notes = await noteService.getNotes(
+      { courseId, subjectId, chapterId, isFree, search, isPublished: true, page, limit },
+      req.user
+    );
 
-      return sendSuccess(res, 200, 'Notes fetched successfully', { notes });
-    }
-
-    // In-memory fallback
-    const notes = mockData.notes.filter(n => n.isPublished).map(n => {
-      const copy = { ...n };
-      const isPaid = !copy.isFree;
-      let hasPurchased = false;
-      if (req.user) {
-        hasPurchased = req.user.role === 'admin' || (req.user.purchasedNotes && req.user.purchasedNotes.includes(copy._id.toString()));
-      }
-      if (isPaid && !hasPurchased) {
-        delete copy.fileUrl;
-      }
-      return copy;
+    return sendSuccess(res, 200, 'Notes fetched successfully', {
+      notes,
+      total: notes.length,
     });
-
-    return sendSuccess(res, 200, 'Notes fetched successfully', { notes });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/notes/:id
+ * Retrieve single note metadata
+ */
 export const getNoteById = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const note = await Note.findById(req.params.id).lean();
-      if (!note) {
-        throw new AppError('Note not found', 404);
-      }
-      return sendSuccess(res, 200, 'Note metadata fetched successfully', { note });
-    }
-
-    const note = mockData.notes.find(n => n._id === req.params.id);
-    if (!note) {
-      throw new AppError('Note not found', 404);
-    }
-    return sendSuccess(res, 200, 'Note metadata fetched successfully', { note });
+    const note = await noteService.getNoteById(req.params.id, req.user);
+    return sendSuccess(res, 200, 'Note details fetched successfully', { note });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /api/v1/notes/:id/access
+ * Authenticated access verification endpoint
+ * Returns secure file URL if user is entitled; throws 403 Forbidden otherwise
+ */
+export const getSecureAccess = async (req, res, next) => {
+  try {
+    const accessData = await noteService.getSecureNoteAccess(req.params.id, req.user);
+    return sendSuccess(res, 200, 'Note access authorized', accessData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/notes/:id/download
+ * Authenticated download verification endpoint
+ */
 export const downloadNote = async (req, res, next) => {
   try {
-    let note;
-    if (mongoose.connection.readyState === 1) {
-      note = await Note.findById(req.params.id);
-    } else {
-      note = mockData.notes.find(n => n._id === req.params.id);
-    }
-
-    if (!note) {
-      throw new AppError('Note not found', 404);
-    }
-    if (!note.isFree) {
-      const hasPurchased = req.user && (req.user.role === 'admin' || (req.user.purchasedNotes && req.user.purchasedNotes.includes(note._id.toString())));
-      if (!hasPurchased) {
-        throw new AppError('Access denied. Please purchase the note to download.', 403);
-      }
-    }
+    const accessData = await noteService.getSecureNoteAccess(req.params.id, req.user);
     
-    note.downloadCount = (note.downloadCount || 0) + 1;
-    if (mongoose.connection.readyState === 1) {
-      await note.save();
-    }
-    
-    // If it's a web URL (e.g. sample PDF URL), redirect or serve
-    if (note.fileUrl && (note.fileUrl.startsWith('http://') || note.fileUrl.startsWith('https://'))) {
-      return res.redirect(note.fileUrl);
+    // If it's an external web URL, redirect
+    if (accessData.fileUrl && (accessData.fileUrl.startsWith('http://') || accessData.fileUrl.startsWith('https://'))) {
+      return res.redirect(accessData.fileUrl);
     }
 
-    const filePath = path.join(process.cwd(), note.fileUrl || '');
-    if (fs.existsSync(filePath)) {
-      return res.download(filePath, note.fileName || 'note.pdf');
-    }
-
-    // Default sample PDF download fallback
-    return res.redirect('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+    // Default safe response
+    return sendSuccess(res, 200, 'Download access granted', accessData);
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * POST /api/v1/notes
+ * Admin create new study note
+ */
 export const createNote = async (req, res, next) => {
   try {
-    const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : req.body.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-    
-    const noteData = {
-      ...req.body,
-      isFree: req.body.isFree === 'true' || req.body.isFree === true,
-      price: req.body.price ? Number(req.body.price) : 0,
-      fileUrl,
-      fileName: req.file ? req.file.originalname : 'note.pdf',
-      fileSize: req.file ? req.file.size : 1024 * 1024,
-    };
-    
-    if (mongoose.connection.readyState === 1) {
-      const note = await Note.create(noteData);
-      return sendSuccess(res, 201, 'Note created successfully', { note });
+    let fileUrl = req.body.fileUrl;
+    let fileName = req.body.fileName;
+    let fileSize = req.body.fileSize;
+
+    if (req.file) {
+      fileUrl = `/uploads/notes/${req.file.filename}`;
+      fileName = req.file.originalname;
+      fileSize = `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`;
     }
 
-    const newNote = {
-      _id: `note_${Date.now()}`,
-      ...noteData,
-      isPublished: true,
-      downloadCount: 0,
-      createdAt: new Date(),
-    };
-    mockData.notes.unshift(newNote);
-    return sendSuccess(res, 201, 'Note created successfully', { note: newNote });
+    const note = await noteService.createNote({
+      ...req.body,
+      fileUrl,
+      fileName,
+      fileSize,
+    });
+
+    return sendSuccess(res, 201, 'Note created successfully', { note });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * PUT /api/v1/notes/:id
+ * Admin update note metadata
+ */
 export const updateNote = async (req, res, next) => {
   try {
-    const updateData = { ...req.body };
-    delete updateData.fileUrl; // Prevent updating file URL here
-    if (mongoose.connection.readyState === 1) {
-      const note = await Note.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-      if (!note) {
-        throw new AppError('Note not found', 404);
-      }
-      return sendSuccess(res, 200, 'Note updated successfully', { note });
-    }
-
-    const idx = mockData.notes.findIndex(n => n._id === req.params.id);
-    if (idx === -1) throw new AppError('Note not found', 404);
-    mockData.notes[idx] = { ...mockData.notes[idx], ...updateData };
-    return sendSuccess(res, 200, 'Note updated successfully', { note: mockData.notes[idx] });
+    const note = await noteService.updateNote(req.params.id, req.body);
+    return sendSuccess(res, 200, 'Note updated successfully', { note });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * DELETE /api/v1/notes/:id
+ * Admin delete note
+ */
 export const deleteNote = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const note = await Note.findByIdAndDelete(req.params.id);
-      if (!note) {
-        throw new AppError('Note not found', 404);
-      }
-      try {
-        if (note.fileUrl) {
-          const filePath = path.join(process.cwd(), note.fileUrl);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to delete note file:', err);
-      }
-      return sendSuccess(res, 200, 'Note deleted successfully');
-    }
-
-    const idx = mockData.notes.findIndex(n => n._id === req.params.id);
-    if (idx === -1) throw new AppError('Note not found', 404);
-    mockData.notes.splice(idx, 1);
+    await noteService.deleteNote(req.params.id);
     return sendSuccess(res, 200, 'Note deleted successfully');
   } catch (error) {
     next(error);
   }
 };
-

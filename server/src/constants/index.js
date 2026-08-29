@@ -10,10 +10,27 @@ export const USER_ROLES = {
 };
 
 export const ORDER_STATUS = {
-  PENDING: 'pending',
-  PAID: 'paid',
-  FAILED: 'failed',
-  REFUNDED: 'refunded',
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  // Lowercase aliases for db backward compatibility
+  pending: 'PENDING',
+  paid: 'PAID',
+  failed: 'FAILED',
+  cancelled: 'CANCELLED',
+};
+
+export const PAYMENT_STATUS = {
+  CREATED: 'CREATED',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+  // Lowercase aliases
+  created: 'CREATED',
+  initiated: 'CREATED',
+  completed: 'SUCCESS',
+  success: 'SUCCESS',
+  failed: 'FAILED',
 };
 
 export const COURSE_LEVELS = {
