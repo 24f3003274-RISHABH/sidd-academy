@@ -498,6 +498,69 @@ cp client/.env.example client/.env
 # - VITE_RAZORPAY_KEY_ID
 ```
 
+### Phase 7 — Student Experience and Dashboard
+
+#### 1. Overview & Objectives
+Phase 7 introduces a dedicated, high-performance Student Learning Portal and Dashboard featuring:
+- **Welcome & Learning Stats Section**: Real-time progress metrics (enrolled courses, purchased notes, completed lessons, and overall syllabus completion percentage).
+- **Enrolled Courses Explorer**: Rich course cards with syllabus completion meters, instructor information, and instant "Resume Learning" actions.
+- **Purchased Notes & Digital Library**: Digital viewer with in-browser PDF reader, chapter filtering, and secure tokenized download triggers.
+- **Scheduled & Recent Classes**: Direct access to classroom video lectures and recorded sessions.
+- **Available Courses Catalog**: Catalog recommendations highlighting new batches, pricing, and discount tags.
+- **Interactive Course Learning Interface**:
+  - Hierarchical structure: `Course` → `Subjects` → `Chapters` → `Lessons` → `Video Player` + `Attached Notes`.
+  - State management for completed lessons with optimistic UI updates and backend progress recalculation.
+  - Distinct UX for locked vs. accessible content with transparent price tags and direct enrollment CTAs.
+- **Responsive Navigation**: Desktop sidebar with active states and mobile quick-access tabs, skeleton loaders, and empty/error states.
+
+#### 2. Student Flow Architecture
+```
+Student Login / Registration
+  ↓
+Student Dashboard (/student/dashboard)
+  ├── 1. Welcome & Continue Learning Hero
+  ├── 2. Enrolled Courses (/student/my-courses)
+  │      ↓
+  │    Course Learning Room (/courses/:id/watch)
+  │      ├── Subject Accordion
+  │      │     └── Chapter Accordion
+  │      │           └── Lesson Item
+  │      ├── Video Player (YouTube HD / HTML5)
+  │      ├── Toggle "Mark as Completed"
+  │      └── Chapter Study Notes (In-App PDF Reader / Download)
+  ├── 3. Purchased Digital Notes (/student/notes)
+  │      ├── Subject Filter Tabs & Search
+  │      ├── Read Online Modal
+  │      └── Secure Download Link
+  ├── 4. Order & Transaction History (/student/orders)
+  └── 5. Student Profile & Password Security (/student/profile)
+```
+
+#### 3. Database Schema: Lesson Progress (`lesson_progress`)
+```sql
+CREATE TABLE IF NOT EXISTS lesson_progress (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  lesson_id VARCHAR(255) NOT NULL,
+  is_completed BOOLEAN DEFAULT TRUE,
+  completed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_user_lesson UNIQUE (user_id, course_id, lesson_id)
+);
+```
+
+#### 4. Student API Endpoints (`/api/v1/student`)
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `GET` | `/api/v1/student/dashboard` | Aggregated dashboard data (stats, courses, notes, classes, activities, profile) | Student / Auth |
+| `GET` | `/api/v1/student/courses` | Enrolled courses with calculated progress percentages | Student / Auth |
+| `GET` | `/api/v1/student/notes` | Purchased digital notes with secure access | Student / Auth |
+| `GET` | `/api/v1/student/recent-classes` | Recent video lectures for enrolled courses | Student / Auth |
+| `GET` | `/api/v1/student/activities` | Student activity timeline and progress events | Student / Auth |
+| `POST` | `/api/v1/student/lesson-progress` | Toggle lesson completion and recalculate syllabus percentage | Student / Auth |
+
 ### 3. Start Development
 
 ```bash

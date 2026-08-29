@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
 import { getAllNotes, getSecureAccess } from '../../api/noteApi';
+import { updateLessonProgress } from '../../api/studentApi';
 import { useAuth } from '../../hooks/useAuth';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
 import Loader from '../../components/common/Loader';
@@ -10,8 +11,11 @@ import {
   FiPlay,
   FiLock,
   FiCheckCircle,
+  FiCircle,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronDown,
+  FiChevronUp,
   FiBookOpen,
   FiFileText,
   FiDownload,
@@ -21,6 +25,9 @@ import {
   FiLayers,
   FiArrowLeft,
   FiExternalLink,
+  FiShoppingCart,
+  FiShield,
+  FiCheck,
 } from 'react-icons/fi';
 
 const CourseVideoWatchPage = () => {
@@ -37,7 +44,15 @@ const CourseVideoWatchPage = () => {
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [selectedPdf, setSelectedPdf] = useState(null);
 
-  // Fetch Course details and hierarchy
+  // Expanded subject/chapter accordion state
+  const [expandedSubjects, setExpandedSubjects] = useState({});
+  const [expandedChapters, setExpandedChapters] = useState({});
+
+  // Completed lesson IDs set for instant responsive updates
+  const [completedLessons, setCompletedLessons] = useState(new Set());
+  const [togglingProgress, setTogglingProgress] = useState(false);
+
+  // Fetch Course details, hierarchy, and notes
   useEffect(() => {
     const fetchCourseData = async () => {
       try {
@@ -45,6 +60,20 @@ const CourseVideoWatchPage = () => {
         const res = await getCourseById(courseId);
         const courseData = res.data?.data?.course || res.data?.course || res.data;
         setCourse(courseData);
+
+        // Auto-expand all subjects and chapters initially
+        const subjMap = {};
+        const chapMap = {};
+        (courseData?.subjects || []).forEach((subj, sIdx) => {
+          const sId = subj.id || subj._id || `subj-${sIdx}`;
+          subjMap[sId] = true;
+          (subj.chapters || []).forEach((chap, cIdx) => {
+            const cId = chap.id || chap._id || `chap-${sIdx}-${cIdx}`;
+            chapMap[cId] = true;
+          });
+        });
+        setExpandedSubjects(subjMap);
+        setExpandedChapters(chapMap);
 
         // Fetch notes for this course
         try {
@@ -65,22 +94,27 @@ const CourseVideoWatchPage = () => {
     }
   }, [courseId]);
 
-  // Flatten lessons from hierarchy
+  // Flatten lessons from course -> subjects -> chapters -> lessons hierarchy
   const allLessons = useMemo(() => {
     if (!course) return [];
     const list = [];
     const subjects = course.subjects || [];
 
-    subjects.forEach((subj) => {
+    subjects.forEach((subj, sIdx) => {
+      const sId = subj.id || subj._id || `subj-${sIdx}`;
       const chapters = subj.chapters || [];
-      chapters.forEach((chap) => {
+      chapters.forEach((chap, cIdx) => {
+        const cId = chap.id || chap._id || `chap-${sIdx}-${cIdx}`;
         const classes = chap.dailyClasses || chap.lessons || [];
-        classes.forEach((cls) => {
+        classes.forEach((cls, lIdx) => {
+          const lId = cls.id || cls._id || `lesson-${sIdx}-${cIdx}-${lIdx}`;
           list.push({
             ...cls,
+            id: lId,
+            subjectId: sId,
             subjectName: subj.name,
+            chapterId: cId,
             chapterTitle: chap.title,
-            chapterId: chap.id || chap._id,
           });
         });
       });
@@ -93,7 +127,7 @@ const CourseVideoWatchPage = () => {
   useEffect(() => {
     if (allLessons.length > 0) {
       const requestedId = searchParams.get('lessonId');
-      const found = allLessons.find((l) => (l.id || l._id) === requestedId);
+      const found = allLessons.find((l) => l.id === requestedId || l._id === requestedId);
       if (found) {
         setActiveLessonId(found.id || found._id);
       } else {
@@ -115,7 +149,8 @@ const CourseVideoWatchPage = () => {
     if (!user) return false;
     if (user.role === 'admin') return true;
     if (course?.isFree) return true;
-    return user.purchasedCourses?.includes(courseId);
+    const purchased = user.purchasedCourses || [];
+    return purchased.includes(courseId) || purchased.some((p) => p.id === courseId || p._id === courseId);
   }, [user, course, courseId]);
 
   // Check if current lesson is locked
@@ -131,6 +166,45 @@ const CourseVideoWatchPage = () => {
     setSearchParams({ lessonId: lid });
   };
 
+  const toggleSubject = (sId) => {
+    setExpandedSubjects((prev) => ({ ...prev, [sId]: !prev[sId] }));
+  };
+
+  const toggleChapter = (cId) => {
+    setExpandedChapters((prev) => ({ ...prev, [cId]: !prev[cId] }));
+  };
+
+  const toggleComplete = async () => {
+    if (!currentLesson || !isAuthenticated) {
+      if (!isAuthenticated) {
+        toast('Please login to track your lesson progress', { icon: '🔒' });
+      }
+      return;
+    }
+    const lid = currentLesson.id || currentLesson._id;
+    const isNowCompleted = !completedLessons.has(lid);
+
+    // Optimistic state update
+    const updatedSet = new Set(completedLessons);
+    if (isNowCompleted) {
+      updatedSet.add(lid);
+      toast.success('Lesson marked as completed! 🎉');
+    } else {
+      updatedSet.delete(lid);
+      toast('Lesson marked as incomplete');
+    }
+    setCompletedLessons(updatedSet);
+
+    try {
+      setTogglingProgress(true);
+      await updateLessonProgress(courseId, lid, isNowCompleted);
+    } catch (err) {
+      console.error('Failed to sync lesson progress:', err);
+    } finally {
+      setTogglingProgress(false);
+    }
+  };
+
   const currentIndex = allLessons.findIndex((l) => (l.id || l._id) === activeLessonId);
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
@@ -144,7 +218,7 @@ const CourseVideoWatchPage = () => {
       setIsPdfModalOpen(true);
       toast.success('Study notes unlocked', { id: 'pdf-access' });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Access restricted. Please enroll in course to unlock.', { id: 'pdf-access' });
+      toast.error(err.response?.data?.message || 'Access restricted. Please purchase note or enroll in course.', { id: 'pdf-access' });
     }
   };
 
@@ -161,10 +235,12 @@ const CourseVideoWatchPage = () => {
     );
   }
 
+  const isCurrentCompleted = currentLesson && completedLessons.has(currentLesson.id || currentLesson._id);
+
   return (
     <div style={{ backgroundColor: '#0c0d14', minHeight: '100vh', color: '#fff' }}>
-      {/* Header Bar */}
-      <div
+      {/* Top Navigation Bar */}
+      <header
         style={{
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           backgroundColor: '#121420',
@@ -172,39 +248,44 @@ const CourseVideoWatchPage = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Link
-            to={`/courses/${courseId}`}
+            to={isAuthenticated ? '/student/my-courses' : `/courses/${courseId}`}
             className="btn btn-sm btn-outline"
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderColor: 'rgba(255,255,255,0.15)' }}
           >
-            <FiArrowLeft /> Course Details
+            <FiArrowLeft /> {isAuthenticated ? 'My Courses' : 'Course Details'}
           </Link>
           <div>
             <h1 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700, color: '#fff' }}>
               {course.title}
             </h1>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Instructor: {course.instructor || 'SID Academy Faculty Team'} • {allLessons.length} Lectures
+              Instructor: {course.instructor || 'SID Academy Faculty'} • {allLessons.length} Lectures Total
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           {isEnrolled ? (
             <span
               style={{
-                backgroundColor: 'rgba(67, 233, 123, 0.15)',
-                color: '#43e97b',
-                padding: '0.3rem 0.8rem',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                color: '#10b981',
+                padding: '0.35rem 0.85rem',
                 borderRadius: '20px',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.3rem',
+                gap: '0.35rem',
               }}
             >
               <FiCheckCircle /> Enrolled Full Access
@@ -215,13 +296,13 @@ const CourseVideoWatchPage = () => {
               className="btn btn-sm btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              <FiLock /> Unlock All Lectures
+              <FiShoppingCart /> Unlock Course (₹{course.discountPrice || course.price})
             </Link>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Main Watch Layout: Video Player (Left) + Syllabus Sidebar (Right) */}
+      {/* Main Watch Layout Grid */}
       <div
         className="container-fluid"
         style={{
@@ -231,18 +312,80 @@ const CourseVideoWatchPage = () => {
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr) 380px',
           gap: '1.5rem',
+          alignItems: 'start',
         }}
       >
-        {/* Left Column: Video Player & Lecture Meta */}
+        {/* Left Column: Video Player, Controls & Lecture Details */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* Video Player Component */}
-          {currentLesson ? (
+          {/* Video Player or Locked State Card */}
+          {isCurrentLessonLocked ? (
+            <div
+              className="card-glass"
+              style={{
+                borderRadius: '16px',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                padding: '3.5rem 2rem',
+                textAlign: 'center',
+                backgroundColor: '#161826',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '380px',
+              }}
+            >
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  color: '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.8rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <FiLock />
+              </div>
+              <span style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Premium Lecture Locked
+              </span>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0.4rem 0 0.5rem 0', maxWidth: '500px' }}>
+                {currentLesson?.title || 'Unlock Full Syllabus to Continue'}
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '460px', margin: '0 auto 1.5rem auto' }}>
+                This lecture is part of the complete premium curriculum. Enroll now to access all recorded lectures, chapter notes, and live doubt sessions.
+              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
+                  ₹{course.discountPrice || course.price}
+                </span>
+                {course.discountPrice && course.price && (
+                  <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                    ₹{course.price}
+                  </span>
+                )}
+              </div>
+
+              <Link
+                to={`/courses/${courseId}`}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', fontSize: '0.95rem', fontWeight: 700 }}
+              >
+                <FiShoppingCart /> Enroll & Unlock Course
+              </Link>
+            </div>
+          ) : currentLesson ? (
             <VideoPlayerEmbed
               videoUrl={currentLesson.videoUrl || currentLesson.youtubeUrl}
               playlistUrl={currentLesson.playlistUrl}
               title={currentLesson.title}
               thumbnailUrl={currentLesson.thumbnailUrl || course.thumbnail}
-              isLocked={isCurrentLessonLocked}
+              isLocked={false}
               isFree={currentLesson.isFree}
               duration={currentLesson.duration}
               onUnlock={() => navigate(`/courses/${courseId}`)}
@@ -254,16 +397,18 @@ const CourseVideoWatchPage = () => {
             </div>
           )}
 
-          {/* Player Nav Controls (Previous / Next) */}
+          {/* Player Nav Controls (Previous / Next / Mark Complete) */}
           <div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               backgroundColor: '#161826',
-              padding: '0.75rem 1.25rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
+              padding: '0.85rem 1.25rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
             }}
           >
             <button
@@ -272,57 +417,78 @@ const CourseVideoWatchPage = () => {
               className="btn btn-sm btn-outline"
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              <FiChevronLeft /> Previous Lecture
+              <FiChevronLeft /> Previous
             </button>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Lesson {currentIndex + 1} of {allLessons.length}
-            </span>
+
+            {/* Mark as completed action */}
+            {isAuthenticated && (
+              <button
+                onClick={toggleComplete}
+                disabled={togglingProgress}
+                className={`btn btn-sm ${isCurrentCompleted ? 'btn-primary' : 'btn-outline'}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  backgroundColor: isCurrentCompleted ? '#10b981' : undefined,
+                  borderColor: isCurrentCompleted ? '#10b981' : undefined,
+                }}
+              >
+                {isCurrentCompleted ? <FiCheckCircle size={15} /> : <FiCircle size={15} />}
+                {isCurrentCompleted ? 'Completed' : 'Mark as Complete'}
+              </button>
+            )}
+
             <button
               onClick={() => nextLesson && handleSelectLesson(nextLesson)}
               disabled={!nextLesson}
               className="btn btn-sm btn-outline"
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              Next Lecture <FiChevronRight />
+              Next <FiChevronRight />
             </button>
           </div>
 
-          {/* Active Lesson Header & Tab navigation */}
+          {/* Active Lesson Details & Tabs (Overview / Notes) */}
           {currentLesson && (
-            <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
+            <div className="card-glass" style={{ padding: '1.75rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase' }}>
                       {currentLesson.subjectName} • {currentLesson.chapterTitle}
                     </span>
                     {currentLesson.isFree ? (
-                      <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>Free Lecture Preview</span>
+                      <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 700 }}>
+                        Free Demo
+                      </span>
                     ) : (
-                      <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>Premium Lecture</span>
+                      <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', backgroundColor: 'rgba(108, 99, 255, 0.15)', color: 'var(--accent)', fontWeight: 700 }}>
+                        Full Course
+                      </span>
                     )}
                   </div>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
+                  <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
                     {currentLesson.title}
                   </h2>
                 </div>
                 {currentLesson.duration && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     <FiClock /> {currentLesson.duration}
                   </div>
                 )}
               </div>
 
-              {/* Sub-tabs: Overview & Study Notes */}
-              <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              {/* Sub-tabs: Overview & Notes */}
+              <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
                 <button
                   onClick={() => setActiveTab('overview')}
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: activeTab === 'overview' ? 'var(--primary)' : 'var(--text-muted)',
+                    color: activeTab === 'overview' ? 'var(--accent)' : 'var(--text-muted)',
                     fontWeight: activeTab === 'overview' ? 700 : 500,
-                    borderBottom: activeTab === 'overview' ? '2px solid var(--primary)' : '2px solid transparent',
+                    borderBottom: activeTab === 'overview' ? '2px solid var(--accent)' : '2px solid transparent',
                     paddingBottom: '0.5rem',
                     cursor: 'pointer',
                     fontSize: '0.95rem',
@@ -335,9 +501,9 @@ const CourseVideoWatchPage = () => {
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: activeTab === 'notes' ? 'var(--primary)' : 'var(--text-muted)',
+                    color: activeTab === 'notes' ? 'var(--accent)' : 'var(--text-muted)',
                     fontWeight: activeTab === 'notes' ? 700 : 500,
-                    borderBottom: activeTab === 'notes' ? '2px solid var(--primary)' : '2px solid transparent',
+                    borderBottom: activeTab === 'notes' ? '2px solid var(--accent)' : '2px solid transparent',
                     paddingBottom: '0.5rem',
                     cursor: 'pointer',
                     fontSize: '0.95rem',
@@ -346,7 +512,7 @@ const CourseVideoWatchPage = () => {
                     gap: '0.4rem',
                   }}
                 >
-                  <FiBookOpen size={16} /> Attached Study Notes & PDFs ({notes.length})
+                  <FiBookOpen size={16} /> Chapter Notes ({notes.length})
                 </button>
               </div>
 
@@ -355,29 +521,29 @@ const CourseVideoWatchPage = () => {
                 <div>
                   <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, fontSize: '0.95rem', margin: '0 0 1.25rem 0' }}>
                     {currentLesson.description ||
-                      'Comprehensive video lecture featuring detailed theory explanations, problem solving, derivations, and board exam tips by Sidd Academy faculty.'}
+                      'Comprehensive video lecture featuring in-depth theoretical derivations, previous year board exam questions, conceptual problem solving, and handwritten formulas by SID Academy faculty.'}
                   </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', backgroundColor: '#131522', padding: '1rem', borderRadius: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', backgroundColor: '#131522', padding: '1rem 1.25rem', borderRadius: '12px' }}>
                     <div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Faculty</span>
                       <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{course.instructor || 'आकाश सर & Siddhant Pandey'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Class Target</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{course.level || 'Class 10-12 / Board Exams'}</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Target Class</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{course.level || 'Class 10 / 12 Board Exams'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Format</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>YouTube HD Stream + PDF Support</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Quality</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>1080p Full HD Video Stream</strong>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {notes.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                      <FiFileText size={32} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
-                      <p>No study PDFs uploaded for this chapter yet.</p>
+                    <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
+                      <FiFileText size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+                      <p style={{ margin: 0 }}>No separate study notes attached for this course yet.</p>
                     </div>
                   ) : (
                     notes.map((note) => (
@@ -386,21 +552,23 @@ const CourseVideoWatchPage = () => {
                         style={{
                           backgroundColor: '#161826',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: '8px',
-                          padding: '1rem',
+                          borderRadius: '10px',
+                          padding: '1rem 1.25rem',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '0.75rem',
                         }}
                       >
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center' }}>
                           <div
                             style={{
-                              width: '38px',
-                              height: '38px',
+                              width: '40px',
+                              height: '40px',
                               borderRadius: '8px',
-                              backgroundColor: 'rgba(255, 101, 132, 0.15)',
-                              color: '#ff6584',
+                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                              color: '#10b981',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -409,18 +577,18 @@ const CourseVideoWatchPage = () => {
                             <FiFileText size={20} />
                           </div>
                           <div>
-                            <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#fff' }}>{note.title}</h4>
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#fff', fontWeight: 700 }}>{note.title}</h4>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {note.pageCount || 24} Pages • {note.isFree ? 'Free Access' : 'Enrolled Students Only'}
+                              {note.subjectName || 'Study Material'} • {note.fileSize || '2.8 MB'} PDF
                             </span>
                           </div>
                         </div>
                         <button
                           onClick={() => handleOpenPdf(note)}
                           className="btn btn-sm btn-primary"
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                         >
-                          <FiDownload size={14} /> Open PDF
+                          <FiDownload size={14} /> Open / Download PDF
                         </button>
                       </div>
                     ))
@@ -431,21 +599,24 @@ const CourseVideoWatchPage = () => {
           )}
         </div>
 
-        {/* Right Column: Playlist / Curriculum Sidebar */}
+        {/* Right Column: Hierarchical Navigation (Course -> Subject -> Chapter -> Lesson) */}
         <div
           style={{
             backgroundColor: '#161826',
             border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '12px',
+            borderRadius: '16px',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
             maxHeight: 'calc(100vh - 120px)',
+            position: 'sticky',
+            top: '80px',
           }}
         >
+          {/* Syllabus Header */}
           <div
             style={{
-              padding: '1rem 1.25rem',
+              padding: '1.1rem 1.25rem',
               borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
               backgroundColor: '#1a1c2d',
               display: 'flex',
@@ -458,86 +629,149 @@ const CourseVideoWatchPage = () => {
                 Course Curriculum
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {allLessons.length} Video Lessons
+                {allLessons.length} Total Lectures • {completedLessons.size} Completed
               </span>
             </div>
-            <FiList style={{ color: 'var(--primary)' }} />
+            <FiList style={{ color: 'var(--accent)' }} />
           </div>
 
-          {/* Scrollable Lesson Items */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
-            {allLessons.map((lesson, idx) => {
-              const lid = lesson.id || lesson._id;
-              const isActive = lid === activeLessonId;
-              const isLocked = !isEnrolled && !lesson.isFree;
+          {/* Hierarchical Tree (Subjects -> Chapters -> Lessons) */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem' }}>
+            {(course.subjects || []).map((subject, sIdx) => {
+              const sId = subject.id || subject._id || `subj-${sIdx}`;
+              const isSubjExpanded = expandedSubjects[sId] !== false;
 
               return (
-                <div
-                  key={lid}
-                  onClick={() => handleSelectLesson(lesson)}
-                  style={{
-                    padding: '0.85rem 1rem',
-                    borderRadius: '8px',
-                    backgroundColor: isActive ? 'rgba(108, 99, 255, 0.18)' : 'transparent',
-                    border: isActive ? '1px solid var(--primary)' : '1px solid transparent',
-                    cursor: 'pointer',
-                    marginBottom: '0.4rem',
-                    display: 'flex',
-                    gap: '0.75rem',
-                    alignItems: 'flex-start',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
+                <div key={sId} style={{ marginBottom: '0.75rem' }}>
+                  {/* Subject Accordion Header */}
                   <div
+                    onClick={() => toggleSubject(sId)}
                     style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      backgroundColor: isActive
-                        ? 'var(--primary)'
-                        : isLocked
-                        ? 'rgba(255, 117, 140, 0.15)'
-                        : 'rgba(67, 233, 123, 0.15)',
-                      color: isActive ? '#fff' : isLocked ? '#ff758c' : '#43e97b',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.8rem',
+                      justifyContent: 'space-between',
+                      padding: '0.5rem 0.75rem',
+                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
                       fontWeight: 700,
-                      flexShrink: 0,
-                      marginTop: '0.1rem',
+                      color: 'var(--accent)',
                     }}
                   >
-                    {isLocked ? <FiLock size={12} /> : isActive ? <FiPlay size={12} /> : idx + 1}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <FiLayers size={14} /> {subject.name}
+                    </span>
+                    {isSubjExpanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4
-                      style={{
-                        margin: '0 0 0.25rem 0',
-                        fontSize: '0.88rem',
-                        fontWeight: isActive ? 700 : 500,
-                        color: isActive ? '#fff' : '#e0e0e0',
-                        lineHeight: 1.3,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                      }}
-                    >
-                      {lesson.title}
-                    </h4>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      <span>{lesson.duration || '30:00'}</span>
-                      <span>{lesson.isFree ? 'Free Preview' : isEnrolled ? 'Unlocked' : 'Premium'}</span>
+
+                  {/* Chapters List */}
+                  {isSubjExpanded && (
+                    <div style={{ paddingLeft: '0.5rem', marginTop: '0.4rem' }}>
+                      {(subject.chapters || []).map((chapter, cIdx) => {
+                        const cId = chapter.id || chapter._id || `chap-${sIdx}-${cIdx}`;
+                        const isChapExpanded = expandedChapters[cId] !== false;
+                        const lessons = chapter.dailyClasses || chapter.lessons || [];
+
+                        return (
+                          <div key={cId} style={{ marginBottom: '0.5rem' }}>
+                            {/* Chapter Header */}
+                            <div
+                              onClick={() => toggleChapter(cId)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '0.4rem 0.6rem',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                color: '#e0e0e0',
+                              }}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                Chapter {cIdx + 1}: {chapter.title}
+                              </span>
+                              {isChapExpanded ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />}
+                            </div>
+
+                            {/* Lessons List under Chapter */}
+                            {isChapExpanded && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', paddingLeft: '0.5rem' }}>
+                                {lessons.map((lesson, lIdx) => {
+                                  const lId = lesson.id || lesson._id || `lesson-${sIdx}-${cIdx}-${lIdx}`;
+                                  const isActive = lId === activeLessonId;
+                                  const isLocked = !isEnrolled && !lesson.isFree;
+                                  const isDone = completedLessons.has(lId);
+
+                                  return (
+                                    <div
+                                      key={lId}
+                                      onClick={() => handleSelectLesson({ ...lesson, id: lId, subjectName: subject.name, chapterTitle: chapter.title })}
+                                      style={{
+                                        padding: '0.65rem 0.85rem',
+                                        borderRadius: '8px',
+                                        backgroundColor: isActive ? 'rgba(108, 99, 255, 0.2)' : 'transparent',
+                                        border: isActive ? '1px solid var(--accent)' : '1px solid transparent',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        gap: '0.65rem',
+                                        alignItems: 'center',
+                                        transition: 'all 0.15s',
+                                      }}
+                                    >
+                                      {/* Icon status */}
+                                      <div
+                                        style={{
+                                          width: '22px',
+                                          height: '22px',
+                                          borderRadius: '50%',
+                                          backgroundColor: isDone
+                                            ? 'rgba(16, 185, 129, 0.2)'
+                                            : isActive
+                                            ? 'var(--accent)'
+                                            : isLocked
+                                            ? 'rgba(239, 68, 68, 0.15)'
+                                            : 'rgba(255, 255, 255, 0.08)',
+                                          color: isDone ? '#10b981' : isActive ? '#fff' : isLocked ? '#ef4444' : 'var(--text-muted)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: '0.75rem',
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        {isDone ? <FiCheck size={11} /> : isLocked ? <FiLock size={11} /> : isActive ? <FiPlay size={10} /> : lIdx + 1}
+                                      </div>
+
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div
+                                          style={{
+                                            fontSize: '0.82rem',
+                                            fontWeight: isActive ? 700 : 500,
+                                            color: isActive ? '#fff' : '#ccc',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {lesson.title}
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                          <span>{lesson.duration || '25 min'}</span>
+                                          <span>{lesson.isFree ? 'Free Preview' : isEnrolled ? 'Unlocked' : 'Locked'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -550,10 +784,7 @@ const CourseVideoWatchPage = () => {
         <div
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            inset: 0,
             backgroundColor: 'rgba(0,0,0,0.85)',
             backdropFilter: 'blur(8px)',
             zIndex: 9999,
@@ -569,7 +800,7 @@ const CourseVideoWatchPage = () => {
               backgroundColor: '#1b1c2b',
               borderRadius: '16px',
               width: '100%',
-              maxWidth: '900px',
+              maxWidth: '920px',
               height: '85vh',
               display: 'flex',
               flexDirection: 'column',
@@ -590,7 +821,7 @@ const CourseVideoWatchPage = () => {
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{selectedPdf.title}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {selectedPdf.fileName} • {selectedPdf.fileSize || '2.5 MB'}
+                  {selectedPdf.fileName || 'Study Document'} • {selectedPdf.fileSize || '2.5 MB'}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -601,7 +832,7 @@ const CourseVideoWatchPage = () => {
                   className="btn btn-sm btn-primary"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 >
-                  <FiExternalLink size={14} /> Open in Tab
+                  <FiExternalLink size={14} /> Open in New Tab
                 </a>
                 <button onClick={() => setIsPdfModalOpen(false)} className="btn btn-sm btn-outline">
                   Close

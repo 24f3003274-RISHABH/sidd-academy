@@ -23,6 +23,7 @@ import paymentRoutes from './routes/payment.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
+import studentRoutes from './routes/student.routes.js';
 
 // Setup __dirname in ES module scope
 const __filename = fileURLToPath(import.meta.url);
@@ -95,6 +96,7 @@ app.use('/api/v1/notes', noteRoutes);
 app.use('/api/v1/videos', videoRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/student', studentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/banners', bannerRoutes);
 

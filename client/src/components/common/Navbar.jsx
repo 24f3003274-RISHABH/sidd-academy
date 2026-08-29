@@ -48,9 +48,11 @@ const Navbar = () => {
                   {(user?.role || '').toLowerCase() === 'admin' && (
                     <Link to="/admin/dashboard" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiGrid /> Admin Dashboard</Link>
                   )}
-                  <Link to="/student/dashboard" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiUser /> Dashboard</Link>
+                  <Link to="/student/dashboard" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiGrid /> Dashboard</Link>
                   <Link to="/student/my-courses" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiBook /> My Courses</Link>
+                  <Link to="/student/notes" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiShoppingBag /> My Notes</Link>
                   <Link to="/student/orders" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiShoppingBag /> My Orders</Link>
+                  <Link to="/student/profile" className="navbar-link" onClick={() => setDropdownOpen(false)}><FiUser /> Profile</Link>
                   <button onClick={handleLogout} className="btn btn-danger" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><FiLogOut /> Logout</button>
                 </div>
               )}
@@ -80,7 +82,9 @@ const Navbar = () => {
               {(user?.role || '').toLowerCase() === 'admin' && <Link to="/admin/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>}
               <Link to="/student/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
               <Link to="/student/my-courses" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Courses</Link>
+              <Link to="/student/notes" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Notes</Link>
               <Link to="/student/orders" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Orders</Link>
+              <Link to="/student/profile" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>My Profile</Link>
               <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="btn btn-danger" style={{ width: '100%' }}>Logout</button>
             </>
           ) : (

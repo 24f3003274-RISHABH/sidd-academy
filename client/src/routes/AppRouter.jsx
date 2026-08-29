@@ -23,6 +23,7 @@ const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
 // Student Pages
 const DashboardPage = lazy(() => import('../pages/student/DashboardPage'));
 const MyCoursesPage = lazy(() => import('../pages/student/MyCoursesPage'));
+const MyNotesPage = lazy(() => import('../pages/student/MyNotesPage'));
 const MyOrdersPage = lazy(() => import('../pages/student/MyOrdersPage'));
 const ProfilePage = lazy(() => import('../pages/student/ProfilePage'));
 
@@ -68,6 +69,7 @@ const AppRouter = () => {
         {/* Student Routes */}
         <Route path="/student/dashboard" element={<ProtectedRoute><PublicLayout><DashboardPage /></PublicLayout></ProtectedRoute>} />
         <Route path="/student/my-courses" element={<ProtectedRoute><PublicLayout><MyCoursesPage /></PublicLayout></ProtectedRoute>} />
+        <Route path="/student/notes" element={<ProtectedRoute><PublicLayout><MyNotesPage /></PublicLayout></ProtectedRoute>} />
         <Route path="/student/orders" element={<ProtectedRoute><PublicLayout><MyOrdersPage /></PublicLayout></ProtectedRoute>} />
         <Route path="/student/profile" element={<ProtectedRoute><PublicLayout><ProfilePage /></PublicLayout></ProtectedRoute>} />
 

@@ -1,59 +1,189 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { FiUser, FiBook, FiLogOut } from 'react-icons/fi';
+import ConfirmationModal from '../common/ConfirmationModal';
+import {
+  FiGrid,
+  FiBook,
+  FiFileText,
+  FiShoppingBag,
+  FiUser,
+  FiLogOut,
+  FiCompass,
+  FiCheckCircle,
+} from 'react-icons/fi';
 
 const StudentSidebar = () => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleConfirmLogout = () => {
     logout();
-    navigate('/');
+    setIsLogoutModalOpen(false);
+    navigate('/login');
   };
 
   const navItems = [
-    { name: 'My Profile', path: '/student/dashboard', icon: <FiUser /> },
-    { name: 'My Courses', path: '/student/my-courses', icon: <FiBook /> },
+    { name: 'Dashboard', path: '/student/dashboard', icon: <FiGrid size={18} /> },
+    { name: 'My Courses', path: '/student/my-courses', icon: <FiBook size={18} /> },
+    { name: 'My Notes', path: '/student/notes', icon: <FiFileText size={18} /> },
+    { name: 'Purchase History', path: '/student/orders', icon: <FiShoppingBag size={18} /> },
+    { name: 'Profile & Settings', path: '/student/profile', icon: <FiUser size={18} /> },
   ];
 
   return (
-    <aside style={{ width: '240px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', height: 'fit-content', border: '1px solid rgba(255,255,255,0.05)' }}>
-      <div style={{ paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Student Panel</h3>
-      </div>
-      <nav>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <>
+      <aside
+        style={{
+          width: '260px',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem',
+        }}
+      >
+        {/* Student Mini Profile Header Card */}
+        <div
+          className="card-glass"
+          style={{
+            padding: '1.25rem',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+          }}
+        >
+          <div
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(108, 99, 255, 0.2)',
+              color: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '1.1rem',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            {user?.avatar ? (
+              <img src={user.avatar} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              (user?.name || 'S').charAt(0).toUpperCase()
+            )}
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+              {user?.name || 'Student'}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+              <FiCheckCircle size={11} /> Verified Student
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Links Card */}
+        <div
+          className="card-glass"
+          style={{
+            padding: '0.75rem',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.35rem',
+          }}
+        >
+          <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', fontWeight: 700 }}>
+            Learning Portal
+          </div>
           {navItems.map((item) => (
-            <li key={item.path}>
-              <NavLink 
-                to={item.path} 
-                className={({ isActive }) => `student-nav-item ${isActive ? 'active' : ''}`}
-                style={({ isActive }) => ({
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  color: isActive ? 'var(--primary)' : 'var(--text-muted)',
-                  textDecoration: 'none',
-                  backgroundColor: isActive ? 'rgba(108, 99, 255, 0.1)' : 'transparent',
-                  fontWeight: isActive ? 600 : 400,
-                })}
-              >
-                {item.icon}
-                {item.name}
-              </NavLink>
-            </li>
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => `student-nav-link ${isActive ? 'active' : ''}`}
+              style={({ isActive }) => ({
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.7rem 0.85rem',
+                borderRadius: '10px',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                backgroundColor: isActive ? 'rgba(108, 99, 255, 0.2)' : 'transparent',
+                fontWeight: isActive ? 600 : 500,
+                fontSize: '0.9rem',
+                textDecoration: 'none',
+                transition: 'all 0.2s ease',
+              })}
+            >
+              <span style={{ color: 'var(--accent)' }}>{item.icon}</span>
+              <span>{item.name}</span>
+            </NavLink>
           ))}
-        </ul>
-      </nav>
-      <div style={{ paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <button onClick={handleLogout} className="btn btn-outline" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-          <FiLogOut /> Logout
-        </button>
-      </div>
-    </aside>
+
+          <div style={{ margin: '0.5rem 0', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }} />
+
+          <NavLink
+            to="/courses"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.7rem 0.85rem',
+              borderRadius: '10px',
+              color: 'var(--text-muted)',
+              fontWeight: 500,
+              fontSize: '0.9rem',
+              textDecoration: 'none',
+            }}
+          >
+            <span style={{ color: '#f59e0b' }}><FiCompass size={18} /></span>
+            <span>Explore All Courses</span>
+          </NavLink>
+
+          <button
+            onClick={() => setIsLogoutModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.7rem 0.85rem',
+              borderRadius: '10px',
+              color: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.05)',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              marginTop: '0.25rem',
+              width: '100%',
+              textAlign: 'left',
+              transition: 'background-color 0.2s',
+            }}
+          >
+            <FiLogOut size={18} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isLogoutModalOpen}
+        title="Sign Out Confirmation"
+        message="Are you sure you want to end your current student session? You can sign back in anytime."
+        confirmText="Sign Out"
+        cancelText="Stay Logged In"
+        confirmVariant="danger"
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setIsLogoutModalOpen(false)}
+      />
+    </>
   );
 };
 
