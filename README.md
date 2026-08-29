@@ -131,6 +131,73 @@ CLIENT_URL=http://localhost:3000
 
 ---
 
+## 🗄️ Phase 2 — PostgreSQL Database
+
+📖 **Detailed ER Diagram Documentation**: [docs/database/ER-DIAGRAM.md](docs/database/ER-DIAGRAM.md)  
+📊 **Mermaid Diagram**: [docs/database/er-diagram.mmd](docs/database/er-diagram.mmd)
+
+### 1. Relational Database Design
+The Sidd Academy platform utilizes a normalized PostgreSQL database designed with strict referential integrity, foreign key cascades, check constraints, unique indexes, and audit timestamps (`created_at`, `updated_at`).
+
+### 2. Core Tables
+1. **`users`**: Administrative staff, instructors, and students with roles (`student`, `admin`, `user`), bcrypt-hashed passwords, and status tracking.
+2. **`courses`**: Master catalog of academic programs, pricing, slug identifiers, levels, student enrollment counts, and ratings.
+3. **`subjects`**: Modular academic subjects mapped 1-to-many to courses with cascading deletions.
+4. **`chapters`**: Units of study organized beneath individual subjects.
+5. **`lessons`**: Daily scheduled classes and live/recorded lecture sessions with date and duration metadata.
+6. **`videos`**: Streaming video URLs, YouTube integration IDs, providers, and resolution settings.
+7. **`notes`**: Digital study materials and PDF notes attached to courses, subjects, chapters, or lessons, supporting free and paid access.
+8. **`enrollments`**: Many-to-many relationship linking students to courses with progress tracking (`progress_percentage`) and unique constraints.
+9. **`orders`**: Checkout transactions, total amounts, and Razorpay gateway references.
+10. **`order_items`**: Polymorphic order line items (`course` or `note`) with immutable price snapshots.
+11. **`payments`**: Transaction records with gateway response audits and status tracking.
+12. **`note_purchases`**: Standalone digital note ownership table preventing duplicate purchases (`UNIQUE(user_id, note_id)`).
+13. **`banners`**: Hero and carousel promotional banners for marketing campaigns.
+
+### 3. Normalization & Integrity Decisions
+- **Third Normal Form (3NF)**: Eliminated transitive dependencies and multi-valued attributes.
+- **Cascading Rules**:
+  - `ON DELETE CASCADE` on curriculum hierarchy (Course → Subject → Chapter → Lesson → Video) and user-owned records (User → Enrollments/Orders).
+  - `ON DELETE SET NULL` on optional attachments (e.g., if a Course is removed, standalone Notes remain preserved with nullified foreign keys).
+- **Check Constraints**: Enforced valid enumeration states (`role`, `level`, `item_type`, `payment_status`, `video_provider`) and non-negative values (`price >= 0`, `rating BETWEEN 0 AND 5.0`).
+- **Indexes**: Created high-performance B-tree indexes on foreign keys, email lookups, and unique slugs.
+
+### 4. Migration Strategy
+Migrations are structured in atomic, sequentially numbered files inside `server/src/database/migrations/`:
+- `001_create_users.sql`
+- `002_create_courses.sql`
+- `003_create_subjects.sql`
+- `004_create_chapters.sql`
+- `005_create_lessons.sql`
+- `006_create_videos.sql`
+- `007_create_notes.sql`
+- `008_create_enrollments.sql`
+- `009_create_orders.sql`
+- `010_create_order_items.sql`
+- `011_create_payments.sql`
+- `012_create_note_purchases.sql`
+- `013_create_banners.sql`
+
+Run migrations via npm:
+```bash
+npm run db:migrate
+```
+
+### 5. Development Seed Data
+Development seeds are modularized under `server/src/database/seeds/`:
+- **Users**: 1 Admin (`admin@siddacademy.com`) and 2 Students (`student@siddacademy.com`, `aman.gupta@example.com`).
+- **Courses**: 2 comprehensive programs (PERN Stack & DSA in Java).
+- **Curriculum**: Subjects, chapters, daily classes, and video streams.
+- **Notes**: Free cheat sheets and premium study guides.
+- **Enrollments & Orders**: Active enrollments, completed Razorpay orders, payments, and note purchases.
+
+Run seed script via npm:
+```bash
+npm run db:seed
+```
+
+---
+
 ## 🏛️ Current Architecture
 
 The platform uses a strict decoupled PERN architecture with clean separation of concerns:

@@ -1,0 +1,213 @@
+erDiagram
+    %% =========================================================================
+    %% SIDD ACADEMY - POSTGRESQL ENTITY RELATIONSHIP (ER) DIAGRAM
+    %% =========================================================================
+
+    USERS ||--o{ ENROLLMENTS : "has"
+    USERS ||--o{ ORDERS : "places"
+    USERS ||--o{ PAYMENTS : "makes"
+    USERS ||--o{ NOTE_PURCHASES : "purchases"
+
+    COURSES ||--o{ SUBJECTS : "contains"
+    COURSES ||--o{ ENROLLMENTS : "enrolled in"
+    COURSES ||--o{ NOTES : "includes"
+
+    SUBJECTS ||--o{ CHAPTERS : "divided into"
+    SUBJECTS ||--o{ NOTES : "includes"
+
+    CHAPTERS ||--o{ LESSONS : "consists of"
+    CHAPTERS ||--o{ NOTES : "includes"
+
+    LESSONS ||--o{ VIDEOS : "delivers"
+    LESSONS ||--o{ NOTES : "attaches"
+
+    ORDERS ||--|{ ORDER_ITEMS : "contains"
+    ORDERS ||--o{ PAYMENTS : "fulfilled by"
+    ORDERS ||--o{ NOTE_PURCHASES : "records"
+
+    NOTES ||--o{ NOTE_PURCHASES : "bought as"
+
+    USERS {
+        uuid id PK
+        varchar name
+        varchar email UK
+        varchar password
+        varchar phone
+        varchar role "student | admin | user"
+        text avatar
+        boolean is_active
+        timestamp last_login
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    COURSES {
+        uuid id PK
+        varchar title
+        varchar slug UK
+        text description
+        text thumbnail
+        varchar instructor
+        varchar duration
+        varchar language
+        varchar level "Beginner | Intermediate | Advanced | All Levels"
+        numeric price
+        numeric discount_price
+        boolean is_free
+        boolean is_published
+        integer total_students
+        numeric rating
+        integer order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SUBJECTS {
+        uuid id PK
+        uuid course_id FK
+        varchar title
+        text description
+        varchar icon
+        integer order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CHAPTERS {
+        uuid id PK
+        uuid subject_id FK
+        varchar title
+        text description
+        integer order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    LESSONS {
+        uuid id PK
+        uuid chapter_id FK
+        varchar title
+        text description
+        integer class_number
+        date class_date
+        varchar duration
+        boolean is_free
+        boolean is_protected
+        integer order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    VIDEOS {
+        uuid id PK
+        uuid lesson_id FK
+        varchar title
+        text video_url
+        varchar youtube_id
+        text playlist_url
+        text thumbnail_url
+        integer duration_seconds
+        varchar video_provider "youtube | vimeo | s3 | local | custom"
+        varchar quality
+        integer order_num
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    NOTES {
+        uuid id PK
+        varchar title
+        text description
+        uuid course_id FK
+        uuid subject_id FK
+        uuid chapter_id FK
+        uuid lesson_id FK
+        text file_url
+        varchar file_name
+        varchar file_size
+        text thumbnail
+        numeric price
+        boolean is_free
+        boolean is_published
+        integer page_count
+        integer download_count
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    ENROLLMENTS {
+        uuid id PK
+        uuid user_id FK
+        uuid course_id FK
+        timestamp enrolled_at
+        varchar status "active | completed | cancelled | expired"
+        numeric progress_percentage
+        timestamp completed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    ORDERS {
+        uuid id PK
+        uuid user_id FK
+        numeric total_amount
+        varchar currency
+        varchar payment_status "pending | paid | failed | refunded"
+        varchar razorpay_order_id
+        varchar razorpay_payment_id
+        varchar razorpay_signature
+        varchar receipt
+        text notes
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    ORDER_ITEMS {
+        uuid id PK
+        uuid order_id FK
+        varchar item_type "course | note"
+        uuid item_id
+        varchar title
+        numeric price
+        timestamp created_at
+    }
+
+    PAYMENTS {
+        uuid id PK
+        uuid order_id FK
+        uuid user_id FK
+        numeric amount
+        varchar currency
+        varchar gateway
+        varchar transaction_id
+        varchar payment_method
+        varchar status "initiated | completed | failed | refunded"
+        jsonb gateway_response
+        timestamp paid_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    NOTE_PURCHASES {
+        uuid id PK
+        uuid user_id FK
+        uuid note_id FK
+        uuid order_id FK
+        numeric price_paid
+        timestamp purchased_at
+    }
+
+    BANNERS {
+        uuid id PK
+        varchar title
+        text subtitle
+        varchar badge
+        text image_url
+        varchar link_url
+        varchar button_text
+        boolean is_active
+        integer order_num
+        varchar bg_color
+        timestamp created_at
+        timestamp updated_at
+    }

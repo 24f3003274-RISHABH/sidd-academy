@@ -11,7 +11,9 @@
     "dev": "npm --workspace=client run dev",
     "build": "npm --workspace=client run build",
     "lint": "npm --workspace=client run lint",
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "db:migrate": "npm --workspace=server run db:migrate",
+    "db:seed": "npm --workspace=server run db:seed"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
