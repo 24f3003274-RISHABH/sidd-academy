@@ -38,15 +38,21 @@ const CourseDetailPage = () => {
   useEffect(() => {
     const fetchCourse = async () => {
       try {
+        setLoading(true);
         const res = await getCourseById(id);
-        const fetchedCourse = res.data.course;
+        const fetchedCourse = res.data?.data?.course || res.data?.course || res.data?.data || res.data;
+        
+        if (!fetchedCourse || (!fetchedCourse.id && !fetchedCourse._id)) {
+          throw new Error('Course not found');
+        }
+
         setCourse(fetchedCourse);
         
         // Auto expand first subject and chapter by default
-        if (fetchedCourse?.subjects?.length > 0) {
+        if (fetchedCourse.subjects && fetchedCourse.subjects.length > 0) {
           const firstSubj = fetchedCourse.subjects[0];
           setExpandedSubjects({ [firstSubj.id || firstSubj._id]: true });
-          if (firstSubj.chapters?.length > 0) {
+          if (firstSubj.chapters && firstSubj.chapters.length > 0) {
             const firstChap = firstSubj.chapters[0];
             setExpandedChapters({ [firstChap.id || firstChap._id]: true });
           }
@@ -167,11 +173,11 @@ const CourseDetailPage = () => {
   };
 
   const handleLessonPlay = (lesson, chapterTitle) => {
-    const videoUrl = lesson.videoUrl || lesson.video?.youtube_url || lesson.video?.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const videoUrl = lesson.videoUrl || lesson.video?.youtube_url || lesson.video?.video_url || lesson.video?.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
     setPreviewVideo({
       videoUrl,
       title: lesson.title,
-      description: `Class scheduled on ${new Date(lesson.classDate).toLocaleDateString()} (${lesson.duration || 60} mins)`,
+      description: `Class scheduled on ${new Date(lesson.classDate || lesson.created_at || Date.now()).toLocaleDateString()} (${lesson.duration || 60} mins)`,
       chapterTitle: chapterTitle || 'Academic Lecture',
     });
   };
@@ -310,7 +316,7 @@ const CourseDetailPage = () => {
                           {sIdx + 1}
                         </span>
                         <div>
-                          <h3 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>{subject.name}</h3>
+                          <h3 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>{subject.name || subject.title}</h3>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{chapters.length} Chapters</span>
                         </div>
                       </div>
