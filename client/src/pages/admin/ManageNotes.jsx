@@ -4,7 +4,7 @@ import { getAllCourses } from '../../api/courseApi';
 import { getSubjectsByCourse, getChaptersBySubject } from '../../api/adminApi';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiTrash2, FiPlus, FiDownload, FiEdit2, FiEye, FiFileText, FiLock, FiCheckCircle, FiBookOpen, FiExternalLink } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiEdit2, FiEye, FiFileText, FiExternalLink } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { formatPrice } from '../../utils/helpers';
 
@@ -147,7 +147,6 @@ const ManageNotes = () => {
     setSubmitting(true);
     try {
       if (editingId) {
-        // Update Note
         const payload = {
           ...formData,
           courseId: selectedCourse || null,
@@ -157,7 +156,6 @@ const ManageNotes = () => {
         await updateNote(editingId, payload);
         toast.success('Note metadata updated successfully');
       } else {
-        // Create Note (Multipart Form Data)
         const data = new FormData();
         data.append('title', formData.title);
         data.append('description', formData.description);
@@ -212,12 +210,12 @@ const ManageNotes = () => {
   if (loading) return <Loader fullPage />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800 }}>Manage Digital Notes & Study PDFs</h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Upload, set free/paid pricing, assign academic hierarchy, and control authenticated PDF downloads.
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>Manage Digital Notes & Study PDFs</h1>
+          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
+            Upload, set free/paid pricing, assign academic hierarchy, and control PDF downloads.
           </p>
         </div>
         <button onClick={handleOpenCreateModal} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -225,106 +223,106 @@ const ManageNotes = () => {
         </button>
       </div>
 
-      <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '12px' }}>
+      <div className="card" style={{ padding: '1.25rem' }}>
         <div className="table-wrapper">
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Note Title</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Subject & Chapter</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Access / Price</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Pages</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Downloads</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'right' }}>Actions</th>
+              <tr>
+                <th>Note Title</th>
+                <th>Subject & Chapter</th>
+                <th>Access / Price</th>
+                <th>Pages</th>
+                <th>Downloads</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {notes.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                    <FiFileText size={36} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                    <FiFileText size={36} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
                     <p>No digital notes created yet. Click "Add Study Note" to upload.</p>
                   </td>
                 </tr>
               ) : (
-                notes.map((note) => (
-                  <tr key={note.id || note._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div
-                          style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            backgroundColor: note.isFree ? 'rgba(67, 233, 123, 0.15)' : 'rgba(108, 99, 255, 0.15)',
-                            color: note.isFree ? '#43e97b' : 'var(--primary)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <FiFileText size={18} />
+                notes.map((note) => {
+                  const id = note.id || note._id;
+                  return (
+                    <tr key={id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '6px',
+                              backgroundColor: note.isFree ? 'var(--accent-subtle)' : 'var(--primary-subtle)',
+                              color: note.isFree ? 'var(--accent-dark)' : 'var(--primary-dark)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FiFileText size={18} />
+                          </div>
+                          <div>
+                            <strong style={{ color: 'var(--text-primary)', fontSize: '0.9375rem' }}>{note.title}</strong>
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {note.fileName || 'document.pdf'}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{note.title}</strong>
-                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {note.fileName || 'document.pdf'}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem' }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{note.subjectTitle || 'General'}</span>
-                      <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        {note.chapterTitle || 'Standard Notes'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      {note.isFree ? (
-                        <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>FREE</span>
-                      ) : (
-                        <span className="badge badge-warning" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                          PAID • {formatPrice(note.price)}
+                      </td>
+                      <td style={{ fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--primary-dark)', fontWeight: 600 }}>{note.subjectTitle || 'General'}</span>
+                        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          {note.chapterTitle || 'Standard Notes'}
                         </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      {note.pageCount || 24} pgs
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      {note.downloadsCount || 0}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handlePreviewPdf(note)}
-                          className="btn btn-sm btn-outline"
-                          style={{ padding: '0.4rem 0.6rem' }}
-                          title="Preview PDF"
-                        >
-                          <FiEye size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditModal(note)}
-                          className="btn btn-sm btn-outline"
-                          style={{ padding: '0.4rem 0.6rem' }}
-                          title="Edit Note"
-                        >
-                          <FiEdit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(note.id || note._id)}
-                          className="btn btn-sm btn-danger"
-                          style={{ padding: '0.4rem 0.6rem' }}
-                          title="Delete Note"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td>
+                        {note.isFree ? (
+                          <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>FREE</span>
+                        ) : (
+                          <span className="badge badge-primary" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                            {formatPrice(note.price)}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        {note.pageCount || 24} pgs
+                      </td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        {note.downloadsCount || 0}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                          <button
+                            onClick={() => handlePreviewPdf(note)}
+                            className="btn btn-sm btn-outline"
+                            title="Preview PDF"
+                          >
+                            <FiEye size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(note)}
+                            className="btn btn-sm btn-outline"
+                            title="Edit Note"
+                          >
+                            <FiEdit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(id)}
+                            className="btn btn-sm btn-danger"
+                            title="Delete Note"
+                          >
+                            <FiTrash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -335,11 +333,11 @@ const ManageNotes = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingId ? 'Edit Digital Note' : 'Upload Digital Note Metadata'}
+        title={editingId ? 'Edit Digital Note' : 'Upload Digital Note'}
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div className="form-group">
-            <label className="form-label">Note Title</label>
+            <label className="form-label">Note Title *</label>
             <input
               type="text"
               className="form-input"
@@ -353,7 +351,7 @@ const ManageNotes = () => {
           <div className="form-group">
             <label className="form-label">Description</label>
             <textarea
-              className="form-textarea"
+              className="form-input"
               rows="2"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -362,8 +360,8 @@ const ManageNotes = () => {
           </div>
 
           {/* Hierarchy Selection */}
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--primary)' }}>
+          <div style={{ backgroundColor: 'var(--bg-muted)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem', color: 'var(--primary-dark)', fontWeight: 700 }}>
               Academic Hierarchy Association
             </h4>
             <div className="grid-3" style={{ gap: '0.75rem' }}>
@@ -374,7 +372,7 @@ const ManageNotes = () => {
                   value={selectedCourse}
                   onChange={(e) => setSelectedCourse(e.target.value)}
                 >
-                  <option value="">-- All Courses / None --</option>
+                  <option value="">-- All Courses --</option>
                   {courses.map((c) => (
                     <option key={c._id || c.id} value={c._id || c.id}>{c.title}</option>
                   ))}
@@ -427,14 +425,13 @@ const ManageNotes = () => {
             </div>
 
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.75rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
                 <input
                   type="checkbox"
                   checked={formData.isFree}
                   onChange={(e) => setFormData({ ...formData, isFree: e.target.checked })}
-                  style={{ width: '20px', height: '20px' }}
                 />
-                <span style={{ fontWeight: 600 }}>Is Free Access</span>
+                <span>Free Access</span>
               </label>
             </div>
 
@@ -461,14 +458,14 @@ const ManageNotes = () => {
                 onChange={(e) => setSelectedFile(e.target.files[0])}
               />
               {selectedFile && (
-                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#43e97b' }}>
+                <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--accent-dark)' }}>
                   ✓ Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
                 </div>
               )}
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
@@ -482,7 +479,7 @@ const ManageNotes = () => {
               className="btn btn-primary"
               disabled={submitting}
             >
-              {submitting ? 'Saving Note...' : editingId ? 'Update Note' : 'Upload Note'}
+              {submitting ? 'Saving...' : editingId ? 'Update Note' : 'Upload Note'}
             </button>
           </div>
         </form>
@@ -491,34 +488,12 @@ const ManageNotes = () => {
       {/* PDF Modal Previewer */}
       {previewPdf && (
         <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
+          className="modal-overlay"
           onClick={() => setPreviewPdf(null)}
         >
           <div
-            style={{
-              backgroundColor: '#1b1c2b',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '900px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
+            className="modal-box"
+            style={{ maxWidth: '900px', height: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div
@@ -527,16 +502,17 @@ const ManageNotes = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid var(--border)',
+                backgroundColor: 'var(--bg-card)',
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{previewPdf.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{previewPdf.title}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {previewPdf.fileName} • {previewPdf.fileSize || '2.5 MB'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <a
                   href={previewPdf.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                   target="_blank"
@@ -551,7 +527,7 @@ const ManageNotes = () => {
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#2d3047' }}>
+            <div style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
               <iframe
                 src={previewPdf.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                 title={previewPdf.title}

@@ -8,6 +8,7 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
 
   const {
     _id,
+    id,
     title,
     description,
     videoUrl,
@@ -18,6 +19,7 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
     thumbnailUrl,
   } = video;
 
+  const videoId = id || _id;
   const thumbnail = thumbnailUrl || getYouTubeThumbnail(videoUrl);
   const watchUrl = getYouTubeWatchUrl(videoUrl);
 
@@ -33,80 +35,36 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
   return (
     <>
       <div 
-        id={`video-card-${_id}`}
-        className="card-glass" 
+        id={`video-card-${videoId}`}
+        className="yt-card" 
         onClick={handleCardClick}
         style={{
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: '12px',
-          overflow: 'hidden',
           cursor: 'pointer',
-          transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-4px)';
-          e.currentTarget.style.borderColor = 'var(--primary)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
         }}
       >
         {/* Video Thumbnail with YouTube Play Badge */}
-        <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', backgroundColor: '#000', overflow: 'hidden' }}>
+        <div className="yt-thumbnail-wrapper">
           <img 
             src={thumbnail} 
             alt={title} 
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transition: 'transform 0.3s ease',
-            }}
+            className="yt-thumbnail"
+            loading="lazy"
           />
-          <div 
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.35)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <div 
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255, 0, 0, 0.9)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(255, 0, 0, 0.5)',
-                transition: 'transform 0.2s ease',
-              }}
-            >
-              <FiPlay size={22} style={{ marginLeft: '3px' }} />
+          <div className="yt-play-overlay">
+            <div className="yt-play-btn">
+              <FiPlay size={20} style={{ marginLeft: '2px' }} />
             </div>
           </div>
 
           {/* Badges */}
-          <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '0.4rem' }}>
+          <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '0.4rem', zIndex: 2 }}>
             <span 
               className={`badge ${isFree ? 'badge-success' : 'badge-primary'}`}
-              style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', fontWeight: 600 }}
+              style={{ fontSize: '0.75rem', fontWeight: 600 }}
             >
-              {isFree ? 'Free Preview' : 'Pro Lecture'}
+              {isFree ? 'Free Lecture' : 'Video Class'}
             </span>
           </div>
 
@@ -114,16 +72,18 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
             <div 
               style={{
                 position: 'absolute',
-                bottom: '10px',
-                right: '10px',
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                color: '#fff',
-                padding: '0.2rem 0.5rem',
+                bottom: '8px',
+                right: '8px',
+                backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                color: '#ffffff',
+                padding: '0.2rem 0.45rem',
                 borderRadius: '4px',
                 fontSize: '0.75rem',
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.3rem',
+                zIndex: 2,
               }}
             >
               <FiClock size={12} /> {duration}
@@ -132,38 +92,35 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
         </div>
 
         {/* Video Card Content */}
-        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1, gap: '0.6rem' }}>
+        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1, gap: '0.5rem' }}>
           {chapterTitle && (
-            <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {chapterTitle}
             </span>
           )}
-          <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>
             {title}
           </h4>
           {description && (
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5, flex: 1 }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5, flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {description}
             </p>
           )}
 
           {/* Action Row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
             <button
               onClick={handleOpenYoutubeDirectly}
-              id={`yt-btn-${_id}`}
+              id={`yt-btn-${videoId}`}
               className="btn btn-sm"
               style={{
-                backgroundColor: 'rgba(255, 0, 0, 0.12)',
-                color: '#ff4d4d',
-                border: '1px solid rgba(255, 0, 0, 0.3)',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.8rem',
-                padding: '0.35rem 0.7rem',
-                borderRadius: '6px',
-                cursor: 'pointer',
+                gap: '0.35rem',
+                fontWeight: 600,
               }}
             >
               YouTube <FiExternalLink size={12} />
@@ -181,9 +138,6 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.3rem',
-                  fontSize: '0.8rem',
-                  padding: '0.35rem 0.7rem',
-                  borderRadius: '6px',
                 }}
               >
                 <FiFileText size={12} /> Notes PDF

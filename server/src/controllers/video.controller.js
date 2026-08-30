@@ -11,8 +11,8 @@ import { sendSuccess } from '../utils/apiResponse.js';
  */
 export const getAllVideos = async (req, res, next) => {
   try {
-    const { lessonId, courseId, provider, search, limit = 50, page = 1 } = req.query;
-    const videos = await videoService.getVideos({ lessonId, courseId, provider, search, limit, page });
+    const { lessonId, chapterId, subjectId, courseId, provider, isPublished, search, limit = 50, page = 1 } = req.query;
+    const videos = await videoService.getVideos({ lessonId, chapterId, subjectId, courseId, provider, isPublished, search, limit, page });
 
     return sendSuccess(res, 200, 'Videos retrieved successfully', {
       videos,
@@ -51,7 +51,7 @@ export const getVideosByLesson = async (req, res, next) => {
 
 /**
  * POST /api/v1/videos
- * Admin create/associate a video with a lesson
+ * Admin create/associate a video
  */
 export const createVideo = async (req, res, next) => {
   try {

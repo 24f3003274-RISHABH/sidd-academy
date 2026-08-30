@@ -6,7 +6,7 @@ import axiosInstance from '../../api/axiosInstance';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
-import { FiVideo, FiYoutube, FiPlus, FiTrash2, FiEdit2, FiExternalLink, FiPlay, FiClock } from 'react-icons/fi';
+import { FiVideo, FiYoutube, FiPlus, FiTrash2, FiEdit2, FiCheckCircle } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const ManageVideos = () => {
@@ -16,7 +16,7 @@ const ManageVideos = () => {
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Cascading hierarchy dropdowns for associating video with lesson
+  // Cascading hierarchy dropdowns
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
 
@@ -32,12 +32,15 @@ const ManageVideos = () => {
   // Form State
   const [formData, setFormData] = useState({
     title: '',
+    description: '',
     videoUrl: '',
     playlistUrl: '',
     videoProvider: 'youtube',
     durationSeconds: 1800,
     quality: '1080p',
     order: 1,
+    isFree: false,
+    isPublished: true,
   });
 
   const fetchVideos = async () => {
@@ -79,7 +82,6 @@ const ManageVideos = () => {
         const res = await getSubjectsByCourse(selectedCourse);
         const list = res.data?.data?.subjects || res.data?.subjects || [];
         setSubjects(list);
-        if (list.length > 0) setSelectedSubject(list[0]._id || list[0].id);
       } catch (err) {
         console.warn('Failed to load subjects:', err);
       }
@@ -99,7 +101,6 @@ const ManageVideos = () => {
         const res = await getChaptersBySubject(selectedSubject);
         const list = res.data?.data?.chapters || res.data?.chapters || [];
         setChapters(list);
-        if (list.length > 0) setSelectedChapter(list[0]._id || list[0].id);
       } catch (err) {
         console.warn('Failed to load chapters:', err);
       }
@@ -119,7 +120,6 @@ const ManageVideos = () => {
         const res = await axiosInstance.get(`/lessons?chapterId=${selectedChapter}`);
         const list = res.data?.data?.lessons || res.data?.data?.classes || res.data?.lessons || [];
         setLessons(list);
-        if (list.length > 0) setSelectedLesson(list[0]._id || list[0].id);
       } catch (err) {
         console.warn('Failed to load lessons:', err);
       }
@@ -131,13 +131,20 @@ const ManageVideos = () => {
     setEditingId(null);
     setFormData({
       title: '',
+      description: '',
       videoUrl: '',
       playlistUrl: '',
       videoProvider: 'youtube',
       durationSeconds: 1800,
       quality: '1080p',
       order: 1,
+      isFree: false,
+      isPublished: true,
     });
+    setSelectedCourse('');
+    setSelectedSubject('');
+    setSelectedChapter('');
+    setSelectedLesson('');
     setIsModalOpen(true);
   };
 
@@ -145,13 +152,19 @@ const ManageVideos = () => {
     setEditingId(video.id || video._id);
     setFormData({
       title: video.title || '',
+      description: video.description || '',
       videoUrl: video.videoUrl || '',
       playlistUrl: video.playlistUrl || '',
       videoProvider: video.videoProvider || 'youtube',
       durationSeconds: video.durationSeconds || 1800,
       quality: video.quality || '1080p',
       order: video.order || 1,
+      isFree: Boolean(video.isFree),
+      isPublished: video.isPublished !== undefined ? Boolean(video.isPublished) : true,
     });
+    setSelectedCourse(video.courseId || '');
+    setSelectedSubject(video.subjectId || '');
+    setSelectedChapter(video.chapterId || '');
     setSelectedLesson(video.lessonId || '');
     setIsModalOpen(true);
   };
@@ -171,6 +184,9 @@ const ManageVideos = () => {
     try {
       const payload = {
         ...formData,
+        courseId: selectedCourse || null,
+        subjectId: selectedSubject || null,
+        chapterId: selectedChapter || null,
         lessonId: selectedLesson || null,
       };
 
@@ -179,7 +195,7 @@ const ManageVideos = () => {
         toast.success('Video updated successfully');
       } else {
         await createVideo(payload);
-        toast.success('Video created and linked to lesson successfully');
+        toast.success('Video created successfully');
       }
 
       setIsModalOpen(false);
@@ -206,12 +222,12 @@ const ManageVideos = () => {
   if (loading) return <Loader fullPage />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 800 }}>Manage YouTube Videos</h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-            Add, update, and associate YouTube video streams & playlists with course lessons.
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>Manage YouTube Videos</h1>
+          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
+            Add, edit, and link YouTube lectures to Courses, Subjects, and Chapters.
           </p>
         </div>
         <button onClick={handleOpenCreateModal} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -220,83 +236,88 @@ const ManageVideos = () => {
       </div>
 
       {/* Videos List Table */}
-      <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '12px' }}>
+      <div className="card" style={{ padding: '1.25rem' }}>
         <div className="table-wrapper">
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Thumbnail</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Video Title</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Associated Lesson</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Provider</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)' }}>Quality</th>
-                <th style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'right' }}>Actions</th>
+              <tr>
+                <th>Thumbnail</th>
+                <th>Video Title</th>
+                <th>Hierarchy / Link</th>
+                <th>Provider</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {videos.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                    <FiVideo size={36} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                    <p>No video streams linked yet. Click "Add Video Stream" to begin.</p>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)' }}>
+                    <FiVideo size={36} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+                    <p>No video streams added yet. Click "Add Video Stream" to begin.</p>
                   </td>
                 </tr>
               ) : (
-                videos.map((vid) => (
-                  <tr key={vid.id || vid._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <img
-                        src={vid.thumbnailUrl || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200&auto=format&fit=crop&q=80'}
-                        alt={vid.title}
-                        style={{ width: '80px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}
-                      />
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{vid.title}</strong>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
-                        <FiYoutube style={{ color: '#ff0000' }} />
-                        <span style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {vid.videoUrl || vid.playlistUrl}
+                videos.map((vid) => {
+                  const id = vid.id || vid._id;
+                  return (
+                    <tr key={id}>
+                      <td>
+                        <img
+                          src={vid.thumbnailUrl || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200&auto=format&fit=crop&q=80'}
+                          alt={vid.title}
+                          style={{ width: '80px', height: '48px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border)' }}
+                        />
+                      </td>
+                      <td>
+                        <strong style={{ color: 'var(--text-primary)', fontSize: '0.9375rem' }}>{vid.title}</strong>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
+                          <FiYoutube style={{ color: '#dc2626' }} />
+                          <span style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {vid.videoUrl || vid.playlistUrl}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        {vid.lessonTitle ? (
+                          <span className="badge badge-primary">{vid.lessonTitle}</span>
+                        ) : vid.courseTitle ? (
+                          <span className="badge badge-secondary">{vid.courseTitle}</span>
+                        ) : (
+                          <span className="badge badge-outline">General / Stream</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="badge badge-outline" style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                          {vid.videoProvider}
                         </span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {vid.lessonTitle ? (
-                        <span className="badge badge-primary">{vid.lessonTitle}</span>
-                      ) : (
-                        <span style={{ opacity: 0.5 }}>Unassigned</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <span className="badge badge-outline" style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                        {vid.videoProvider}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#43e97b' }}>
-                      {vid.quality}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handleOpenEditModal(vid)}
-                          className="btn btn-sm btn-outline"
-                          style={{ padding: '0.4rem 0.6rem' }}
-                          title="Edit Video"
-                        >
-                          <FiEdit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(vid.id || vid._id)}
-                          className="btn btn-sm btn-danger"
-                          style={{ padding: '0.4rem 0.6rem' }}
-                          title="Delete Video"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td>
+                        <span className={`badge ${vid.isFree ? 'badge-success' : 'badge-primary'}`}>
+                          {vid.isFree ? 'Free Preview' : 'Pro'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => handleOpenEditModal(vid)}
+                            className="btn btn-sm btn-outline"
+                            title="Edit Video"
+                          >
+                            <FiEdit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(id)}
+                            className="btn btn-sm btn-danger"
+                            title="Delete Video"
+                          >
+                            <FiTrash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -311,14 +332,25 @@ const ManageVideos = () => {
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div className="form-group">
-            <label className="form-label">Video Title</label>
+            <label className="form-label">Video Title *</label>
             <input
               type="text"
               className="form-input"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="e.g. Chapter 1: Chemical Reactions & Equations - Lecture 01"
+              placeholder="e.g. Chapter 1: Chemical Kinetics - Lecture 01"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Description (Optional)</label>
+            <textarea
+              className="form-input"
+              rows="2"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Brief topic breakdown or key formula summary..."
             />
           </div>
 
@@ -329,11 +361,8 @@ const ManageVideos = () => {
               className="form-input"
               value={formData.videoUrl}
               onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
-              placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ or https://youtu.be/..."
+              placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
             />
-            <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
-              Standard video, YouTube Shorts, or embed link. Large videos are streamed directly via YouTube.
-            </small>
           </div>
 
           <div className="form-group">
@@ -343,14 +372,14 @@ const ManageVideos = () => {
               className="form-input"
               value={formData.playlistUrl}
               onChange={(e) => setFormData({ ...formData, playlistUrl: e.target.value })}
-              placeholder="https://www.youtube.com/playlist?list=PLxyz..."
+              placeholder="https://www.youtube.com/playlist?list=..."
             />
           </div>
 
           {/* Live Preview Embed */}
           {(formData.videoUrl || formData.playlistUrl) && (
-            <div style={{ backgroundColor: '#121420', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+            <div style={{ backgroundColor: '#0f172a', padding: '0.875rem', borderRadius: '8px' }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
                 Live Stream Preview:
               </span>
               <VideoPlayerEmbed
@@ -361,10 +390,10 @@ const ManageVideos = () => {
             </div>
           )}
 
-          {/* Lesson Association Cascade */}
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--primary)' }}>
-              Associate with Lesson (Course &rarr; Subject &rarr; Chapter &rarr; Lesson)
+          {/* Hierarchy Association */}
+          <div style={{ backgroundColor: 'var(--bg-muted)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem', color: 'var(--primary-dark)', fontWeight: 700 }}>
+              Hierarchy Association (Optional)
             </h4>
 
             <div className="grid-2" style={{ gap: '0.75rem' }}>
@@ -415,7 +444,7 @@ const ManageVideos = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.8rem' }}>Lesson / Class</label>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>Lesson</label>
                 <select
                   className="form-input"
                   value={selectedLesson}
@@ -431,46 +460,27 @@ const ManageVideos = () => {
             </div>
           </div>
 
-          <div className="grid-3" style={{ gap: '0.75rem' }}>
-            <div className="form-group">
-              <label className="form-label">Provider</label>
-              <select
-                className="form-input"
-                value={formData.videoProvider}
-                onChange={(e) => setFormData({ ...formData, videoProvider: e.target.value })}
-              >
-                <option value="youtube">YouTube Embed</option>
-                <option value="vimeo">Vimeo</option>
-                <option value="custom">Custom Provider</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Quality</label>
-              <select
-                className="form-input"
-                value={formData.quality}
-                onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
-              >
-                <option value="1080p">1080p Full HD</option>
-                <option value="720p">720p HD</option>
-                <option value="4K">4K Ultra HD</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Order</label>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', cursor: 'pointer', fontWeight: 600 }}>
               <input
-                type="number"
-                className="form-input"
-                min="1"
-                value={formData.order}
-                onChange={(e) => setFormData({ ...formData, order: Number(e.target.value) })}
+                type="checkbox"
+                checked={formData.isFree}
+                onChange={(e) => setFormData({ ...formData, isFree: e.target.checked })}
               />
-            </div>
+              Free Lecture (No Login / Free Preview)
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={formData.isPublished}
+                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+              />
+              Published (Visible to students)
+            </label>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiCheck, FiBook, FiVideo, FiFileText, FiStar, FiYoutube, FiArrowRight } from 'react-icons/fi';
+import { FiCheck, FiBook, FiVideo, FiFileText, FiStar, FiYoutube, FiArrowRight, FiDownloadCloud } from 'react-icons/fi';
 import { getAllCourses } from '../../api/courseApi';
 import { getActiveBanners } from '../../api/adminApi';
 import HeroSection from '../../components/home/HeroSection';
@@ -37,7 +37,7 @@ const HomePage = () => {
   const clientYouTubeVideos = [
     {
       _id: 'yt_chem_06',
-      title: 'LEC 06 chemical kinetics FACTOR AFFECTING RATE OF RXN #iit #jee #hindi #upboard #biharboard',
+      title: 'LEC 06 Chemical Kinetics: Factor Affecting Rate of Rxn #upboard #hindi',
       description: 'सबसे आसान भाषा में समझें - Effect of Temp, Concentration, Catalyst, Surface Area on Reaction Rate by SID ACADEMY PRAYAGRAJ.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '33:32',
@@ -49,7 +49,7 @@ const HomePage = () => {
     },
     {
       _id: 'yt_bio_02',
-      title: 'LEC 02 पुष्पी पादपो में लैंगिक जनन by आकाश सर #upboard #mpboard #biharboard #boardexam #biology',
+      title: 'LEC 02 पुष्पी पादपो में लैंगिक जनन by आकाश सर #upboard #class12 #biology',
       description: 'Basic to Advance: Embryo Sac development, Pollen-Pistil interaction & Double Fertilization by आकाश सर.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '25:03',
@@ -61,8 +61,8 @@ const HomePage = () => {
     },
     {
       _id: 'yt_eng_01',
-      title: 'conversation use of to और With by आकाश सर #english #englishgrammar #class12 #upboard #boardexam',
-      description: 'Spoken English & Board Exam Grammar: Exact rules for using "To" vs "With" in sentences.',
+      title: 'Conversation & Board Grammar: Use of "To" vs "With" by आकाश सर',
+      description: 'Spoken English & Board Exam Grammar: Exact rules for using "To" vs "With" in UP Board sentences.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '7:03',
       isFree: true,
@@ -73,8 +73,8 @@ const HomePage = () => {
     },
     {
       _id: 'yt_chem_05',
-      title: 'Chemical kinetics LEC 05 question ❓ #chemistry #class12 #neet #jee #upboard #mpboard #biharboard',
-      description: 'ज़रूर देखे Basic to Advance: High yield numericals on Rate Constant, Half Life & Collision Theory.',
+      title: 'Chemical Kinetics LEC 05 Numericals & Question Practice',
+      description: 'High yield numericals on Rate Constant, Half Life & Collision Theory for UP Board exams.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '29:58',
       isFree: true,
@@ -85,7 +85,7 @@ const HomePage = () => {
     },
     {
       _id: 'yt_bio_01',
-      title: 'LEC 01 पुष्पी पादपों में लैंगिक जनन #flowers #biology #basic #class12 #upboard #mpboard #biharboard',
+      title: 'LEC 01 पुष्पी पादपों में लैंगिक जनन — पुष्प की संरचना',
       description: 'Flower Structure, Stamen, Microsporangium, and Pollen Grain development step-by-step.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '14:32',
@@ -97,8 +97,8 @@ const HomePage = () => {
     },
     {
       _id: 'yt_regular_launch',
-      title: 'जो वादा किया उससे निभाना पड़ेगा SID ACADEMY PRAYAGRAJ 💥 जहां आपकी सफलता हमारी जिम्मेदारी 🤩#study',
-      description: '20 AUGUST नई शुरुआत — Regular Classroom & Online Batch Start with Siddhant Pandey.',
+      title: '20 August नई शुरुआत — Regular Class 10th & 12th Batch Launch',
+      description: 'Prayagraj Offline & Online Live Batch orientation with Siddhant Pandey & teaching team.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       duration: '23:29',
       isFree: true,
@@ -115,53 +115,97 @@ const HomePage = () => {
 
       {banners.length > 0 && <FeaturedBanners banners={banners} />}
 
-      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '3rem 0', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="container grid-4">
-          <div className="stat-card" style={{ textAlign: 'center' }}>
-            <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>10k+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Students Enrolled</div>
+      {/* Target Classes Selection Grid */}
+      <section style={{ backgroundColor: '#ffffff', padding: '3.5rem 0', borderBottom: '1px solid var(--border)' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 style={{ fontSize: '1.875rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+              अपनी कक्षा चुनें (Select Your Class)
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+              हिंदी माध्यम एवं NCERT पैटर्न के आधार पर पूर्ण पाठयक्रम
+            </p>
           </div>
-          <div className="stat-card" style={{ textAlign: 'center' }}>
-            <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>50+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Modular Courses</div>
-          </div>
-          <div className="stat-card" style={{ textAlign: 'center' }}>
-            <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>500+</div>
-            <div style={{ color: 'var(--text-muted)' }}>Modular PDFs & Notes</div>
-          </div>
-          <div className="stat-card" style={{ textAlign: 'center' }}>
-            <div className="stat-value text-gradient" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>1000+</div>
-            <div style={{ color: 'var(--text-muted)' }}>YouTube Video Classes</div>
+
+          <div className="grid-3">
+            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--primary)' }}>
+              <div style={{ display: 'inline-block', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                Class 10th High School
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>विज्ञान, गणित एवं सामाजिक विज्ञान</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+                Board Exam Special Batch: संपूर्ण NCERT समाधान, मॉडल प्रश्न-पत्र और अध्याय-वार टेस्ट सीरीज़।
+              </p>
+              <span style={{ color: 'var(--primary)', fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                View Class 10 Courses <FiArrowRight />
+              </span>
+            </Link>
+
+            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--secondary)' }}>
+              <div style={{ display: 'inline-block', backgroundColor: 'var(--secondary-subtle)', color: 'var(--secondary-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                Class 11th Foundation
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>भौतिकी, रसायन एवं जीव विज्ञान</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+                मजबूत नींव (Strong Foundation) के साथ Board एवं प्रतियोगी परीक्षाओं (NEET / JEE) की तैयारी।
+              </p>
+              <span style={{ color: 'var(--secondary-dark)', fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                View Class 11 Courses <FiArrowRight />
+              </span>
+            </Link>
+
+            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--accent)' }}>
+              <div style={{ display: 'inline-block', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                Class 12th Board Target
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>UP Board 95%+ Target Batch</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+                डेली वीडियो लेक्चर्स, विस्तृत हस्तलिखित नोट्स, विगत 10 वर्षों के अनसॉल्व्ड पेपर्स का हल।
+              </p>
+              <span style={{ color: 'var(--accent-dark)', fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                View Class 12 Courses <FiArrowRight />
+              </span>
+            </Link>
           </div>
         </div>
       </section>
 
       {/* Featured Courses */}
-      <section className="section container" style={{ padding: '4.5rem 0' }}>
-        <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
-          <h2 className="section-title" style={{ fontSize: '2.2rem', fontWeight: 800 }}>Featured Academic Courses</h2>
-          <p className="section-subtitle" style={{ color: 'var(--text-muted)' }}>Comprehensive curriculum designed for board exams & competitive tests</p>
+      <section className="section container">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              प्रमुख पाठ्यक्रम (Featured Academic Courses)
+            </h2>
+            <p style={{ color: 'var(--text-muted)', margin: '0.35rem 0 0 0', fontSize: '0.95rem' }}>
+              सत्र 2024-2025 के लिए नवीनतम पाठयक्रम अनुसार तैयार
+            </p>
+          </div>
+          <Link to="/courses" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            सभी कोर्सेज देखें <FiArrowRight />
+          </Link>
         </div>
+
         <div className="grid-3">
           {courses.map(course => (
-            <CourseCard key={course._id} course={course} />
+            <CourseCard key={course._id || course.id} course={course} />
           ))}
         </div>
       </section>
 
       {/* YouTube Video Classes Showcase */}
-      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0' }}>
+      <section style={{ backgroundColor: '#ffffff', padding: '4.5rem 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div className="container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.25rem' }}>
             <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#ff4d4d', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem', backgroundColor: 'rgba(255, 77, 77, 0.1)', padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1px solid rgba(255, 77, 77, 0.25)' }}>
-                <FiYoutube size={18} color="#ff0000" /> OFFICIAL YOUTUBE CHANNEL • @A2CCENTRE
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#dc2626', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem', backgroundColor: '#fef2f2', padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1px solid #fecaca' }}>
+                <FiYoutube size={18} color="#ef4444" /> OFFICIAL YOUTUBE CHANNEL • @A2CCENTRE
               </div>
-              <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: '0.4rem 0 0.5rem 0' }}>
-                Free Video Lectures from SID ACADEMY PRAYAGRAJ
+              <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: '0.4rem 0 0.5rem 0', color: 'var(--text-primary)' }}>
+                मुफ्त वीडियो कक्षाएं (Free Video Lectures)
               </h2>
               <p style={{ color: 'var(--text-muted)', margin: 0, maxWidth: '680px', fontSize: '0.95rem' }}>
-                High-yield video lectures on Chemical Kinetics, Sexual Reproduction in Plants, and English Grammar by Akash Sir & Siddhant Pandey. Touch to play immediately or subscribe on YouTube!
+                SID ACADEMY प्रयागराज के विशेषज्ञ शिक्षकों द्वारा तैयार वीडियो लेक्चर्स। सीधे देखें या YouTube चैनल पर सब्सक्राइब करें।
               </p>
             </div>
 
@@ -171,12 +215,12 @@ const HomePage = () => {
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="btn btn-primary"
-                style={{ backgroundColor: '#ff0000', borderColor: '#ff0000', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
+                style={{ backgroundColor: '#dc2626', borderColor: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
               >
                 <FiYoutube size={18} /> Visit @A2CCENTRE
               </a>
               <Link to="/courses" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                All Courses <FiArrowRight />
+                Explore Courses <FiArrowRight />
               </Link>
             </div>
           </div>
@@ -190,43 +234,55 @@ const HomePage = () => {
       </section>
 
       {/* Modular Study Material Banner */}
-      <section className="section container" style={{ padding: '4.5rem 0', textAlign: 'center' }}>
-        <div className="card-glass" style={{ padding: '3.5rem 2rem', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.12) 0%, rgba(255, 101, 132, 0.12) 100%)' }}>
-          <h2 style={{ fontSize: '2.4rem', fontWeight: 800, marginBottom: '1rem' }}>Modular Notes & Formula PDFs</h2>
-          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', maxWidth: '650px', margin: '0 auto 2rem auto', lineHeight: 1.6 }}>
-            Organized hierarchically: <strong>Subject &rarr; Chapter &rarr; PDF 1 / PDF 2</strong>. Download printable formulas, derivations, mind-maps, and question banks.
+      <section className="section container" style={{ textAlign: 'center' }}>
+        <div style={{ padding: '3.5rem 2rem', borderRadius: '16px', backgroundColor: 'var(--primary-subtle)', border: '1px solid var(--primary-border)' }}>
+          <h2 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--primary-dark)', marginBottom: '1rem' }}>
+            हस्तलिखित नोट्स एवं फॉर्मूला PDFs (Modular Notes)
+          </h2>
+          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', marginBottom: '2rem', maxWidth: '650px', margin: '0 auto 2rem auto', lineHeight: 1.7 }}>
+            व्यवस्थित संरचना: <strong>Subject &rarr; Chapter &rarr; PDF 1 / PDF 2</strong>। प्रिंट करने योग्य सूत्र, माइंड-मैप्स और बोर्ड परीक्षा के महत्वपूर्ण प्रश्नोत्तर।
           </p>
-          <Link to="/notes" className="btn btn-primary btn-lg" style={{ padding: '0.8rem 2rem' }}>
-            Open Modular Notes Library
+          <Link to="/notes" className="btn btn-primary btn-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FiDownloadCloud /> ओपन मॉड्यूलर नोट्स लाइब्रेरी
           </Link>
         </div>
       </section>
 
-      <section className="section" style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0' }}>
+      {/* Why Choose Section */}
+      <section style={{ backgroundColor: '#ffffff', padding: '4.5rem 0', borderTop: '1px solid var(--border)' }}>
         <div className="container">
-          <div className="section-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <h2 className="section-title">Why Students Choose Sidd Academy</h2>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)' }}>विद्यार्थियों का भरोसा Sidd Academy क्यों है?</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '0.4rem' }}>हमारी विशेषताएं जो आपकी पढ़ाई को बनाती हैं प्रभावी</p>
           </div>
           <div className="grid-4">
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiStar size={36} color="var(--accent-gold)" style={{ marginBottom: '1rem' }} />
-              <h3>Expert Faculty</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Learn from experienced educators and gold medalists.</p>
+            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--secondary-subtle)', color: 'var(--secondary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto' }}>
+                <FiStar size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>अनुभवी शिक्षक</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>प्रयागराज के शीर्ष शिक्षकों द्वारा विषयवार अध्यापन।</p>
             </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiFileText size={36} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-              <h3>Modular PDFs</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Structured notes: Subject &rarr; Chapter &rarr; PDF 1/2 format.</p>
+            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto' }}>
+                <FiFileText size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>मॉड्यूलर PDF नोट्स</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>Subject &rarr; Chapter &rarr; PDF 1/2 प्रारूप में स्पष्ट नोट्स।</p>
             </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiVideo size={36} color="var(--secondary)" style={{ marginBottom: '1rem' }} />
-              <h3>YouTube Lectures</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>High-definition video lectures with instant YouTube links.</p>
+            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto' }}>
+                <FiVideo size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>HD वीडियो क्लासेज</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>सरल भाषा और विज़ुअल एनिमेशन के साथ अवधारणाएं स्पष्ट।</p>
             </div>
-            <div className="card-glass" style={{ padding: '2rem', textAlign: 'center' }}>
-              <FiCheck size={36} color="var(--accent)" style={{ marginBottom: '1rem' }} />
-              <h3>Board Preparation</h3>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>Proven question banks and previous 10-year paper solutions.</p>
+            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto' }}>
+                <FiCheck size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>बोर्ड परीक्षा तैयारी</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>विगत वर्षों के अनसॉल्व्ड प्रश्न और मॉडल पेपर्स।</p>
             </div>
           </div>
         </div>
@@ -236,4 +292,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
-

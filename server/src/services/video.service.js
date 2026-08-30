@@ -7,7 +7,7 @@ import { AppError } from '../utils/apiResponse.js';
  */
 export class VideoService {
   /**
-   * Extract YouTube Video ID from standard, shortened, and embedded URLs
+   * Extract YouTube Video ID from standard, shortened, shorts, and embedded URLs
    */
   extractYoutubeId(url) {
     if (!url || typeof url !== 'string') return null;
@@ -18,6 +18,12 @@ export class VideoService {
       return cleanUrl;
     }
 
+    // Handles:
+    // https://www.youtube.com/watch?v=VIDEO_ID
+    // https://youtu.be/VIDEO_ID
+    // https://www.youtube.com/embed/VIDEO_ID
+    // https://www.youtube.com/shorts/VIDEO_ID
+    // https://www.youtube.com/v/VIDEO_ID
     const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
     const match = cleanUrl.match(regExp);
     return match ? match[1] : null;
@@ -93,10 +99,10 @@ export class VideoService {
   }
 
   /**
-   * Create and associate a video with a lesson
+   * Create a video stream entry
    */
   async createVideo(data) {
-    if (!data.title) {
+    if (!data.title || !data.title.trim()) {
       throw new AppError('Video title is required', 400);
     }
     if (!data.videoUrl && !data.playlistUrl) {
@@ -113,19 +119,24 @@ export class VideoService {
 
     const video = await videoRepository.create({
       lessonId: data.lessonId || null,
-      title: data.title,
-      videoUrl: data.videoUrl || '',
+      courseId: data.courseId || null,
+      subjectId: data.subjectId || null,
+      chapterId: data.chapterId || null,
+      title: data.title.trim(),
+      description: data.description ? data.description.trim() : '',
+      videoUrl: data.videoUrl ? data.videoUrl.trim() : '',
       youtubeId: youtubeId || '',
-      playlistUrl: data.playlistUrl || '',
+      playlistUrl: data.playlistUrl ? data.playlistUrl.trim() : '',
       thumbnailUrl: thumbnailUrl || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
       durationSeconds: Number(data.durationSeconds || 0),
       videoProvider: data.videoProvider || 'youtube',
       quality: data.quality || '1080p',
       order: Number(data.order || 0),
+      isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
     });
 
-    // If attached to a lesson, also keep lesson video_url in sync
-    if (data.lessonId) {
+    // If attached to a lesson, also keep lesson video_url in sync if possible
+    if (data.lessonId && data.videoUrl) {
       try {
         await lessonRepository.update(data.lessonId, { videoUrl: data.videoUrl });
       } catch (err) {
@@ -140,7 +151,7 @@ export class VideoService {
   }
 
   /**
-   * Update video
+   * Update video details
    */
   async updateVideo(id, data) {
     const existing = await videoRepository.findById(id);
@@ -148,7 +159,7 @@ export class VideoService {
       throw new AppError('Video not found', 404);
     }
 
-    let youtubeId = data.videoUrl ? this.extractYoutubeId(data.videoUrl) : existing.youtubeId;
+    let youtubeId = data.videoUrl !== undefined ? this.extractYoutubeId(data.videoUrl) : existing.youtubeId;
     let playlistId = (data.playlistUrl || data.videoUrl) ? this.extractPlaylistId(data.playlistUrl || data.videoUrl) : existing.playlistUrl;
 
     let thumbnailUrl = data.thumbnailUrl !== undefined ? data.thumbnailUrl : existing.thumbnailUrl;
@@ -183,3 +194,4 @@ export class VideoService {
 }
 
 export const videoService = new VideoService();
+export default videoService;

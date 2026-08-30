@@ -75,6 +75,7 @@ const AppRouter = () => {
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+          <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="courses" element={<ManageCourses />} />
           <Route path="subjects" element={<ManageSubjects />} />

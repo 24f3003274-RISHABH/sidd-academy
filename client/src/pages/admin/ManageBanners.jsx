@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getAllBanners, createBanner, updateBanner, deleteBanner } from '../../api/adminApi';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus, FiEye, FiCheck, FiX, FiZap, FiExternalLink, FiLayers, FiImage } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiPlus, FiCheck, FiX, FiZap } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const PRESET_TEMPLATES = [
@@ -79,7 +79,7 @@ const ManageBanners = () => {
 
   const openModal = (banner = null) => {
     if (banner) {
-      setEditingId(banner._id);
+      setEditingId(banner._id || banner.id);
       setFormData({
         title: banner.title || '',
         subtitle: banner.subtitle || '',
@@ -121,8 +121,9 @@ const ManageBanners = () => {
 
   const handleToggleActive = async (banner) => {
     try {
+      const id = banner._id || banner.id;
       const updatedStatus = !banner.isActive;
-      await updateBanner(banner._id, { ...banner, isActive: updatedStatus });
+      await updateBanner(id, { ...banner, isActive: updatedStatus });
       toast.success(updatedStatus ? 'Banner is now visible on Home Page' : 'Banner hidden from Home Page');
       fetchBanners();
     } catch (err) {
@@ -162,11 +163,11 @@ const ManageBanners = () => {
   if (loading) return <Loader fullPage />;
 
   return (
-    <div>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Home Page Sliding Banners</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Home Page Sliding Banners</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>
             Manage floating & sliding banners on the home page for crash courses, masterclasses, and offers.
           </p>
         </div>
@@ -176,11 +177,11 @@ const ManageBanners = () => {
       </div>
 
       {/* Preset Quick Templates */}
-      <div className="card-glass" style={{ padding: '1.25rem', marginBottom: '2rem', borderRadius: '12px' }}>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <FiZap color="#ffb703" /> Quick Add Banner Templates
+      <div className="card" style={{ padding: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <FiZap color="#d97706" /> Quick Add Banner Templates
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {PRESET_TEMPLATES.map((preset, idx) => (
             <button
               key={idx}
@@ -190,7 +191,7 @@ const ManageBanners = () => {
                 setTimeout(() => applyPreset(preset), 50);
               }}
               className="btn btn-sm btn-outline"
-              style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
               <FiPlus size={12} /> {preset.name}
             </button>
@@ -199,7 +200,7 @@ const ManageBanners = () => {
       </div>
 
       {/* Banners Grid */}
-      <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px' }}>
+      <div className="card" style={{ padding: '1.5rem' }}>
         {banners.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '3rem 0' }}>
             <p style={{ marginBottom: '1rem' }}>No banners created yet.</p>
@@ -207,92 +208,94 @@ const ManageBanners = () => {
           </div>
         ) : (
           <div className="grid-2">
-            {banners.map(banner => (
-              <div 
-                key={banner._id} 
-                style={{ 
-                  border: banner.isActive ? '1px solid rgba(108, 99, 255, 0.4)' : '1px solid rgba(255,255,255,0.08)', 
-                  borderRadius: '12px', 
-                  padding: '1.25rem', 
-                  position: 'relative',
-                  backgroundColor: 'rgba(255,255,255,0.02)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: '1rem',
-                }}
-              >
-                <div>
-                  <div style={{ position: 'relative', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
-                    <img 
-                      src={banner.imageUrl || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'} 
-                      alt={banner.title} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                    />
-                    <span 
-                      style={{ 
-                        position: 'absolute', 
-                        top: '8px', 
-                        left: '8px', 
-                        backgroundColor: 'rgba(0,0,0,0.75)', 
-                        color: '#ffb703', 
-                        fontSize: '0.75rem', 
-                        fontWeight: 700, 
-                        padding: '0.2rem 0.6rem', 
-                        borderRadius: '4px',
-                        backdropFilter: 'blur(4px)'
-                      }}
-                    >
-                      {banner.badge || 'PROMOTION'}
-                    </span>
-                    <span 
-                      className={`badge ${banner.isActive ? 'badge-success' : 'badge-paid'}`}
-                      style={{ position: 'absolute', top: '8px', right: '8px' }}
-                    >
-                      {banner.isActive ? 'Active on Home' : 'Hidden'}
-                    </span>
+            {banners.map(banner => {
+              const id = banner._id || banner.id;
+              return (
+                <div 
+                  key={id} 
+                  style={{ 
+                    border: banner.isActive ? '1px solid var(--primary-border)' : '1px solid var(--border)', 
+                    borderRadius: '8px', 
+                    padding: '1.25rem', 
+                    position: 'relative',
+                    backgroundColor: banner.isActive ? 'var(--primary-subtle)' : 'var(--bg-muted)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                  }}
+                >
+                  <div>
+                    <div style={{ position: 'relative', height: '140px', borderRadius: '6px', overflow: 'hidden', marginBottom: '1rem' }}>
+                      <img 
+                        src={banner.imageUrl || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'} 
+                        alt={banner.title} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                      <span 
+                        style={{ 
+                          position: 'absolute', 
+                          top: '8px', 
+                          left: '8px', 
+                          backgroundColor: 'rgba(15, 23, 42, 0.85)', 
+                          color: '#f59e0b', 
+                          fontSize: '0.75rem', 
+                          fontWeight: 700, 
+                          padding: '0.2rem 0.6rem', 
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {banner.badge || 'PROMOTION'}
+                      </span>
+                      <span 
+                        className={`badge ${banner.isActive ? 'badge-success' : 'badge-outline'}`}
+                        style={{ position: 'absolute', top: '8px', right: '8px' }}
+                      >
+                        {banner.isActive ? 'Active' : 'Hidden'}
+                      </span>
+                    </div>
+
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.35rem', lineHeight: 1.3, color: 'var(--text-primary)' }}>{banner.title}</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '0.75rem' }}>{banner.subtitle}</p>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--primary)' }}>
+                      <span>Button: <strong>{banner.buttonText || 'Explore Now'}</strong></span>
+                      <span>•</span>
+                      <span>Link: <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 4px', borderRadius: '3px' }}>{banner.linkUrl || '/courses'}</code></span>
+                    </div>
                   </div>
 
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.35rem', lineHeight: 1.3 }}>{banner.title}</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.4, marginBottom: '0.75rem' }}>{banner.subtitle}</p>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--primary)' }}>
-                    <span>Button: <strong>{banner.buttonText || 'Explore Now'}</strong></span>
-                    <span>•</span>
-                    <span>Link: <code>{banner.linkUrl || '/courses'}</code></span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                    <button 
+                      onClick={() => handleToggleActive(banner)}
+                      className={`btn btn-sm ${banner.isActive ? 'btn-outline' : 'btn-primary'}`}
+                      style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.75rem' }}
+                    >
+                      {banner.isActive ? <><FiX /> Hide</> : <><FiCheck /> Show</>}
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        onClick={() => openModal(banner)} 
+                        className="btn btn-sm btn-outline" 
+                        title="Edit banner"
+                        style={{ padding: '0.4rem 0.65rem' }}
+                      >
+                        <FiEdit2 size={13} /> Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(id)} 
+                        className="btn btn-sm btn-danger" 
+                        title="Delete banner"
+                        style={{ padding: '0.4rem 0.65rem' }}
+                      >
+                        <FiTrash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
-                  <button 
-                    onClick={() => handleToggleActive(banner)}
-                    className={`btn btn-sm ${banner.isActive ? 'btn-outline' : 'btn-primary'}`}
-                    style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.75rem' }}
-                  >
-                    {banner.isActive ? <><FiX /> Hide from Home</> : <><FiCheck /> Show on Home</>}
-                  </button>
-
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button 
-                      onClick={() => openModal(banner)} 
-                      className="btn btn-sm btn-outline" 
-                      title="Edit banner"
-                      style={{ padding: '0.45rem 0.75rem' }}
-                    >
-                      <FiEdit2 /> Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(banner._id)} 
-                      className="btn btn-sm btn-danger" 
-                      title="Delete banner"
-                      style={{ padding: '0.45rem 0.75rem' }}
-                    >
-                      <FiTrash2 /> Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -300,27 +303,6 @@ const ManageBanners = () => {
       {/* Add / Edit Banner Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Sliding Banner' : 'Create Home Banner'}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
-          {/* Quick preset selector inside modal */}
-          {!editingId && (
-            <div style={{ backgroundColor: 'rgba(108, 99, 255, 0.1)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(108, 99, 255, 0.2)' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#939aff', marginBottom: '0.4rem' }}>Or pick a template:</div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {PRESET_TEMPLATES.map((p, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => applyPreset(p)}
-                    className="badge badge-primary"
-                    style={{ border: 'none', cursor: 'pointer', padding: '0.3rem 0.6rem' }}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Badge / Category Tag</label>
@@ -361,12 +343,12 @@ const ManageBanners = () => {
           <div className="form-group">
             <label className="form-label">Subtitle / Description</label>
             <textarea 
-              className="form-textarea" 
+              className="form-input" 
               rows="2" 
               value={formData.subtitle} 
               onChange={e => setFormData({...formData, subtitle: e.target.value})} 
               placeholder="Brief description of the course, batch timings, or discount details"
-            ></textarea>
+            />
           </div>
 
           <div className="form-group">
@@ -404,36 +386,17 @@ const ManageBanners = () => {
           </div>
 
           <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '0.25rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
               <input 
                 type="checkbox" 
                 checked={formData.isActive} 
                 onChange={e => setFormData({...formData, isActive: e.target.checked})} 
-                style={{ width: '20px', height: '20px' }} 
               />
-              <span style={{ fontWeight: 600 }}>Active on Home Page Carousel</span>
+              <span>Active on Home Page Carousel</span>
             </label>
           </div>
 
-          {/* Live Preview Box */}
-          <div style={{ marginTop: '0.5rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', overflow: 'hidden', position: 'relative', height: '120px' }}>
-            <img 
-              src={formData.imageUrl || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'} 
-              alt="Preview" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.3)' }} 
-            />
-            <div style={{ position: 'absolute', inset: 0, padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.7rem', color: '#ffb703', fontWeight: 800 }}>{formData.badge || 'BADGE'}</span>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formData.title || 'Banner Title Preview'}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#ccc', marginTop: '0.2rem' }}>
-                Button: <strong style={{ color: 'var(--primary)' }}>{formData.buttonText || 'Explore Now'}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
             <button type="submit" className="btn btn-primary">
               {editingId ? 'Update Banner' : 'Save & Publish Banner'}

@@ -29,8 +29,9 @@ export const getAllUsers = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const search = req.query.search;
+    const role = req.query.role;
 
-    const result = await adminService.getAllUsers({ page, limit, search });
+    const result = await adminService.getAllUsers({ page, limit, search, role });
     return sendSuccess(res, 200, 'Users fetched', result);
   } catch (error) {
     next(error);

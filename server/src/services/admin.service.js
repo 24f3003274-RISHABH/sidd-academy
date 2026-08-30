@@ -15,7 +15,7 @@ export class AdminService {
    */
   async getDashboardStats() {
     const [totalUsers, totalCourses, totalNotes, totalOrders, totalRevenue, recentOrders] = await Promise.all([
-      userRepository.countUsers({ excludeRole: 'admin' }),
+      userRepository.countUsers({ excludeRole: null }),
       courseRepository.count(),
       noteRepository.count(),
       orderRepository.countPaid(),
@@ -29,15 +29,19 @@ export class AdminService {
       totalNotes,
       totalOrders,
       totalRevenue,
-      recentOrders,
+      recentOrders: (recentOrders || []).map(o => ({
+        ...o,
+        id: o.id || o._id,
+        _id: o.id || o._id,
+      })),
     };
   }
 
   /**
-   * Retrieve paginated users with optional search filtering (excludes admin by default)
+   * Retrieve paginated users with optional search and role filtering
    */
-  async getAllUsers({ page = 1, limit = 10, search } = {}) {
-    return userRepository.findAll({ page, limit, search, excludeRole: 'admin' });
+  async getAllUsers({ page = 1, limit = 10, search, role } = {}) {
+    return userRepository.findAll({ page, limit, search, role, excludeRole: null });
   }
 
   /**
