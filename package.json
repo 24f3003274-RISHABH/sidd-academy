@@ -14,11 +14,5 @@
     "start": "node server/server.js",
     "db:migrate": "npm --workspace=server run db:migrate",
     "db:seed": "npm --workspace=server run db:seed"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
-  },
-  "dependencies": {
-    "pg": "^8.23.0"
   }
 }

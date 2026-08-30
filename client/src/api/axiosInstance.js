@@ -1,12 +1,16 @@
 import axios from 'axios';
 
-// Ensure baseURL uses VITE_API_URL or defaults to relative '/api/v1'
+// Ensure baseURL uses VITE_API_URL or defaults to production Render API
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-    return envUrl.trim().replace(/\/+$/, '');
+    const cleaned = envUrl.trim().replace(/\/+$/, '');
+    if (!cleaned.includes('/api')) {
+      return `${cleaned}/api/v1`;
+    }
+    return cleaned;
   }
-  return '/api/v1';
+  return 'https://sidd-academy.onrender.com/api/v1';
 };
 
 const axiosInstance = axios.create({
