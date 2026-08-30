@@ -67,8 +67,8 @@ const LoginPage = () => {
             <button
               type="button"
               onClick={() => {
-                setEmail('admin@siddacademy.com');
-                setPassword('admin123');
+                setEmail('rishabhmyp@gmail.com');
+                setPassword('sid@8218');
               }}
               className="btn btn-sm btn-outline"
               style={{ flex: 1, borderColor: '#939aff', color: '#939aff', fontSize: '0.8rem' }}
