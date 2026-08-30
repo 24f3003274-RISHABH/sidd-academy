@@ -41,7 +41,8 @@ const ManageNotes = () => {
     try {
       setLoading(true);
       const res = await getAllNotes();
-      setNotes(res.data?.data?.notes || res.data?.notes || []);
+      const list = res.data?.data?.notes || res.data?.notes || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+      setNotes(list);
     } catch (err) {
       toast.error('Failed to fetch digital notes');
     } finally {
@@ -52,7 +53,7 @@ const ManageNotes = () => {
   const fetchCourses = async () => {
     try {
       const res = await getAllCourses();
-      const list = res.data?.data?.courses || res.data?.courses || [];
+      const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
       setCourses(list);
     } catch (err) {
       console.warn('Failed to load courses:', err);
@@ -74,9 +75,9 @@ const ManageNotes = () => {
     const fetchSubjs = async () => {
       try {
         const res = await getSubjectsByCourse(selectedCourse);
-        const list = res.data?.data?.subjects || res.data?.subjects || [];
+        const list = res.data?.data?.subjects || res.data?.subjects || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setSubjects(list);
-        if (list.length > 0) setSelectedSubject(list[0]._id || list[0].id);
+        if (list.length > 0) setSelectedSubject(list[0].id || list[0]._id);
       } catch (err) {
         console.warn('Failed to load subjects:', err);
       }
@@ -94,9 +95,9 @@ const ManageNotes = () => {
     const fetchChaps = async () => {
       try {
         const res = await getChaptersBySubject(selectedSubject);
-        const list = res.data?.data?.chapters || res.data?.chapters || [];
+        const list = res.data?.data?.chapters || res.data?.chapters || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setChapters(list);
-        if (list.length > 0) setSelectedChapter(list[0]._id || list[0].id);
+        if (list.length > 0) setSelectedChapter(list[0].id || list[0]._id);
       } catch (err) {
         console.warn('Failed to load chapters:', err);
       }
@@ -389,7 +390,7 @@ const ManageNotes = () => {
                 >
                   <option value="">-- Select Subject --</option>
                   {subjects.map((s) => (
-                    <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>
+                    <option key={s._id || s.id} value={s._id || s.id}>{s.name || s.title}</option>
                   ))}
                 </select>
               </div>

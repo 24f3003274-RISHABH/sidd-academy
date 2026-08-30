@@ -23,8 +23,13 @@ const ManageChapters = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
+        setLoading(true);
         const res = await getAllCourses();
-        setCourses(res.data.courses || []);
+        const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+        setCourses(list);
+        if (list.length > 0 && !selectedCourse) {
+          setSelectedCourse(list[0].id || list[0]._id);
+        }
       } catch (err) {
         toast.error('Failed to fetch courses');
       } finally {
@@ -36,8 +41,20 @@ const ManageChapters = () => {
 
   useEffect(() => {
     if (selectedCourse) {
-      getSubjectsByCourse(selectedCourse).then(res => setSubjects(res.data.subjects || [])).catch(() => setSubjects([]));
-      setSelectedSubject('');
+      getSubjectsByCourse(selectedCourse)
+        .then(res => {
+          const list = res.data?.data?.subjects || res.data?.subjects || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+          setSubjects(list);
+          if (list.length > 0) {
+            setSelectedSubject(list[0].id || list[0]._id);
+          } else {
+            setSelectedSubject('');
+          }
+        })
+        .catch(() => {
+          setSubjects([]);
+          setSelectedSubject('');
+        });
     } else {
       setSubjects([]);
       setSelectedSubject('');
@@ -56,7 +73,8 @@ const ManageChapters = () => {
     setLoading(true);
     try {
       const res = await getChaptersBySubject(subjectId);
-      setChapters(res.data.chapters || []);
+      const list = res.data?.data?.chapters || res.data?.chapters || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+      setChapters(list);
     } catch (err) {
       toast.error('Failed to fetch chapters');
     } finally {
@@ -70,11 +88,21 @@ const ManageChapters = () => {
       return;
     }
     if (chapter) {
-      setEditingId(chapter._id);
-      setFormData({ title: chapter.title, content: chapter.content, videoUrl: chapter.videoUrl, subjectId: selectedSubject });
+      setEditingId(chapter.id || chapter._id);
+      setFormData({
+        title: chapter.title || '',
+        content: chapter.content || chapter.description || '',
+        videoUrl: chapter.videoUrl || '',
+        subjectId: selectedSubject,
+      });
     } else {
       setEditingId(null);
-      setFormData({ title: '', content: '', videoUrl: '', subjectId: selectedSubject });
+      setFormData({
+        title: '',
+        content: '',
+        videoUrl: '',
+        subjectId: selectedSubject,
+      });
     }
     setIsModalOpen(true);
   };
@@ -92,7 +120,7 @@ const ManageChapters = () => {
       setIsModalOpen(false);
       fetchChapters(selectedSubject);
     } catch (err) {
-      toast.error('Error saving chapter');
+      toast.error(err.response?.data?.message || 'Error saving chapter');
     }
   };
 
@@ -103,7 +131,7 @@ const ManageChapters = () => {
         toast.success('Chapter deleted');
         fetchChapters(selectedSubject);
       } catch (err) {
-        toast.error('Error deleting chapter');
+        toast.error(err.response?.data?.message || 'Error deleting chapter');
       }
     }
   };
@@ -121,18 +149,24 @@ const ManageChapters = () => {
           <label className="form-label">Select Course</label>
           <select className="form-select" value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
             <option value="">-- Select a Course --</option>
-            {courses.map(c => (
-              <option key={c._id} value={c._id}>{c.title}</option>
-            ))}
+            {courses.map(c => {
+              const cId = c.id || c._id;
+              return (
+                <option key={cId} value={cId}>{c.title}</option>
+              );
+            })}
           </select>
         </div>
         <div className="form-group" style={{ margin: 0 }}>
           <label className="form-label">Select Subject</label>
           <select className="form-select" value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)} disabled={!selectedCourse}>
             <option value="">-- Select a Subject --</option>
-            {subjects.map(s => (
-              <option key={s._id} value={s._id}>{s.name}</option>
-            ))}
+            {subjects.map(s => {
+              const sId = s.id || s._id;
+              return (
+                <option key={sId} value={sId}>{s.name || s.title}</option>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -157,18 +191,21 @@ const ManageChapters = () => {
               </thead>
               <tbody>
                 {chapters.length === 0 ? (
-                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No chapters found.</td></tr>
+                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No chapters found for this subject. Click &ldquo;Add Chapter&rdquo; to create one.</td></tr>
                 ) : (
-                  chapters.map(chapter => (
-                    <tr key={chapter._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '1rem 0' }}>{chapter.title}</td>
-                      <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{chapter.videoUrl ? 'Yes' : 'No'}</td>
-                      <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => openModal(chapter)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }}><FiEdit2 /></button>
-                        <button onClick={() => handleDelete(chapter._id)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }}><FiTrash2 /></button>
-                      </td>
-                    </tr>
-                  ))
+                  chapters.map(chapter => {
+                    const chId = chapter.id || chapter._id;
+                    return (
+                      <tr key={chId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem 0', fontWeight: 600 }}>{chapter.title}</td>
+                        <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{chapter.videoUrl ? 'Yes' : 'No'}</td>
+                        <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
+                          <button onClick={() => openModal(chapter)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Chapter"><FiEdit2 /></button>
+                          <button onClick={() => handleDelete(chId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Chapter"><FiTrash2 /></button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

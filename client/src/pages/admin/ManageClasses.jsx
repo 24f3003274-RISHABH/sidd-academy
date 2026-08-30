@@ -40,11 +40,12 @@ const ManageClasses = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
+        setLoading(true);
         const res = await getAllCourses();
-        const list = res.data?.data?.courses || res.data?.courses || [];
+        const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setCourses(list);
-        if (list.length > 0) {
-          setSelectedCourse(list[0]._id);
+        if (list.length > 0 && !selectedCourse) {
+          setSelectedCourse(list[0].id || list[0]._id);
         }
       } catch (err) {
         toast.error('Failed to fetch courses');
@@ -60,10 +61,10 @@ const ManageClasses = () => {
     if (selectedCourse) {
       getSubjectsByCourse(selectedCourse)
         .then(res => {
-          const list = res.data?.data?.subjects || res.data?.subjects || [];
+          const list = res.data?.data?.subjects || res.data?.subjects || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
           setSubjects(list);
           if (list.length > 0) {
-            setSelectedSubject(list[0]._id);
+            setSelectedSubject(list[0].id || list[0]._id);
           } else {
             setSelectedSubject('');
           }
@@ -83,10 +84,10 @@ const ManageClasses = () => {
     if (selectedSubject) {
       getChaptersBySubject(selectedSubject)
         .then(res => {
-          const list = res.data?.data?.chapters || res.data?.chapters || [];
+          const list = res.data?.data?.chapters || res.data?.chapters || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
           setChapters(list);
           if (list.length > 0) {
-            setSelectedChapter(list[0]._id);
+            setSelectedChapter(list[0].id || list[0]._id);
           } else {
             setSelectedChapter('');
           }
@@ -109,8 +110,8 @@ const ManageClasses = () => {
     }
     setClassesLoading(true);
     try {
-      const res = await axiosInstance.get(`/classes/chapter/${chapterId}`);
-      const list = res.data?.data?.classes || res.data?.classes || [];
+      const res = await axiosInstance.get(`/lessons?chapterId=${chapterId}`);
+      const list = res.data?.data?.lessons || res.data?.data?.classes || res.data?.lessons || res.data?.classes || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
       setClasses(list);
     } catch (err) {
       console.error('Error fetching classes', err);
@@ -134,7 +135,7 @@ const ManageClasses = () => {
       return;
     }
     if (cls) {
-      setEditingId(cls._id);
+      setEditingId(cls.id || cls._id);
       setFormData({
         title: cls.title || '',
         description: cls.description || '',
@@ -155,7 +156,7 @@ const ManageClasses = () => {
         duration: '30:00',
         isFree: true,
         isProtected: false,
-        notesUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        notesUrl: '',
         order: classes.length + 1,
         chapter: selectedChapter,
       });
@@ -170,7 +171,7 @@ const ManageClasses = () => {
       return;
     }
     try {
-      const payload = { ...formData, chapter: selectedChapter };
+      const payload = { ...formData, chapterId: selectedChapter, chapter: selectedChapter };
       if (editingId) {
         await updateClass(editingId, payload);
         toast.success('Video lecture updated');
@@ -181,7 +182,7 @@ const ManageClasses = () => {
       setIsModalOpen(false);
       fetchClasses(selectedChapter);
     } catch (err) {
-      toast.error('Error saving video lecture');
+      toast.error(err.response?.data?.message || 'Error saving video lecture');
     }
   };
 
@@ -192,7 +193,7 @@ const ManageClasses = () => {
         toast.success('Video lecture removed');
         fetchClasses(selectedChapter);
       } catch (err) {
-        toast.error('Error deleting video lecture');
+        toast.error(err.response?.data?.message || 'Error deleting video lecture');
       }
     }
   };
@@ -231,9 +232,10 @@ const ManageClasses = () => {
               value={selectedCourse} 
               onChange={e => setSelectedCourse(e.target.value)}
             >
-              {courses.map(c => (
-                <option key={c._id} value={c._id}>{c.title}</option>
-              ))}
+              {courses.map(c => {
+                const cId = c.id || c._id;
+                return <option key={cId} value={cId}>{c.title}</option>;
+              })}
             </select>
           </div>
 
@@ -246,9 +248,10 @@ const ManageClasses = () => {
               disabled={subjects.length === 0}
             >
               {subjects.length === 0 && <option value="">No subjects found in course</option>}
-              {subjects.map(s => (
-                <option key={s._id} value={s._id}>{s.name}</option>
-              ))}
+              {subjects.map(s => {
+                const sId = s.id || s._id;
+                return <option key={sId} value={sId}>{s.name || s.title}</option>;
+              })}
             </select>
           </div>
 
@@ -261,9 +264,10 @@ const ManageClasses = () => {
               disabled={chapters.length === 0}
             >
               {chapters.length === 0 && <option value="">No chapters found in subject</option>}
-              {chapters.map(ch => (
-                <option key={ch._id} value={ch._id}>{ch.title}</option>
-              ))}
+              {chapters.map(ch => {
+                const chId = ch.id || ch._id;
+                return <option key={chId} value={chId}>{ch.title}</option>;
+              })}
             </select>
           </div>
         </div>
@@ -300,91 +304,94 @@ const ManageClasses = () => {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {classes.map((cls, idx) => (
-              <div 
-                key={cls._id} 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '1.25rem', 
-                  backgroundColor: 'rgba(255,255,255,0.02)', 
-                  border: '1px solid rgba(255,255,255,0.06)', 
-                  borderRadius: '12px',
-                  flexWrap: 'wrap',
-                  gap: '1rem'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '280px' }}>
-                  <div 
-                    style={{ 
-                      width: '44px', 
-                      height: '44px', 
-                      borderRadius: '8px', 
-                      backgroundColor: 'rgba(255,0,0,0.1)', 
-                      color: '#ff4d4d', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      fontSize: '1.2rem',
-                      fontWeight: 800,
-                      flexShrink: 0
-                    }}
-                  >
-                    #{idx + 1}
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{cls.title}</span>
-                      <span className={`badge ${cls.isFree ? 'badge-success' : 'badge-paid'}`}>
-                        {cls.isFree ? 'Free Preview' : 'Members Only'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <FiClock /> {cls.duration || '30 mins'}
-                      </span>
-                      {cls.notesUrl && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
-                          <FiFileText /> Notes Attached
-                        </span>
-                      )}
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#ff4d4d' }}>
-                        <FiYoutube /> YouTube Embed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {cls.videoUrl && (
-                    <a 
-                      href={cls.videoUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="btn btn-sm btn-outline"
-                      title="Watch on YouTube"
+            {classes.map((cls, idx) => {
+              const clsId = cls.id || cls._id;
+              return (
+                <div 
+                  key={clsId} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    padding: '1.25rem', 
+                    backgroundColor: 'rgba(255,255,255,0.02)', 
+                    border: '1px solid rgba(255,255,255,0.06)', 
+                    borderRadius: '12px',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '280px' }}>
+                    <div 
+                      style={{ 
+                        width: '44px', 
+                        height: '44px', 
+                        borderRadius: '8px', 
+                        backgroundColor: 'rgba(255,0,0,0.1)', 
+                        color: '#ff4d4d', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        fontSize: '1.2rem',
+                        fontWeight: 800,
+                        flexShrink: 0
+                      }}
                     >
-                      <FiExternalLink /> Watch
-                    </a>
-                  )}
-                  <button 
-                    onClick={() => openModal(cls)} 
-                    className="btn btn-sm btn-outline"
-                    title="Edit lecture details"
-                  >
-                    <FiEdit2 /> Edit
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(cls._id)} 
-                    className="btn btn-sm btn-danger"
-                    title="Delete lecture"
-                  >
-                    <FiTrash2 /> Remove
-                  </button>
+                      #{idx + 1}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{cls.title}</span>
+                        <span className={`badge ${cls.isFree ? 'badge-success' : 'badge-paid'}`}>
+                          {cls.isFree ? 'Free Preview' : 'Members Only'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <FiClock /> {cls.duration || '30 mins'}
+                        </span>
+                        {cls.notesUrl && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)' }}>
+                            <FiFileText /> Notes Attached
+                          </span>
+                        )}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#ff4d4d' }}>
+                          <FiYoutube /> YouTube Embed
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {cls.videoUrl && (
+                      <a 
+                        href={cls.videoUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="btn btn-sm btn-outline"
+                        title="Watch on YouTube"
+                      >
+                        <FiExternalLink /> Watch
+                      </a>
+                    )}
+                    <button 
+                      onClick={() => openModal(cls)} 
+                      className="btn btn-sm btn-outline"
+                      title="Edit lecture details"
+                    >
+                      <FiEdit2 /> Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(clsId)} 
+                      className="btn btn-sm btn-danger"
+                      title="Delete lecture"
+                    >
+                      <FiTrash2 /> Remove
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

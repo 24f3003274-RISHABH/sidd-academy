@@ -19,8 +19,13 @@ const ManageSubjects = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
+        setLoading(true);
         const res = await getAllCourses();
-        setCourses(res.data.courses || []);
+        const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+        setCourses(list);
+        if (list.length > 0 && !selectedCourse) {
+          setSelectedCourse(list[0].id || list[0]._id);
+        }
       } catch (err) {
         toast.error('Failed to fetch courses');
       } finally {
@@ -42,7 +47,8 @@ const ManageSubjects = () => {
     setLoading(true);
     try {
       const res = await getSubjectsByCourse(courseId);
-      setSubjects(res.data.subjects || []);
+      const list = res.data?.data?.subjects || res.data?.subjects || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+      setSubjects(list);
     } catch (err) {
       toast.error('Failed to fetch subjects');
     } finally {
@@ -56,11 +62,19 @@ const ManageSubjects = () => {
       return;
     }
     if (subject) {
-      setEditingId(subject._id);
-      setFormData({ name: subject.name, description: subject.description, courseId: selectedCourse });
+      setEditingId(subject.id || subject._id);
+      setFormData({
+        name: subject.name || subject.title || '',
+        description: subject.description || '',
+        courseId: selectedCourse,
+      });
     } else {
       setEditingId(null);
-      setFormData({ name: '', description: '', courseId: selectedCourse });
+      setFormData({
+        name: '',
+        description: '',
+        courseId: selectedCourse,
+      });
     }
     setIsModalOpen(true);
   };
@@ -78,7 +92,7 @@ const ManageSubjects = () => {
       setIsModalOpen(false);
       fetchSubjects(selectedCourse);
     } catch (err) {
-      toast.error('Error saving subject');
+      toast.error(err.response?.data?.message || 'Error saving subject');
     }
   };
 
@@ -89,7 +103,7 @@ const ManageSubjects = () => {
         toast.success('Subject deleted');
         fetchSubjects(selectedCourse);
       } catch (err) {
-        toast.error('Error deleting subject');
+        toast.error(err.response?.data?.message || 'Error deleting subject');
       }
     }
   };
@@ -103,13 +117,16 @@ const ManageSubjects = () => {
       </div>
 
       <div className="card-glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-        <div className="form-group" style={{ maxWidth: '400px', margin: 0 }}>
+        <div className="form-group" style={{ maxWidth: '450px', margin: 0 }}>
           <label className="form-label">Select Course</label>
           <select className="form-select" value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
             <option value="">-- Select a Course --</option>
-            {courses.map(c => (
-              <option key={c._id} value={c._id}>{c.title}</option>
-            ))}
+            {courses.map(c => {
+              const cId = c.id || c._id;
+              return (
+                <option key={cId} value={cId}>{c.title}</option>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -134,18 +151,21 @@ const ManageSubjects = () => {
               </thead>
               <tbody>
                 {subjects.length === 0 ? (
-                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No subjects found.</td></tr>
+                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No subjects found for this course. Click &ldquo;Add Subject&rdquo; to create one.</td></tr>
                 ) : (
-                  subjects.map(subject => (
-                    <tr key={subject._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '1rem 0' }}>{subject.name}</td>
-                      <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{subject.description?.substring(0, 50)}...</td>
-                      <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => openModal(subject)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }}><FiEdit2 /></button>
-                        <button onClick={() => handleDelete(subject._id)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }}><FiTrash2 /></button>
-                      </td>
-                    </tr>
-                  ))
+                  subjects.map(subject => {
+                    const sId = subject.id || subject._id;
+                    return (
+                      <tr key={sId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '1rem 0', fontWeight: 600 }}>{subject.name || subject.title}</td>
+                        <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{subject.description ? `${subject.description.substring(0, 60)}...` : '—'}</td>
+                        <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
+                          <button onClick={() => openModal(subject)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Subject"><FiEdit2 /></button>
+                          <button onClick={() => handleDelete(sId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Subject"><FiTrash2 /></button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -47,7 +47,8 @@ const ManageVideos = () => {
     try {
       setLoading(true);
       const res = await getAllVideos();
-      setVideos(res.data?.data?.videos || res.data?.videos || []);
+      const list = res.data?.data?.videos || res.data?.videos || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+      setVideos(list);
     } catch (err) {
       toast.error('Failed to fetch videos');
     } finally {
@@ -58,7 +59,7 @@ const ManageVideos = () => {
   const fetchCourses = async () => {
     try {
       const res = await getAllCourses();
-      const list = res.data?.data?.courses || res.data?.courses || [];
+      const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
       setCourses(list);
     } catch (err) {
       console.warn('Failed to load courses:', err);
@@ -80,7 +81,7 @@ const ManageVideos = () => {
     const fetchSubjs = async () => {
       try {
         const res = await getSubjectsByCourse(selectedCourse);
-        const list = res.data?.data?.subjects || res.data?.subjects || [];
+        const list = res.data?.data?.subjects || res.data?.subjects || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setSubjects(list);
       } catch (err) {
         console.warn('Failed to load subjects:', err);
@@ -99,7 +100,7 @@ const ManageVideos = () => {
     const fetchChaps = async () => {
       try {
         const res = await getChaptersBySubject(selectedSubject);
-        const list = res.data?.data?.chapters || res.data?.chapters || [];
+        const list = res.data?.data?.chapters || res.data?.chapters || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setChapters(list);
       } catch (err) {
         console.warn('Failed to load chapters:', err);
@@ -118,7 +119,7 @@ const ManageVideos = () => {
     const fetchLess = async () => {
       try {
         const res = await axiosInstance.get(`/lessons?chapterId=${selectedChapter}`);
-        const list = res.data?.data?.lessons || res.data?.data?.classes || res.data?.lessons || [];
+        const list = res.data?.data?.lessons || res.data?.data?.classes || res.data?.lessons || res.data?.classes || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setLessons(list);
       } catch (err) {
         console.warn('Failed to load lessons:', err);
@@ -421,7 +422,7 @@ const ManageVideos = () => {
                 >
                   <option value="">-- Select Subject --</option>
                   {subjects.map((s) => (
-                    <option key={s._id || s.id} value={s._id || s.id}>{s.name}</option>
+                    <option key={s._id || s.id} value={s._id || s.id}>{s.name || s.title}</option>
                   ))}
                 </select>
               </div>

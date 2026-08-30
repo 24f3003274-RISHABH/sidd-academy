@@ -19,8 +19,10 @@ const ManageCourses = () => {
 
   const fetchCourses = async () => {
     try {
+      setLoading(true);
       const res = await getAllCourses();
-      setCourses(res.data.courses || []);
+      const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
+      setCourses(list);
     } catch (err) {
       toast.error('Failed to fetch courses');
     } finally {
@@ -34,17 +36,28 @@ const ManageCourses = () => {
 
   const openModal = (course = null) => {
     if (course) {
-      setEditingId(course._id);
+      setEditingId(course.id || course._id);
       setFormData({
-        title: course.title, description: course.description, price: course.price,
-        isFree: course.isFree, level: course.level, duration: course.duration,
-        instructor: course.instructor, thumbnail: course.thumbnail
+        title: course.title || '',
+        description: course.description || '',
+        price: course.price || 0,
+        isFree: Boolean(course.isFree),
+        level: course.level || 'Beginner',
+        duration: course.duration || '',
+        instructor: course.instructor || '',
+        thumbnail: course.thumbnail || '',
       });
     } else {
       setEditingId(null);
       setFormData({
-        title: '', description: '', price: 0, isFree: false,
-        level: 'Beginner', duration: '', instructor: '', thumbnail: ''
+        title: '',
+        description: '',
+        price: 0,
+        isFree: false,
+        level: 'Beginner',
+        duration: '',
+        instructor: '',
+        thumbnail: '',
       });
     }
     setIsModalOpen(true);
@@ -103,18 +116,29 @@ const ManageCourses = () => {
               </tr>
             </thead>
             <tbody>
-              {courses.map(course => (
-                <tr key={course._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '1rem 0' }}>{course.title}</td>
-                  <td style={{ padding: '1rem 0' }}>{course.instructor}</td>
-                  <td style={{ padding: '1rem 0' }}><span className="badge badge-primary">{course.level}</span></td>
-                  <td style={{ padding: '1rem 0' }}>{course.isFree ? 'Free' : formatPrice(course.price)}</td>
-                  <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => openModal(course)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }}><FiEdit2 /></button>
-                    <button onClick={() => handleDelete(course._id)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }}><FiTrash2 /></button>
+              {courses.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No courses found in database. Click &ldquo;Add Course&rdquo; above to create one.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                courses.map(course => {
+                  const cId = course.id || course._id;
+                  return (
+                    <tr key={cId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '1rem 0', fontWeight: 600 }}>{course.title}</td>
+                      <td style={{ padding: '1rem 0' }}>{course.instructor || 'Faculty'}</td>
+                      <td style={{ padding: '1rem 0' }}><span className="badge badge-primary">{course.level || 'All Levels'}</span></td>
+                      <td style={{ padding: '1rem 0' }}>{course.isFree ? 'Free' : formatPrice(course.price)}</td>
+                      <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => openModal(course)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Course"><FiEdit2 /></button>
+                        <button onClick={() => handleDelete(cId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Course"><FiTrash2 /></button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
