@@ -3,7 +3,7 @@ import { FiFolder, FiFileText, FiDownload, FiEye, FiCheckCircle, FiSearch, FiLay
 import { formatFileSize, formatPrice } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 
-const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, isAuthenticated, user, isPurchasing }) => {
+const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAuthenticated, user, isPurchasing }) => {
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activePdfPreview, setActivePdfPreview] = useState(null);
@@ -249,14 +249,14 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, isAuthenticated
                           {canAccess ? (
                             <>
                               <button
-                                onClick={() => setActivePdfPreview(note)}
+                                onClick={() => onPreview ? onPreview(note) : setActivePdfPreview(note)}
                                 className="btn btn-sm btn-outline"
                                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
                               >
                                 <FiEye size={13} /> Preview
                               </button>
                               <button
-                                onClick={() => onDownload(note._id, note.title)}
+                                onClick={() => onDownload && onDownload(note.id || note._id, note.title)}
                                 className="btn btn-sm btn-primary"
                                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
                               >
@@ -324,7 +324,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, isAuthenticated
               </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button 
-                  onClick={() => onDownload(activePdfPreview._id, activePdfPreview.title)}
+                  onClick={() => onDownload && onDownload(activePdfPreview.id || activePdfPreview._id, activePdfPreview.title)}
                   className="btn btn-sm btn-primary"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 >

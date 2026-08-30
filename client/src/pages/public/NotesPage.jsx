@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAllNotes, getSecureAccess, downloadNote } from '../../api/noteApi';
 import { createOrder, verifyPayment } from '../../api/paymentApi';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,6 +21,7 @@ import {
 import { formatPrice } from '../../utils/helpers';
 
 const NotesPage = () => {
+  const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isAuthenticated, user } = useAuth();
@@ -87,7 +89,7 @@ const NotesPage = () => {
   // Authenticated Secure PDF Download
   const handleDownload = async (id, title) => {
     if (!isAuthenticated) {
-      toast.error('Please login to download study notes');
+      navigate('/login', { state: { from: '/notes' } });
       return;
     }
     try {
@@ -108,6 +110,10 @@ const NotesPage = () => {
 
   // Authenticated PDF Preview
   const handlePreview = async (note) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: '/notes' } });
+      return;
+    }
     try {
       toast.loading('Opening secure reader...', { id: 'preview' });
       const res = await getSecureAccess(note.id || note._id);
@@ -131,7 +137,6 @@ const NotesPage = () => {
 
   const handlePurchase = async (note) => {
     if (!isAuthenticated) {
-      toast.error('Please login to purchase study notes');
       navigate('/login', { state: { from: '/notes' } });
       return;
     }
@@ -315,6 +320,7 @@ const NotesPage = () => {
           notes={filteredNotes}
           onDownload={handleDownload}
           onPurchase={handlePurchase}
+          onPreview={handlePreview}
           isAuthenticated={isAuthenticated}
           user={user}
           isPurchasing={paymentLoading}
