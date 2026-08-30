@@ -63,17 +63,18 @@ export class SubjectRepository {
   /**
    * Create subject
    */
-  async create({ courseId, name, order = 0 }) {
+  async create({ courseId, name, title, order = 0 }) {
     const id = uuidv4();
+    const subjectName = (name || title || '').trim();
 
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO subjects (id, course_id, name, order_index, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, NOW(), NOW())
+          INSERT INTO subjects (id, course_id, title, name, order_num, order_index, created_at, updated_at)
+          VALUES ($1, $2, $3, $3, $4, $4, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, courseId, name.trim(), order]);
+        const res = await query(sql, [id, courseId, subjectName, Number(order) || 0]);
         return this.normalizeSubject(res.rows[0]);
       } catch (err) {
         console.warn('SubjectRepository create fallback to mockStore:', err.message);
@@ -86,7 +87,8 @@ export class SubjectRepository {
       id: memoryId,
       course: courseId,
       courseId,
-      name: name.trim(),
+      name: subjectName,
+      title: subjectName,
       order: Number(order) || 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -105,13 +107,17 @@ export class SubjectRepository {
         const values = [id];
         let pIndex = 2;
 
-        if (updates.name !== undefined) {
+        const subjectName = updates.name !== undefined ? updates.name : updates.title;
+        if (subjectName !== undefined) {
+          fields.push(`title = $${pIndex}`);
           fields.push(`name = $${pIndex++}`);
-          values.push(updates.name.trim());
+          values.push(subjectName.trim());
         }
-        if (updates.order !== undefined) {
+        const orderVal = updates.order !== undefined ? updates.order : (updates.order_index !== undefined ? updates.order_index : updates.orderNum);
+        if (orderVal !== undefined) {
+          fields.push(`order_num = $${pIndex}`);
           fields.push(`order_index = $${pIndex++}`);
-          values.push(Number(updates.order));
+          values.push(Number(orderVal) || 0);
         }
         fields.push(`updated_at = NOW()`);
 
@@ -128,8 +134,14 @@ export class SubjectRepository {
     const s = mockData.subjects.find(item => item._id === id || item.id === id);
     if (!s) return null;
 
-    if (updates.name !== undefined) s.name = updates.name.trim();
-    if (updates.order !== undefined) s.order = Number(updates.order);
+    if (updates.name !== undefined || updates.title !== undefined) {
+      s.name = (updates.name || updates.title).trim();
+      s.title = s.name;
+    }
+    if (updates.order !== undefined || updates.order_index !== undefined) {
+      s.order = Number(updates.order !== undefined ? updates.order : updates.order_index);
+      s.order_index = s.order;
+    }
     s.updatedAt = new Date().toISOString();
 
     return this.normalizeSubject(s);
