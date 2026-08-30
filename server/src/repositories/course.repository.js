@@ -45,7 +45,7 @@ export class CourseRepository {
         // Fetch courses
         const sql = `
           SELECT id, title, slug, description, price, discount_price, thumbnail, duration, 
-                 level, is_published, total_students as enrolled_students, rating, 120 as rating_count, created_at, updated_at
+                 level, is_published, total_students, total_students as enrolled_students, rating, rating_count, created_at, updated_at
           FROM courses 
           ${whereClause}
           ORDER BY created_at DESC
@@ -234,28 +234,48 @@ export class CourseRepository {
       duration = '6 Months',
       level = 'Class 10',
       isPublished = true,
+      rating = 4.90,
+      ratingCount = 0,
+      instructor = 'Sidd Academy Faculty',
+      language = 'Hinglish',
+      isFree = false,
+      orderNum = 0,
     } = courseData;
 
     const id = uuidv4();
+    const safeRating = rating !== undefined && rating !== null ? Math.max(0, Math.min(5, Number(rating))) : 4.90;
+    const safePrice = Math.max(0, Number(price) || 0);
+    const safeDiscountPrice = Math.max(0, Number(discountPrice) || 0);
+    const safeIsFree = Boolean(isFree || safePrice === 0);
 
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO courses (id, title, slug, description, price, discount_price, thumbnail, duration, level, is_published, enrolled_students, rating, rating_count, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 5.0, 0, NOW(), NOW())
+          INSERT INTO courses (
+            id, title, slug, description, price, discount_price, thumbnail, 
+            duration, level, is_published, total_students, enrolled_students, 
+            rating, rating_count, instructor, language, is_free, order_num, created_at, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14, $15, $16, NOW(), NOW())
           RETURNING *
         `;
         const res = await query(sql, [
           id,
           title.trim(),
           slug,
-          description.trim(),
-          price,
-          discountPrice,
-          thumbnail,
-          duration,
-          level,
-          isPublished,
+          (description || '').trim(),
+          safePrice,
+          safeDiscountPrice,
+          thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600',
+          duration || '60+ Hours',
+          level || 'All Levels',
+          Boolean(isPublished),
+          safeRating,
+          Number(ratingCount) || 0,
+          instructor || 'Sidd Academy Faculty',
+          language || 'Hinglish',
+          safeIsFree,
+          Number(orderNum) || 0,
         ]);
         return this.normalizeCourse(res.rows[0]);
       } catch (err) {
@@ -269,16 +289,21 @@ export class CourseRepository {
       id: memoryId,
       title: title.trim(),
       slug,
-      description: description.trim(),
-      price: Number(price),
-      discountPrice: Number(discountPrice),
+      description: (description || '').trim(),
+      price: safePrice,
+      discountPrice: safeDiscountPrice,
       thumbnail: thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600',
       duration,
       level,
       isPublished: Boolean(isPublished),
       enrolledStudents: 0,
-      rating: 5.0,
-      ratingCount: 0,
+      totalStudents: 0,
+      rating: safeRating,
+      ratingCount: Number(ratingCount) || 0,
+      instructor: instructor || 'Sidd Academy Faculty',
+      language: language || 'Hinglish',
+      isFree: safeIsFree,
+      orderNum: Number(orderNum) || 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -311,11 +336,11 @@ export class CourseRepository {
         }
         if (updates.price !== undefined) {
           fields.push(`price = $${pIndex++}`);
-          values.push(updates.price);
+          values.push(Math.max(0, Number(updates.price) || 0));
         }
         if (updates.discountPrice !== undefined) {
           fields.push(`discount_price = $${pIndex++}`);
-          values.push(updates.discountPrice);
+          values.push(Math.max(0, Number(updates.discountPrice) || 0));
         }
         if (updates.thumbnail !== undefined) {
           fields.push(`thumbnail = $${pIndex++}`);
@@ -331,7 +356,27 @@ export class CourseRepository {
         }
         if (updates.isPublished !== undefined) {
           fields.push(`is_published = $${pIndex++}`);
-          values.push(updates.isPublished);
+          values.push(Boolean(updates.isPublished));
+        }
+        if (updates.rating !== undefined) {
+          fields.push(`rating = $${pIndex++}`);
+          values.push(Math.max(0, Math.min(5, Number(updates.rating))));
+        }
+        if (updates.instructor !== undefined) {
+          fields.push(`instructor = $${pIndex++}`);
+          values.push(updates.instructor);
+        }
+        if (updates.language !== undefined) {
+          fields.push(`language = $${pIndex++}`);
+          values.push(updates.language);
+        }
+        if (updates.isFree !== undefined) {
+          fields.push(`is_free = $${pIndex++}`);
+          values.push(Boolean(updates.isFree));
+        }
+        if (updates.orderNum !== undefined || updates.order !== undefined) {
+          fields.push(`order_num = $${pIndex++}`);
+          values.push(Number(updates.orderNum ?? updates.order));
         }
         fields.push(`updated_at = NOW()`);
 
@@ -356,12 +401,17 @@ export class CourseRepository {
     if (updates.title !== undefined) course.title = updates.title.trim();
     if (updates.slug !== undefined) course.slug = updates.slug;
     if (updates.description !== undefined) course.description = updates.description.trim();
-    if (updates.price !== undefined) course.price = Number(updates.price);
-    if (updates.discountPrice !== undefined) course.discountPrice = Number(updates.discountPrice);
+    if (updates.price !== undefined) course.price = Math.max(0, Number(updates.price));
+    if (updates.discountPrice !== undefined) course.discountPrice = Math.max(0, Number(updates.discountPrice));
     if (updates.thumbnail !== undefined) course.thumbnail = updates.thumbnail;
     if (updates.duration !== undefined) course.duration = updates.duration;
     if (updates.level !== undefined) course.level = updates.level;
     if (updates.isPublished !== undefined) course.isPublished = Boolean(updates.isPublished);
+    if (updates.rating !== undefined) course.rating = Math.max(0, Math.min(5, Number(updates.rating)));
+    if (updates.instructor !== undefined) course.instructor = updates.instructor;
+    if (updates.language !== undefined) course.language = updates.language;
+    if (updates.isFree !== undefined) course.isFree = Boolean(updates.isFree);
+    if (updates.orderNum !== undefined) course.orderNum = Number(updates.orderNum);
     course.updatedAt = new Date().toISOString();
 
     return this.normalizeCourse(course);
@@ -430,12 +480,17 @@ export class CourseRepository {
       price: c.price !== undefined ? Number(c.price) : 0,
       discountPrice: c.discount_price !== undefined ? Number(c.discount_price) : (c.discountPrice !== undefined ? Number(c.discountPrice) : 0),
       thumbnail: c.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600',
-      duration: c.duration || '6 Months',
-      level: c.level || 'Class 10',
+      duration: c.duration || '60+ Hours',
+      level: c.level || 'All Levels',
       isPublished: c.is_published !== undefined ? Boolean(c.is_published) : (c.isPublished !== undefined ? Boolean(c.isPublished) : true),
-      enrolledStudents: c.enrolled_students !== undefined ? Number(c.enrolled_students) : (c.enrolledStudents !== undefined ? Number(c.enrolledStudents) : 0),
-      rating: c.rating !== undefined ? Number(c.rating) : 5.0,
+      enrolledStudents: c.total_students !== undefined ? Number(c.total_students) : (c.enrolled_students !== undefined ? Number(c.enrolled_students) : (c.enrolledStudents !== undefined ? Number(c.enrolledStudents) : 0)),
+      totalStudents: c.total_students !== undefined ? Number(c.total_students) : (c.enrolled_students !== undefined ? Number(c.enrolled_students) : (c.totalStudents !== undefined ? Number(c.totalStudents) : 0)),
+      rating: c.rating !== undefined && c.rating !== null ? Number(c.rating) : 4.90,
       ratingCount: c.rating_count !== undefined ? Number(c.rating_count) : (c.ratingCount !== undefined ? Number(c.ratingCount) : 0),
+      instructor: c.instructor || 'Sidd Academy Faculty',
+      language: c.language || 'Hinglish',
+      isFree: c.is_free !== undefined ? Boolean(c.is_free) : (c.isFree !== undefined ? Boolean(c.isFree) : false),
+      orderNum: c.order_num !== undefined ? Number(c.order_num) : (c.orderNum !== undefined ? Number(c.orderNum) : 0),
       createdAt: c.created_at || c.createdAt,
       updatedAt: c.updated_at || c.updatedAt,
       subjects: c.subjects || [],

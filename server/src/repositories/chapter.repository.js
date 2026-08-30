@@ -65,11 +65,11 @@ export class ChapterRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO chapters (id, subject_id, title, order_index, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, NOW(), NOW())
+          INSERT INTO chapters (id, subject_id, title, order_num, order_index, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $4, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, subjectId, title.trim(), order]);
+        const res = await query(sql, [id, subjectId, title.trim(), Number(order) || 0]);
         return this.normalizeChapter(res.rows[0]);
       } catch (err) {
         console.warn('ChapterRepository create fallback to mockStore:', err.message);
@@ -105,9 +105,12 @@ export class ChapterRepository {
           fields.push(`title = $${pIndex++}`);
           values.push(updates.title.trim());
         }
-        if (updates.order !== undefined) {
+        if (updates.order !== undefined || updates.order_index !== undefined || updates.orderNum !== undefined) {
+          const ord = Number(updates.order ?? updates.order_index ?? updates.orderNum);
+          fields.push(`order_num = $${pIndex++}`);
+          values.push(ord);
           fields.push(`order_index = $${pIndex++}`);
-          values.push(Number(updates.order));
+          values.push(ord);
         }
         fields.push(`updated_at = NOW()`);
 

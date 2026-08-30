@@ -210,7 +210,7 @@ export class OrderRepository {
                 [enrollId, userId, item.itemId, orderId]
               );
               await client.query(
-                `UPDATE courses SET enrolled_students = enrolled_students + 1 WHERE id = $1`,
+                `UPDATE courses SET total_students = total_students + 1, enrolled_students = enrolled_students + 1 WHERE id = $1`,
                 [item.itemId]
               );
             } else if (item.itemType === 'note') {
@@ -629,7 +629,7 @@ export class OrderRepository {
               [enrollId, order.user_id || userId, item.item_id, orderId]
             );
             await client.query(
-              `UPDATE courses SET enrolled_students = enrolled_students + 1 WHERE id = $1`,
+              `UPDATE courses SET total_students = total_students + 1, enrolled_students = enrolled_students + 1 WHERE id = $1`,
               [item.item_id]
             );
           } else if (item.item_type === 'note') {
