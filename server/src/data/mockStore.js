@@ -8,8 +8,8 @@ export const mockData = {
     {
       _id: 'user_admin_01',
       name: 'Rishabh Admin',
-      email: 'admin@siddacademy.com',
-      password: bcrypt.hashSync('admin123', salt),
+      email: 'rishabhmyp@gmail.com',
+      password: bcrypt.hashSync('sid@8218', salt),
       role: 'admin',
       phone: '+91 9876543210',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',

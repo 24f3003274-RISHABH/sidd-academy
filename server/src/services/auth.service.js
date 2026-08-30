@@ -102,13 +102,9 @@ export class AuthService {
       }
     }
 
-    // Demo account fallbacks for seamless test logins
-    if (!isMatch) {
-      if (cleanEmail === 'admin@siddacademy.com' && password === 'admin123') {
-        isMatch = true;
-      } else if (cleanEmail === 'student@siddacademy.com' && (password === 'password123' || password === 'student123')) {
-        isMatch = true;
-      }
+    // Demo account fallback for student test login if unseeded
+    if (!isMatch && cleanEmail === 'student@siddacademy.com' && (password === 'password123' || password === 'student123')) {
+      isMatch = true;
     }
 
     if (!isMatch) {
