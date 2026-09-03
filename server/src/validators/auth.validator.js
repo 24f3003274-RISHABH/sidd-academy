@@ -24,11 +24,10 @@ export const registerValidator = [
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
   body('phone')
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty()
-    .withMessage('Mobile number is required')
     .custom((value) => {
-      if (!isValidIndianMobile(value)) {
+      if (value && !isValidIndianMobile(value)) {
         throw new Error('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)');
       }
       return true;
@@ -39,14 +38,10 @@ export const verifyRegistrationValidator = [
   body('identifier')
     .trim()
     .notEmpty()
-    .withMessage('Identifier (mobile number or email) is required')
-    .custom((value) => {
-      const isEmail = value.includes('@');
-      if (!isEmail && !isValidIndianMobile(value)) {
-        throw new Error('Please provide a valid Indian mobile number or email address');
-      }
-      return true;
-    }),
+    .withMessage('Identifier (email) is required')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
   body('otp')
     .trim()
     .notEmpty()

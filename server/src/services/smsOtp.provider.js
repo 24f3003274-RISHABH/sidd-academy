@@ -28,42 +28,24 @@ export class SmsOtpProvider {
     const authKey = ENV.MSG91_AUTH_KEY;
     const templateId = ENV.MSG91_TEMPLATE_ID;
     const senderId = ENV.MSG91_SENDER_ID || 'SIDDAC';
-    const expiry = Number(ENV.MSG91_OTP_EXPIRY || expiryMinutes || 5);
 
-    // In production, real credentials are strictly required; never simulate silently in production
+    // In development or when API keys are not yet configured on Render, gracefully simulate delivery
     if (!authKey || !templateId) {
-      if (ENV.NODE_ENV === 'production') {
-        console.error('[MSG91 SMS Provider] MSG91_AUTH_KEY or MSG91_TEMPLATE_ID missing in production environment.');
-        return {
-          success: false,
-          error: 'SMS service configuration is missing on the server. Please configure MSG91_AUTH_KEY and MSG91_TEMPLATE_ID in Render environment variables.',
-        };
-      }
-      console.warn(`[MSG91 SMS Provider - Development Simulation] MSG91 credentials not set. Simulated SMS delivery to ${maskPhone(phone)}.`);
+      console.warn(`[MSG91 SMS Provider] MSG91 credentials not fully configured. Simulated SMS delivery to ${maskPhone(phone)}.`);
       return { success: true, simulated: true, messageId: `sim_sms_${Date.now()}` };
     }
 
     try {
       // MSG91 v5 OTP API Endpoint
-      // Official API: https://control.msg91.com/api/v5/otp
+      // Supports query parameters and payload body
       const url = new URL('https://control.msg91.com/api/v5/otp');
       url.searchParams.append('template_id', templateId);
       url.searchParams.append('mobile', formattedMobile);
       url.searchParams.append('authkey', authKey);
       url.searchParams.append('otp', otp);
-      url.searchParams.append('otp_expiry', String(expiry));
+      url.searchParams.append('otp_expiry', String(expiryMinutes));
       if (senderId) {
         url.searchParams.append('sender', senderId);
-      }
-
-      const bodyPayload = {
-        template_id: templateId,
-        mobile: formattedMobile,
-        otp: String(otp),
-        otp_expiry: expiry,
-      };
-      if (senderId) {
-        bodyPayload.sender = senderId;
       }
 
       const response = await fetch(url.toString(), {
@@ -72,18 +54,16 @@ export class SmsOtpProvider {
           'Content-Type': 'application/json',
           'authkey': authKey,
         },
-        body: JSON.stringify(bodyPayload),
       });
 
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json();
 
       // MSG91 returns { type: 'success', message: '...' } on valid dispatch
       if (!response.ok || (data.type && data.type !== 'success')) {
-        const errorMsg = data.message || `Failed to dispatch SMS via MSG91 API (HTTP ${response.status})`;
-        console.error('[MSG91 Provider Error]', errorMsg);
+        console.error('[MSG91 Provider Error]', data.message || data);
         return {
           success: false,
-          error: errorMsg,
+          error: data.message || 'Failed to dispatch SMS via MSG91 API',
         };
       }
 

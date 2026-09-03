@@ -47,39 +47,9 @@ router.post(
   authController.verifyRegistrationOtp
 );
 
-// Explicit mobile aliases for registration verification
-router.post(
-  '/mobile/request-otp',
-  otpSendLimiter,
-  registerValidator,
-  validateRequest,
-  authController.register
-);
-router.post(
-  '/mobile/verify-otp',
-  otpVerifyLimiter,
-  verifyRegistrationValidator,
-  validateRequest,
-  authController.verifyRegistrationOtp
-);
-router.post(
-  '/mobile/resend-otp',
-  otpSendLimiter,
-  resendOtpValidator,
-  validateRequest,
-  authController.resendOtp
-);
-
 // POST /api/v1/auth/forgot-password - Step 1: Request password reset OTP (Enumeration Safe)
 router.post(
   '/forgot-password',
-  otpSendLimiter,
-  forgotPasswordValidator,
-  validateRequest,
-  authController.forgotPassword
-);
-router.post(
-  '/forgot-password/mobile/request-otp',
   otpSendLimiter,
   forgotPasswordValidator,
   validateRequest,
@@ -89,13 +59,6 @@ router.post(
 // POST /api/v1/auth/verify-reset-otp - Step 2: Verify reset OTP and obtain resetToken
 router.post(
   '/verify-reset-otp',
-  otpVerifyLimiter,
-  verifyResetOtpValidator,
-  validateRequest,
-  authController.verifyResetOtp
-);
-router.post(
-  '/forgot-password/mobile/verify-otp',
   otpVerifyLimiter,
   verifyResetOtpValidator,
   validateRequest,

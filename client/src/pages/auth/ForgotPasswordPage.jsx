@@ -14,7 +14,6 @@ const ForgotPasswordPage = () => {
   const [step, setStep] = useState('request'); // 'request' | 'otp' | 'reset' | 'success'
   const [identifier, setIdentifier] = useState('');
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
-  const [channel, setChannel] = useState('sms');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,7 +39,6 @@ const ForgotPasswordPage = () => {
       const data = res.data?.data || res.data;
 
       setMaskedIdentifier(data?.maskedIdentifier || identifier);
-      setChannel(data?.channel || (identifier.includes('@') ? 'email' : 'sms'));
       setCooldownSeconds(data?.cooldownSeconds || 60);
 
       toast.success(res.data?.message || 'Verification code dispatched.');
@@ -216,10 +214,7 @@ const ForgotPasswordPage = () => {
         {step === 'otp' && (
           <OtpInput
             maskedIdentifier={maskedIdentifier}
-            channel={channel}
-            title={channel === 'sms' ? 'Verify Mobile Number' : 'Verify Email Code'}
             cooldownSeconds={cooldownSeconds}
-            expirySeconds={300}
             onVerify={handleVerifyOtp}
             onResend={handleResendOtp}
             isLoading={loading}
@@ -229,7 +224,7 @@ const ForgotPasswordPage = () => {
               setStep('request');
               setErrorMessage('');
             }}
-            submitLabel={channel === 'sms' ? 'Verify Mobile Number' : 'Verify Code'}
+            submitLabel="Verify Code"
           />
         )}
 

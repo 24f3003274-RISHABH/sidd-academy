@@ -33,25 +33,6 @@ const RegisterPage = () => {
     e.preventDefault();
     setErrorMessage('');
 
-    // Clean and validate Indian phone number
-    const rawPhone = formData.phone.trim();
-    const digitsOnly = rawPhone.replace(/\D/g, '');
-    let tenDigitPhone = '';
-
-    if (digitsOnly.length === 10) {
-      tenDigitPhone = digitsOnly;
-    } else if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
-      tenDigitPhone = digitsOnly.slice(2);
-    } else {
-      tenDigitPhone = digitsOnly;
-    }
-
-    const indianMobileRegex = /^[6-9]\d{9}$/;
-    if (!indianMobileRegex.test(tenDigitPhone)) {
-      toast.error('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)');
-      return;
-    }
-
     if (formData.password.length < 6) {
       toast.error('Password must be at least 6 characters');
       return;
@@ -64,24 +45,21 @@ const RegisterPage = () => {
     setLoading(true);
     try {
       const res = await apiRegister({
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: tenDigitPhone,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
         password: formData.password,
       });
 
       const data = res.data?.data || res.data;
-      const maskedPhoneDisplay = data?.maskedPhone || `+91 ******${tenDigitPhone.slice(-4)}`;
-
       setOtpInfo({
-        identifier: data?.identifier || `+91${tenDigitPhone}`,
+        identifier: data?.identifier || formData.email.trim().toLowerCase(),
         maskedEmail: data?.maskedEmail || formData.email,
-        maskedPhone: maskedPhoneDisplay,
-        channel: data?.channel || 'sms',
+        maskedPhone: data?.maskedPhone || formData.phone,
         cooldownSeconds: data?.cooldownSeconds || 60,
       });
 
-      toast.success(res.data?.message || `Verification code sent to ${maskedPhoneDisplay}!`);
+      toast.success('Verification code sent to your email!');
       setStep('otp');
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Registration failed. Please try again.';
@@ -196,35 +174,16 @@ const RegisterPage = () => {
 
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label className="form-label">
-                    Mobile Number (India) <span style={{ color: 'var(--danger)' }}>*</span>
-                  </label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SMS OTP</span>
+                  <label className="form-label">Mobile Number (India)</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Optional</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-                  <span
-                    style={{
-                      position: 'absolute',
-                      left: '0.85rem',
-                      fontWeight: 600,
-                      color: 'var(--text-secondary)',
-                      fontSize: '0.9375rem',
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    +91
-                  </span>
-                  <input
-                    type="tel"
-                    className="form-input"
-                    style={{ paddingLeft: '3.25rem' }}
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="9876543210"
-                    maxLength={15}
-                  />
-                </div>
+                <input
+                  type="tel"
+                  className="form-input"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="10-digit number e.g. 9876543210"
+                />
               </div>
 
               <div className="form-group">
@@ -257,7 +216,7 @@ const RegisterPage = () => {
                 disabled={loading}
                 style={{ marginTop: '0.5rem', padding: '0.75rem' }}
               >
-                {loading ? 'Sending Verification Code...' : 'Send OTP & Continue'}
+                {loading ? 'Sending Verification Code...' : 'Continue to Verification'}
               </button>
             </form>
 
@@ -272,11 +231,9 @@ const RegisterPage = () => {
           </>
         ) : (
           <OtpInput
-            maskedIdentifier={otpInfo.maskedPhone}
-            channel="sms"
-            title="Verify Mobile Number"
+            maskedIdentifier={otpInfo.maskedEmail}
+            channel="email"
             cooldownSeconds={otpInfo.cooldownSeconds}
-            expirySeconds={300}
             onVerify={handleVerifyOtp}
             onResend={handleResendOtp}
             isLoading={loading}
@@ -286,7 +243,7 @@ const RegisterPage = () => {
               setStep('form');
               setErrorMessage('');
             }}
-            submitLabel="Verify Mobile Number"
+            submitLabel="Verify & Create Account"
           />
         )}
       </div>

@@ -26,7 +26,7 @@ export class OtpService {
   constructor() {
     this.otpLength = ENV.OTP_LENGTH || 6;
     this.expiryMinutes = ENV.OTP_EXPIRY_MINUTES || 5;
-    this.maxAttempts = ENV.OTP_MAX_ATTEMPTS || 3;
+    this.maxAttempts = ENV.OTP_MAX_ATTEMPTS || 5;
     this.resendCooldownSeconds = ENV.OTP_RESEND_COOLDOWN_SECONDS || 60;
   }
 
@@ -48,8 +48,8 @@ export class OtpService {
   }
 
   /**
-   * STEP 1: Registration Flow - Request Verification OTP via Indian Mobile SMS
-   * Validates credentials, ensures uniqueness, pre-hashes password, and sends SMS OTP via MSG91.
+   * STEP 1: Registration Flow - Request Verification OTP
+   * Validates credentials, ensures uniqueness, pre-hashes password, and sends OTP.
    * Does NOT persist active user to database yet.
    */
   async sendRegistrationOTP({ name, email, phone, password }) {
@@ -60,26 +60,23 @@ export class OtpService {
     const cleanEmail = email.toLowerCase().trim();
     const cleanName = name.trim();
 
-    // 1. Validate email format
+    // 1. Email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw new AppError('Please provide a valid email address', HTTP_STATUS.BAD_REQUEST);
     }
 
-    // 2. Validate Indian Mobile format (Required for mobile-first registration)
-    if (!phone || !phone.trim()) {
-      throw new AppError('Mobile number is required for registration verification', HTTP_STATUS.BAD_REQUEST);
+    // 2. Indian Mobile format check (if phone provided)
+    let normalizedPhone = '';
+    if (phone && phone.trim()) {
+      if (!isValidIndianMobile(phone)) {
+        throw new AppError(
+          'Please enter a valid 10-digit Indian mobile number (starting with 6, 7, 8, or 9)',
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+      normalizedPhone = normalizeIndianMobile(phone);
     }
-
-    if (!isValidIndianMobile(phone)) {
-      throw new AppError(
-        'Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)',
-        HTTP_STATUS.BAD_REQUEST
-      );
-    }
-
-    // Internal normalization strictly to +91XXXXXXXXXX
-    const normalizedPhone = formatE164IndianMobile(phone);
 
     // 3. Check password length
     if (password.length < 6) {
@@ -87,8 +84,8 @@ export class OtpService {
     }
 
     // 4. Check whether email already exists in users table
-    const existingEmailUser = await authRepository.findByEmail(cleanEmail);
-    if (existingEmailUser) {
+    const existingUser = await authRepository.findByEmail(cleanEmail);
+    if (existingUser) {
       throw new AppError(
         'An account with this email address already exists. Please login.',
         HTTP_STATUS.CONFLICT
@@ -96,18 +93,20 @@ export class OtpService {
     }
 
     // 5. Check whether mobile number already exists in users table
-    const existingPhoneUser = await authRepository.findByPhone(normalizedPhone);
-    if (existingPhoneUser) {
-      throw new AppError(
-        'This mobile number is already registered.',
-        HTTP_STATUS.CONFLICT
-      );
+    if (normalizedPhone) {
+      const existingPhoneUser = await authRepository.findByPhone(normalizedPhone);
+      if (existingPhoneUser) {
+        throw new AppError(
+          'An account with this mobile number already exists. Please login.',
+          HTTP_STATUS.CONFLICT
+        );
+      }
     }
 
-    // 6. Enforce resend cooldown on normalized mobile number
-    await this.checkCooldown(normalizedPhone, 'registration');
+    // 6. Enforce resend cooldown
+    await this.checkCooldown(cleanEmail, 'registration');
 
-    // 7. Generate cryptographically secure 6-digit OTP
+    // 7. Generate secure 6-digit OTP
     const plainOtp = generateSecureOTP(this.otpLength);
     const otpHash = hashOTP(plainOtp);
 
@@ -117,77 +116,70 @@ export class OtpService {
 
     const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
 
-    // 9. Invalidate prior active registration attempts for this mobile number
-    await otpRepository.invalidateExisting(normalizedPhone, 'registration');
+    // 9. Invalidate prior active registration attempts for this email
+    await otpRepository.invalidateExisting(cleanEmail, 'registration');
 
-    // 10. Persist OTP record in PostgreSQL with temporary metadata (channel = 'sms')
+    // 10. Persist OTP record in PostgreSQL with temporary metadata
     await otpRepository.create({
-      identifier: normalizedPhone,
+      identifier: cleanEmail,
       purpose: 'registration',
-      channel: 'sms',
+      channel: 'email',
       otpHash,
       metadata: {
         name: cleanName,
         email: cleanEmail,
-        phone: normalizedPhone,
+        phone: normalizedPhone ? formatE164IndianMobile(normalizedPhone) : '',
         passwordHash: hashedPassword,
       },
       expiresAt,
       maxAttempts: this.maxAttempts,
     });
 
-    // 11. Dispatch OTP ONLY through configured SMS provider (MSG91)
-    // DO NOT send this OTP through Resend/email
-    const smsRes = await smsOtpProvider.sendOtp({
-      phone: normalizedPhone,
+    // 11. Dispatch OTP via Email Provider
+    const emailRes = await emailOtpProvider.sendOtp({
+      email: cleanEmail,
       otp: plainOtp,
       expiryMinutes: this.expiryMinutes,
     });
 
-    if (!smsRes.success) {
-      throw new AppError(
-        smsRes.error || 'Unable to deliver verification code to your mobile number. Please try again.',
-        HTTP_STATUS.BAD_GATEWAY
-      );
+    // 12. If Indian phone provided and SMS gateway configured, also dispatch SMS
+    if (normalizedPhone) {
+      smsOtpProvider.sendOtp({
+        phone: normalizedPhone,
+        otp: plainOtp,
+        expiryMinutes: this.expiryMinutes,
+      }).catch(() => {});
     }
 
     return {
       requireOtp: true,
-      identifier: normalizedPhone,
-      channel: 'sms',
-      maskedPhone: maskPhone(normalizedPhone),
+      identifier: cleanEmail,
+      channel: 'email',
       maskedEmail: maskEmail(cleanEmail),
+      maskedPhone: normalizedPhone ? maskPhone(normalizedPhone) : null,
       cooldownSeconds: this.resendCooldownSeconds,
       expiresInMinutes: this.expiryMinutes,
-      simulated: Boolean(smsRes.simulated),
+      simulated: Boolean(emailRes.simulated),
     };
   }
 
   /**
    * STEP 2: Registration Flow - Verify OTP & Create User Account
-   * Verifies hashed OTP, verifies attempt limits, creates active user with phone_verified = true, and issues JWTs.
+   * Verifies hashed OTP, verifies attempt limits, creates active user, and issues JWTs.
    */
   async verifyRegistrationOTP({ identifier, otp }) {
     if (!identifier || !otp) {
       throw new AppError('Identifier and OTP are required', HTTP_STATUS.BAD_REQUEST);
     }
 
-    // Normalize identifier: if Indian phone number, normalize to +91XXXXXXXXXX
-    const cleanIdentifier = isValidIndianMobile(identifier)
-      ? formatE164IndianMobile(identifier)
-      : identifier.trim().toLowerCase();
+    const cleanEmail = identifier.toLowerCase().trim();
     const cleanOtp = String(otp).trim();
 
-    // 1. Fetch active OTP record (try exact identifier, or fallback to E164 format)
-    let record = await otpRepository.findLatestActive(cleanIdentifier, 'registration');
-    if (!record && isValidIndianMobile(identifier)) {
-      const altKey = formatE164IndianMobile(identifier);
-      record = await otpRepository.findLatestActive(altKey, 'registration');
-    }
-
+    // 1. Fetch active OTP record
+    const record = await otpRepository.findLatestActive(cleanEmail, 'registration');
     if (!record) {
       // Check if expired or attempt-exhausted to give clear feedback
-      const latest = await otpRepository.findLatest(cleanIdentifier, 'registration');
+      const latest = await otpRepository.findLatest(cleanEmail, 'registration');
       if (latest) {
         if (latest.attempts >= latest.maxAttempts) {
           throw new AppError('Maximum verification attempts exceeded. Please request a new OTP.', HTTP_STATUS.BAD_REQUEST);
@@ -204,7 +196,7 @@ export class OtpService {
       throw new AppError('Maximum verification attempts exceeded. Please request a new OTP.', HTTP_STATUS.BAD_REQUEST);
     }
 
-    // 3. Constant-time timing-safe hash verification
+    // 3. Constant-time hash verification
     const isMatch = verifyOTPHash(cleanOtp, record.otpHash);
     if (!isMatch) {
       const updated = await otpRepository.incrementAttempts(record.id);
@@ -217,7 +209,7 @@ export class OtpService {
       throw new AppError(`Invalid OTP. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`, HTTP_STATUS.BAD_REQUEST);
     }
 
-    // 4. Mark OTP as verified immediately to prevent replay / reuse
+    // 4. Mark OTP as verified to prevent replay
     await otpRepository.markVerified(record.id);
 
     // 5. Extract pending registration payload from metadata
@@ -226,29 +218,21 @@ export class OtpService {
       throw new AppError('Registration data expired or invalid. Please register again.', HTTP_STATUS.BAD_REQUEST);
     }
 
-    // 6. Concurrency checks: Ensure neither email nor phone was registered in the interim
-    const conflictEmail = await authRepository.findByEmail(metadata.email);
-    if (conflictEmail) {
-      throw new AppError('An account with this email address already exists. Please login.', HTTP_STATUS.CONFLICT);
-    }
-
-    if (metadata.phone) {
-      const conflictPhone = await authRepository.findByPhone(metadata.phone);
-      if (conflictPhone) {
-        throw new AppError('This mobile number is already registered.', HTTP_STATUS.CONFLICT);
-      }
+    // 6. Concurrency check: Ensure user was not created concurrently
+    const conflictCheck = await authRepository.findByEmail(metadata.email);
+    if (conflictCheck) {
+      throw new AppError('An account with this email already exists. Please login.', HTTP_STATUS.CONFLICT);
     }
 
     // 7. Persist and activate user account in PostgreSQL
-    // Mobile verified is strictly true when verified through SMS OTP channel
     const createdUser = await authRepository.create({
       name: metadata.name,
       email: metadata.email,
       password: metadata.passwordHash,
       phone: metadata.phone || '',
       role: 'student',
-      email_verified: record.channel === 'email',
-      phone_verified: true,
+      email_verified: true,
+      phone_verified: Boolean(metadata.phone),
     });
 
     const userId = createdUser.id || createdUser._id;
@@ -270,8 +254,8 @@ export class OtpService {
         role: role === 'user' ? 'student' : role,
         phone: createdUser.phone || '',
         avatar: createdUser.avatar || '',
-        emailVerified: Boolean(createdUser.email_verified),
-        phoneVerified: true,
+        emailVerified: true,
+        phoneVerified: Boolean(createdUser.phone),
       },
       token,
       refreshToken,
@@ -302,7 +286,7 @@ export class OtpService {
       }
     }
 
-    const lookupKey = isEmail ? cleanIdentifier.toLowerCase() : formatE164IndianMobile(cleanIdentifier);
+    const lookupKey = isEmail ? cleanIdentifier.toLowerCase() : normalizeIndianMobile(cleanIdentifier);
     const user = isEmail
       ? await authRepository.findByEmail(lookupKey)
       : await authRepository.findByPhone(lookupKey);
@@ -315,7 +299,7 @@ export class OtpService {
         message: 'If an account matches our records, a verification code has been dispatched.',
         identifier: lookupKey,
         channel: isEmail ? 'email' : 'sms',
-        maskedIdentifier: isEmail ? maskEmail(cleanIdentifier) : maskPhone(lookupKey),
+        maskedIdentifier: isEmail ? maskEmail(cleanIdentifier) : maskPhone(cleanIdentifier),
         cooldownSeconds: this.resendCooldownSeconds,
       };
     }
@@ -354,7 +338,6 @@ export class OtpService {
         expiryMinutes: this.expiryMinutes,
       });
     } else {
-      // Dispatches strictly through MSG91 SMS Provider (never email)
       await smsOtpProvider.sendOtp({
         phone: lookupKey,
         otp: plainOtp,
@@ -381,17 +364,10 @@ export class OtpService {
       throw new AppError('Identifier and OTP are required', HTTP_STATUS.BAD_REQUEST);
     }
 
-    const cleanIdentifier = isValidIndianMobile(identifier)
-      ? formatE164IndianMobile(identifier)
-      : identifier.trim().toLowerCase();
+    const cleanIdentifier = identifier.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
-    let record = await otpRepository.findLatestActive(cleanIdentifier, 'password_reset');
-    if (!record && isValidIndianMobile(identifier)) {
-      const altKey = normalizeIndianMobile(identifier);
-      record = await otpRepository.findLatestActive(altKey, 'password_reset');
-    }
-
+    const record = await otpRepository.findLatestActive(cleanIdentifier, 'password_reset');
     if (!record) {
       const latest = await otpRepository.findLatest(cleanIdentifier, 'password_reset');
       if (latest) {
@@ -492,23 +468,16 @@ export class OtpService {
       throw new AppError('Identifier is required to resend OTP', HTTP_STATUS.BAD_REQUEST);
     }
 
-    const isMobile = isValidIndianMobile(identifier);
-    const cleanIdentifier = isMobile
-      ? formatE164IndianMobile(identifier)
-      : identifier.trim().toLowerCase();
+    const cleanIdentifier = identifier.trim().toLowerCase();
 
     // Check cooldown
     await this.checkCooldown(cleanIdentifier, purpose);
 
     // If registration: retrieve metadata from previous record
     if (purpose === 'registration') {
-      let latest = await otpRepository.findLatest(cleanIdentifier, 'registration');
-      if (!latest && isMobile) {
-        latest = await otpRepository.findLatest(normalizeIndianMobile(identifier), 'registration');
-      }
-
-      if (!latest || !latest.metadata) {
-        throw new AppError('No pending registration found for this identifier. Please register again.', HTTP_STATUS.NOT_FOUND);
+      const latest = await otpRepository.findLatest(cleanIdentifier, 'registration');
+      if (!latest || !latest.metadata || !latest.metadata.email) {
+        throw new AppError('No pending registration found for this email. Please register again.', HTTP_STATUS.NOT_FOUND);
       }
 
       const plainOtp = generateSecureOTP(this.otpLength);
@@ -517,43 +486,34 @@ export class OtpService {
 
       await otpRepository.invalidateExisting(cleanIdentifier, 'registration');
 
-      const isSmsChannel = latest.channel === 'sms' || isMobile;
-
       await otpRepository.create({
         identifier: cleanIdentifier,
         purpose: 'registration',
-        channel: isSmsChannel ? 'sms' : 'email',
+        channel: 'email',
         otpHash,
         metadata: latest.metadata,
         expiresAt,
         maxAttempts: this.maxAttempts,
       });
 
-      if (isSmsChannel) {
-        // Send strictly via MSG91 (do NOT send email)
-        const smsRes = await smsOtpProvider.sendOtp({
-          phone: cleanIdentifier,
+      await emailOtpProvider.sendOtp({
+        email: cleanIdentifier,
+        otp: plainOtp,
+        expiryMinutes: this.expiryMinutes,
+      });
+
+      if (latest.metadata.phone) {
+        smsOtpProvider.sendOtp({
+          phone: latest.metadata.phone,
           otp: plainOtp,
           expiryMinutes: this.expiryMinutes,
-        });
-        if (!smsRes.success) {
-          throw new AppError(smsRes.error || 'Failed to resend SMS code', HTTP_STATUS.BAD_GATEWAY);
-        }
-      } else {
-        await emailOtpProvider.sendOtp({
-          email: cleanIdentifier,
-          otp: plainOtp,
-          expiryMinutes: this.expiryMinutes,
-        });
+        }).catch(() => {});
       }
 
       return {
         success: true,
-        message: isSmsChannel
-          ? 'A new verification code has been dispatched to your mobile number.'
-          : 'A new verification code has been dispatched to your email.',
+        message: 'A new verification code has been dispatched.',
         identifier: cleanIdentifier,
-        channel: isSmsChannel ? 'sms' : 'email',
         cooldownSeconds: this.resendCooldownSeconds,
       };
     }
