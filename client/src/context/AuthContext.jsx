@@ -78,8 +78,19 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
+  const completeAuthSession = (payload) => {
+    const token = payload?.token;
+    const userData = payload?.user;
+    if (token) {
+      localStorage.setItem('siddToken', token);
+    }
+    setUser(userData);
+    setIsAuthenticated(true);
+    return payload;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, updateUser, completeAuthSession }}>
       {children}
     </AuthContext.Provider>
   );

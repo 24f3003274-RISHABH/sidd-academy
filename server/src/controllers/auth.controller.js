@@ -1,33 +1,140 @@
 import { authService } from '../services/auth.service.js';
+import { otpService } from '../services/otp.service.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import { setRefreshTokenCookie } from '../utils/generateToken.js';
-import { sendWelcomeEmail } from '../utils/sendEmail.js';
 
 /**
  * Controller for Authentication & Identity endpoints
+ * Enhanced with production-ready OTP verification and account recovery.
  */
 
 /**
  * POST /api/v1/auth/register
- * Register a new student account
+ * Step 1 of Registration: Validates input, pre-hashes credentials, and dispatches verification OTP
  */
 export const register = async (req, res, next) => {
   try {
     const { name, email, password, phone } = req.body;
-    const result = await authService.register({ name, email, password, phone });
+    const result = await otpService.sendRegistrationOTP({ name, email, password, phone });
 
-    // Set HTTP-only secure cookie for refresh token
+    return sendSuccess(res, 200, 'Verification code sent to your email address.', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/verify-registration-otp
+ * Step 2 of Registration: Verifies OTP, persists user record, and issues JWT tokens
+ */
+export const verifyRegistrationOtp = async (req, res, next) => {
+  try {
+    const { identifier, otp } = req.body;
+    const result = await otpService.verifyRegistrationOTP({ identifier, otp });
+
     if (result.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken);
     }
 
-    // Optional welcome email trigger
-    sendWelcomeEmail(result.user.email, result.user.name).catch(() => {});
-
-    return sendSuccess(res, 201, 'Registration successful', {
+    return sendSuccess(res, 201, 'Account verified and created successfully.', {
       user: result.user,
       token: result.token,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * Step 1 of Password Reset: Validates identifier and sends OTP
+ * Enumeration-Safe: Never leaks account existence
+ */
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { identifier } = req.body;
+    const result = await otpService.sendForgotPasswordOTP({ identifier });
+
+    return sendSuccess(res, 200, result.message, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/verify-reset-otp
+ * Step 2 of Password Reset: Verifies OTP and returns short-lived reset authorization token
+ */
+export const verifyResetOtp = async (req, res, next) => {
+  try {
+    const { identifier, otp } = req.body;
+    const result = await otpService.verifyResetPasswordOTP({ identifier, otp });
+
+    return sendSuccess(res, 200, result.message, {
+      resetToken: result.resetToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/reset-password
+ * Step 3 of Password Reset: Updates password using verified resetToken
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    const result = await otpService.resetPassword({ resetToken, newPassword });
+
+    return sendSuccess(res, 200, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/resend-otp
+ * Resend OTP with cooldown enforcement
+ */
+export const resendOtp = async (req, res, next) => {
+  try {
+    const { identifier, purpose } = req.body;
+    const result = await otpService.resendOTP({ identifier, purpose });
+
+    return sendSuccess(res, 200, result.message, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/send-mobile-otp
+ * Request Indian mobile verification OTP (Authenticated)
+ */
+export const sendMobileOtp = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const { phone } = req.body;
+    const result = await otpService.sendMobileVerificationOTP({ userId, phone });
+
+    return sendSuccess(res, 200, result.message, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/auth/verify-mobile-otp
+ * Complete Indian mobile verification (Authenticated)
+ */
+export const verifyMobileOtp = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const { phone, otp } = req.body;
+    const result = await otpService.verifyMobileVerificationOTP({ userId, phone, otp });
+
+    return sendSuccess(res, 200, result.message, result);
   } catch (error) {
     next(error);
   }
