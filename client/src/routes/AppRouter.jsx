@@ -19,7 +19,6 @@ const ContactPage = lazy(() => import('../pages/public/ContactPage'));
 // Auth Pages
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
-const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
 
 // Student Pages
 const DashboardPage = lazy(() => import('../pages/student/DashboardPage'));
@@ -66,8 +65,6 @@ const AppRouter = () => {
         {/* Auth Routes */}
         <Route path="/login" element={<PublicLayout><LoginPage /></PublicLayout>} />
         <Route path="/register" element={<PublicLayout><RegisterPage /></PublicLayout>} />
-        <Route path="/forgot-password" element={<PublicLayout><ForgotPasswordPage /></PublicLayout>} />
-        <Route path="/reset-password" element={<PublicLayout><ForgotPasswordPage /></PublicLayout>} />
 
         {/* Student Routes */}
         <Route path="/student/dashboard" element={<ProtectedRoute><PublicLayout><DashboardPage /></PublicLayout></ProtectedRoute>} />

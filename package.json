@@ -11,7 +11,6 @@
     "dev": "npm --workspace=client run dev",
     "build": "npm --workspace=client run build",
     "lint": "npm --workspace=client run lint",
-    "test": "npm --workspace=server test",
     "start": "node server/server.js",
     "db:migrate": "npm --workspace=server run db:migrate",
     "db:seed": "npm --workspace=server run db:seed"

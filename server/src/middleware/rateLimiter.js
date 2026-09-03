@@ -43,36 +43,3 @@ export const paymentLimiter = rateLimit({
     message: 'Too many payment requests. Please try again later.',
   },
 });
-
-/**
- * OTP Request & Resend Rate Limiter
- * Maximum 10 requests per 15 minutes per IP
- * Protects SMS/Email quotas and prevents flooding
- */
-export const otpSendLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many OTP dispatch requests. Please try again after 15 minutes.',
-  },
-});
-
-/**
- * OTP Verification Rate Limiter
- * Maximum 20 verification attempts per 15 minutes per IP
- * Protects against automated OTP enumeration / brute force
- */
-export const otpVerifyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many OTP verification attempts. Please try again after 15 minutes.',
-  },
-});
-

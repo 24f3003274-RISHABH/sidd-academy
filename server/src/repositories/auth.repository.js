@@ -22,7 +22,7 @@ export class AuthRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT id, name, email, password, role, phone, avatar, is_active, email_verified, phone_verified, last_login, created_at, updated_at
+          SELECT id, name, email, password, role, phone, avatar, is_active, last_login, created_at, updated_at
           FROM users 
           WHERE LOWER(email) = LOWER($1) 
           LIMIT 1
@@ -50,80 +50,10 @@ export class AuthRepository {
       phone: memoryUser.phone || '',
       avatar: memoryUser.avatar || '',
       is_active: memoryUser.isActive !== false,
-      email_verified: memoryUser.email_verified || memoryUser.emailVerified || false,
-      phone_verified: memoryUser.phone_verified || memoryUser.phoneVerified || false,
       last_login: memoryUser.lastLogin || null,
       created_at: memoryUser.createdAt,
       updated_at: memoryUser.updatedAt,
     };
-  }
-
-  /**
-   * Find user by phone number (Indian mobile format).
-   * @param {string} phone
-   * @returns {Promise<Object|null>}
-   */
-  async findByPhone(phone) {
-    if (!phone) return null;
-    const cleanPhone = phone.trim().replace(/[\s\-\(\)]/g, '');
-    // Allow matching both 10-digit, +91-prefixed, or 91-prefixed
-    const tenDigit = cleanPhone.slice(-10);
-
-    if (ENV.DATABASE_URL) {
-      try {
-        const sql = `
-          SELECT id, name, email, password, role, phone, avatar, is_active, email_verified, phone_verified, last_login, created_at, updated_at
-          FROM users 
-          WHERE phone LIKE $1 OR phone = $2 OR phone = $3
-          LIMIT 1
-        `;
-        const res = await query(sql, [`%${tenDigit}`, cleanPhone, `+91${tenDigit}`]);
-        if (res.rows.length > 0) {
-          return res.rows[0];
-        }
-      } catch (err) {
-        console.warn('AuthRepository findByPhone fallback to mockStore:', err.message);
-      }
-    }
-
-    const memoryUser = mockData.users.find(u => {
-      if (!u.phone) return false;
-      const uClean = u.phone.replace(/[\s\-\(\)]/g, '');
-      return uClean.endsWith(tenDigit) || uClean === cleanPhone;
-    });
-
-    if (!memoryUser) return null;
-
-    return {
-      id: memoryUser._id || memoryUser.id,
-      _id: memoryUser._id || memoryUser.id,
-      name: memoryUser.name,
-      email: memoryUser.email,
-      password: memoryUser.password,
-      role: memoryUser.role,
-      phone: memoryUser.phone || '',
-      avatar: memoryUser.avatar || '',
-      is_active: memoryUser.isActive !== false,
-      email_verified: memoryUser.email_verified || memoryUser.emailVerified || false,
-      phone_verified: memoryUser.phone_verified || memoryUser.phoneVerified || false,
-      last_login: memoryUser.lastLogin || null,
-      created_at: memoryUser.createdAt,
-      updated_at: memoryUser.updatedAt,
-    };
-  }
-
-  /**
-   * Find user by identifier (either email or phone number).
-   * @param {string} identifier
-   * @returns {Promise<Object|null>}
-   */
-  async findByIdentifier(identifier) {
-    if (!identifier) return null;
-    const trimmed = identifier.trim();
-    if (trimmed.includes('@')) {
-      return this.findByEmail(trimmed);
-    }
-    return this.findByPhone(trimmed);
   }
 
   /**
@@ -210,38 +140,18 @@ export class AuthRepository {
    * @returns {Promise<Object>} Safe user object
    */
   async create(userData) {
-    const {
-      name,
-      email,
-      password,
-      phone = '',
-      role = 'student',
-      avatar = '',
-      email_verified = false,
-      phone_verified = false,
-    } = userData;
+    const { name, email, password, phone = '', role = 'student', avatar = '' } = userData;
     const cleanEmail = email.toLowerCase().trim();
-    const cleanPhone = phone ? phone.trim() : '';
     const id = uuidv4();
 
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO users (id, name, email, password, phone, role, avatar, is_active, email_verified, phone_verified, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, NOW(), NOW())
-          RETURNING id, name, email, phone, role, avatar, is_active, email_verified, phone_verified, created_at, updated_at
+          INSERT INTO users (id, name, email, password, phone, role, avatar, is_active, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW())
+          RETURNING id, name, email, phone, role, avatar, is_active, created_at, updated_at
         `;
-        const res = await query(sql, [
-          id,
-          name.trim(),
-          cleanEmail,
-          password,
-          cleanPhone,
-          role.toLowerCase(),
-          avatar,
-          email_verified,
-          phone_verified,
-        ]);
+        const res = await query(sql, [id, name.trim(), cleanEmail, password, phone.trim(), role.toLowerCase(), avatar]);
         if (res.rows.length > 0) {
           return res.rows[0];
         }
@@ -257,12 +167,10 @@ export class AuthRepository {
       name: name.trim(),
       email: cleanEmail,
       password, // Already bcrypt hashed
-      phone: cleanPhone,
+      phone: phone.trim(),
       role: role.toLowerCase(),
       avatar,
       isActive: true,
-      email_verified: email_verified,
-      phone_verified: phone_verified,
       purchasedCourses: [],
       purchasedNotes: [],
       createdAt: new Date().toISOString(),
@@ -272,50 +180,6 @@ export class AuthRepository {
     mockData.users.push(newUser);
     const { password: _, refreshToken: __, ...safeUser } = newUser;
     return safeUser;
-  }
-
-  /**
-   * Update email verification flag
-   */
-  async updateEmailVerified(id, status = true) {
-    if (ENV.DATABASE_URL) {
-      try {
-        const sql = `UPDATE users SET email_verified = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
-        const res = await query(sql, [status, id]);
-        if (res.rows.length > 0) return res.rows[0];
-      } catch (err) {
-        console.warn('AuthRepository.updateEmailVerified fallback to mockStore:', err.message);
-      }
-    }
-    const u = mockData.users.find((x) => (x.id === id || x._id === id));
-    if (u) {
-      u.email_verified = status;
-      u.updatedAt = new Date().toISOString();
-      return u;
-    }
-    return null;
-  }
-
-  /**
-   * Update phone verification flag
-   */
-  async updatePhoneVerified(id, status = true) {
-    if (ENV.DATABASE_URL) {
-      try {
-        const sql = `UPDATE users SET phone_verified = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
-        const res = await query(sql, [status, id]);
-        if (res.rows.length > 0) return res.rows[0];
-      } catch (err) {
-        console.warn('AuthRepository.updatePhoneVerified fallback to mockStore:', err.message);
-      }
-    }
-    const u = mockData.users.find((x) => (x.id === id || x._id === id));
-    if (u) {
-      u.phone_verified = status;
-      u.updatedAt = new Date().toISOString();
-      return u;
-    }
-    return null;
   }
 
   /**
