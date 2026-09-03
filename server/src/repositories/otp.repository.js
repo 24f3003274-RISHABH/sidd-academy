@@ -25,7 +25,7 @@ export class OtpRepository {
       metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
       expiresAt: new Date(row.expires_at || row.expiresAt),
       attempts: parseInt(row.attempts !== undefined ? row.attempts : 0, 10),
-      maxAttempts: parseInt(row.max_attempts || row.maxAttempts || 5, 10),
+      maxAttempts: parseInt(row.max_attempts || row.maxAttempts || 3, 10),
       lastSentAt: new Date(row.last_sent_at || row.lastSentAt || Date.now()),
       verifiedAt: row.verified_at || row.verifiedAt ? new Date(row.verified_at || row.verifiedAt) : null,
       createdAt: new Date(row.created_at || row.createdAt || Date.now()),
@@ -44,7 +44,7 @@ export class OtpRepository {
     otpHash,
     metadata = {},
     expiresAt,
-    maxAttempts = 5,
+    maxAttempts = 3,
   }) {
     const id = uuidv4();
     const cleanIdentifier = identifier.trim().toLowerCase();

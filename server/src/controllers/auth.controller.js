@@ -17,7 +17,11 @@ export const register = async (req, res, next) => {
     const { name, email, password, phone } = req.body;
     const result = await otpService.sendRegistrationOTP({ name, email, password, phone });
 
-    return sendSuccess(res, 200, 'Verification code sent to your email address.', result);
+    const message = result.channel === 'sms'
+      ? `Verification code sent to ${result.maskedPhone || 'your mobile number'}.`
+      : 'Verification code sent to your email address.';
+
+    return sendSuccess(res, 200, message, result);
   } catch (error) {
     next(error);
   }
