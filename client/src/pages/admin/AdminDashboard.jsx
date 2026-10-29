@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getDashboardStats, getAllOrders } from '../../api/adminApi';
-import Loader from '../../components/common/Loader';
+import { SkeletonDashboard } from '../../components/common/SkeletonLoader';
+import toast from 'react-hot-toast';
 import { formatPrice, formatDate } from '../../utils/helpers';
-import { FiUsers, FiDollarSign, FiBook, FiFileText, FiVideo, FiImage, FiArrowRight, FiShield, FiCheckCircle, FiClock, FiLayers } from 'react-icons/fi';
+import { FiUsers, FiDollarSign, FiBook, FiFileText, FiVideo, FiImage, FiArrowRight, FiShield, FiCheckCircle, FiClock, FiLayers, FiAlertCircle, FiXCircle } from 'react-icons/fi';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -15,17 +16,20 @@ const AdminDashboard = () => {
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchDashboardData = async () => {
-      try {
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(false);
+    try {
         const [statsRes, ordersRes] = await Promise.allSettled([
           getDashboardStats(),
           getAllOrders({ limit: 5 })
         ]);
         
-        if (!isMounted) return;
+        if (statsRes.status === 'rejected' && ordersRes.status === 'rejected') {
+          throw statsRes.reason;
+        }
 
         if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
           const raw = statsRes.value.data.data || statsRes.value.data;
@@ -48,18 +52,31 @@ const AdminDashboard = () => {
             setRecentOrders(orderList);
           }
         }
-      } catch (err) {
-        console.error('Error fetching admin dashboard stats:', err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
+    } catch (err) {
+      console.error('Error fetching admin dashboard stats:', err);
+      setError(true);
+      toast.error('Could not load the admin overview');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchDashboardData();
-    return () => { isMounted = false; };
   }, []);
 
-  if (loading) return <Loader fullPage />;
+  if (loading) return <SkeletonDashboard />;
+
+  if (error) {
+    return (
+      <div className="card-glass admin-error-state">
+        <FiShield size={36} />
+        <h2>Admin overview is unavailable</h2>
+        <p>Check the connection and try loading the dashboard again.</p>
+        <button type="button" className="btn btn-primary" onClick={fetchDashboardData}>Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -67,14 +84,14 @@ const AdminDashboard = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1.25rem' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary)', fontWeight: 700, fontSize: '0.8125rem', marginBottom: '0.25rem' }}>
-            <FiShield /> SIDD ACADEMY • ADMIN CONTROL PANEL
+            <FiShield /> SIDD ACADEMY • TEACHER WORKSPACE
           </div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-            Overview & Management
+            Teaching overview
           </h1>
         </div>
-        <Link to="/" className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          View Live Website <FiArrowRight />
+        <Link to="/admin/curriculum" className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          Open Course Studio <FiArrowRight />
         </Link>
       </div>
 
@@ -212,8 +229,10 @@ const AdminDashboard = () => {
                   const orderId = order.id || order._id || 'ORD';
                   const userName = order.user?.name || order.userName || 'Student';
                   const userEmail = order.user?.email || order.userEmail || '';
-                  const status = (order.status || 'PENDING').toLowerCase();
+                  const status = (order.status || order.paymentStatus || 'PENDING').toLowerCase();
                   const isPaid = status === 'paid' || status === 'completed';
+                  const isFailed = status === 'failed';
+                  const isCancelled = status === 'cancelled';
 
                   return (
                     <tr key={orderId}>
@@ -231,8 +250,8 @@ const AdminDashboard = () => {
                         {formatDate(order.createdAt || new Date())}
                       </td>
                       <td>
-                        <span className={`badge ${isPaid ? 'badge-success' : 'badge-primary'}`}>
-                          {isPaid ? <FiCheckCircle /> : <FiClock />}
+                        <span className={`badge ${isPaid ? 'badge-success' : isFailed ? 'badge-danger' : isCancelled ? 'badge-outline' : 'badge-secondary'}`}>
+                          {isPaid ? <FiCheckCircle /> : isFailed ? <FiAlertCircle /> : isCancelled ? <FiXCircle /> : <FiClock />}
                           {order.status || 'Pending'}
                         </span>
                       </td>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { FiMenu, FiX, FiUser, FiLogOut, FiBook, FiGrid, FiShoppingBag, FiAward } from 'react-icons/fi';
@@ -9,6 +9,7 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,6 +17,16 @@ const Navbar = () => {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleLogout = () => {
@@ -48,10 +59,10 @@ const Navbar = () => {
 
         <div className="hidden-mobile" style={{ position: 'relative' }}>
           {isAuthenticated ? (
-            <div style={{ position: 'relative' }}>
+            <div ref={dropdownRef} style={{ position: 'relative' }}>
               <button 
                 onClick={() => setDropdownOpen(!dropdownOpen)} 
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0.75rem', borderRadius: '30px', border: '1px solid var(--border)', backgroundColor: '#ffffff' }}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0.75rem', borderRadius: '30px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-card)' }}
               >
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.875rem' }}>
                   {user?.name?.charAt(0).toUpperCase() || 'U'}
@@ -64,7 +75,7 @@ const Navbar = () => {
                     position: 'absolute', 
                     top: 'calc(100% + 8px)', 
                     right: 0, 
-                    backgroundColor: '#ffffff', 
+                    backgroundColor: 'var(--bg-card)', 
                     padding: '0.5rem', 
                     borderRadius: '10px', 
                     boxShadow: 'var(--shadow-lg)', 
@@ -115,7 +126,7 @@ const Navbar = () => {
       </div>
 
       {mobileMenuOpen && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', backgroundColor: '#ffffff', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderBottom: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', backgroundColor: 'var(--bg-card)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', borderBottom: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
           <Link to="/" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Home</Link>
           <Link to="/courses" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Courses</Link>
           <Link to="/notes" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Notes & PDFs</Link>

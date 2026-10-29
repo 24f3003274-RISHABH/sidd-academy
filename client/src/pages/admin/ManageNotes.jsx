@@ -14,6 +14,7 @@ const ManageNotes = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [previewPdf, setPreviewPdf] = useState(null);
 
   // Cascading hierarchy dropdowns
@@ -187,13 +188,17 @@ const ManageNotes = () => {
   };
 
   const handleDelete = async (id) => {
+    if (busyId) return;
     if (window.confirm('Are you sure you want to delete this digital note?')) {
+      setBusyId(id);
       try {
         await deleteNote(id);
         toast.success('Note deleted successfully');
         fetchNotes();
       } catch (err) {
         toast.error('Error deleting note');
+      } finally {
+        setBusyId(null);
       }
     }
   };
@@ -314,6 +319,7 @@ const ManageNotes = () => {
                           </button>
                           <button
                             onClick={() => handleDelete(id)}
+                            disabled={busyId === id}
                             className="btn btn-sm btn-danger"
                             title="Delete Note"
                           >
@@ -334,6 +340,7 @@ const ManageNotes = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        closeDisabled={submitting}
         title={editingId ? 'Edit Digital Note' : 'Upload Digital Note'}
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

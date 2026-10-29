@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -10,10 +11,13 @@ const ContactPage = () => {
       toast.error('Please fill all fields');
       return;
     }
+    if (submitting) return;
+    setSubmitting(true);
     // Simulate API call
     setTimeout(() => {
       toast.success('Message sent successfully! We will get back to you soon.');
       setFormData({ name: '', email: '', message: '' });
+      setSubmitting(false);
     }, 1000);
   };
 
@@ -40,7 +44,9 @@ const ContactPage = () => {
               <label className="form-label">Message</label>
               <textarea className="form-textarea" rows="5" value={formData.message} onChange={(e) => setFormData({...formData, message: e.target.value})} placeholder="How can we help you?"></textarea>
             </div>
-            <button type="submit" className="btn btn-primary btn-full">Send Message</button>
+            <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
+              {submitting ? 'Sending...' : 'Send Message'}
+            </button>
           </form>
         </div>
 

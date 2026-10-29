@@ -37,6 +37,7 @@ const ManageOrders = lazy(() => import('../pages/admin/ManageOrders'));
 const ManageBanners = lazy(() => import('../pages/admin/ManageBanners'));
 const ManageSubjects = lazy(() => import('../pages/admin/ManageSubjects'));
 const ManageChapters = lazy(() => import('../pages/admin/ManageChapters'));
+const CurriculumPage = lazy(() => import('../pages/admin/CurriculumPage'));
 const ManageClasses = lazy(() => import('../pages/admin/ManageClasses'));
 
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
@@ -77,6 +78,7 @@ const AppRouter = () => {
         <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="curriculum" element={<CurriculumPage />} />
           <Route path="courses" element={<ManageCourses />} />
           <Route path="subjects" element={<ManageSubjects />} />
           <Route path="chapters" element={<ManageChapters />} />

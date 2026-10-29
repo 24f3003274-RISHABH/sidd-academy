@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
 import { getAllNotes, getSecureAccess } from '../../api/noteApi';
-import { updateLessonProgress } from '../../api/studentApi';
+import { getCourseProgress, updateLessonProgress } from '../../api/studentApi';
 import { useAuth } from '../../hooks/useAuth';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
 import Loader from '../../components/common/Loader';
 import toast from 'react-hot-toast';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import {
   FiPlay,
   FiLock,
@@ -74,6 +75,16 @@ const CourseVideoWatchPage = () => {
         });
         setExpandedSubjects(subjMap);
         setExpandedChapters(chapMap);
+
+        if (isAuthenticated) {
+          try {
+            const progressRes = await getCourseProgress(courseId);
+            const progressData = progressRes.data?.data || progressRes.data || {};
+            setCompletedLessons(new Set(progressData.completedLessonIds || []));
+          } catch (progressError) {
+            console.warn('Could not load lesson progress:', progressError);
+          }
+        }
 
         // Fetch notes for this course
         try {
@@ -146,18 +157,19 @@ const CourseVideoWatchPage = () => {
 
   // Check enrollment / ownership
   const isEnrolled = useMemo(() => {
+    if (course?.isEnrolled === true) return true;
     if (!user) return false;
     if (user.role === 'admin') return true;
     if (course?.isFree) return true;
     const purchased = user.purchasedCourses || [];
-    return purchased.includes(courseId) || purchased.some((p) => p.id === courseId || p._id === courseId);
+    return purchased.includes(courseId) || purchased.some((p) => p.id === courseId || p._id === courseId || p.courseId === courseId);
   }, [user, course, courseId]);
 
   // Check if current lesson is locked
   const isCurrentLessonLocked = useMemo(() => {
     if (!currentLesson) return false;
     if (isEnrolled) return false;
-    return !currentLesson.isFree;
+    return currentLesson.isFree !== true && currentLesson.is_free !== true;
   }, [currentLesson, isEnrolled]);
 
   const handleSelectLesson = (lesson) => {
@@ -197,7 +209,7 @@ const CourseVideoWatchPage = () => {
 
     try {
       setTogglingProgress(true);
-      await updateLessonProgress(courseId, lid, isNowCompleted);
+      await updateLessonProgress({ courseId, lessonId: lid, isCompleted: isNowCompleted });
     } catch (err) {
       console.error('Failed to sync lesson progress:', err);
     } finally {
@@ -235,15 +247,17 @@ const CourseVideoWatchPage = () => {
     );
   }
 
+  const coursePrice = getEffectivePrice(course);
+
   const isCurrentCompleted = currentLesson && completedLessons.has(currentLesson.id || currentLesson._id);
 
   return (
-    <div style={{ backgroundColor: '#0c0d14', minHeight: '100vh', color: '#fff' }}>
+    <div className="watch-page" style={{ backgroundColor: 'var(--bg-primary)', minHeight: '100vh', color: 'var(--text-primary)' }}>
       {/* Top Navigation Bar */}
-      <header
+      <header className="watch-header"
         style={{
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          backgroundColor: '#121420',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-secondary)',
           padding: '0.75rem 1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
@@ -259,12 +273,12 @@ const CourseVideoWatchPage = () => {
           <Link
             to={isAuthenticated ? '/student/my-courses' : `/courses/${courseId}`}
             className="btn btn-sm btn-outline"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderColor: 'rgba(255,255,255,0.15)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
           >
             <FiArrowLeft /> {isAuthenticated ? 'My Courses' : 'Course Details'}
           </Link>
           <div>
-            <h1 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700, color: '#fff' }}>
+            <h1 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700, color: 'var(--text-primary)' }}>
               {course.title}
             </h1>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -296,7 +310,7 @@ const CourseVideoWatchPage = () => {
               className="btn btn-sm btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              <FiShoppingCart /> Unlock Course (₹{course.discountPrice || course.price})
+              <FiShoppingCart /> Unlock Course ({formatPrice(coursePrice)})
             </Link>
           )}
         </div>
@@ -304,29 +318,24 @@ const CourseVideoWatchPage = () => {
 
       {/* Main Watch Layout Grid */}
       <div
-        className="container-fluid"
+        className="container-fluid watch-grid"
         style={{
           maxWidth: '1600px',
           margin: '0 auto',
           padding: '1.5rem',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 380px',
-          gap: '1.5rem',
-          alignItems: 'start',
         }}
       >
         {/* Left Column: Video Player, Controls & Lecture Details */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {/* Video Player or Locked State Card */}
           {isCurrentLessonLocked ? (
-            <div
-              className="card-glass"
+            <div className="watch-locked-card card-glass"
               style={{
                 borderRadius: '16px',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
                 padding: '3.5rem 2rem',
                 textAlign: 'center',
-                backgroundColor: '#161826',
+                backgroundColor: 'var(--bg-card)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -362,11 +371,11 @@ const CourseVideoWatchPage = () => {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                 <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
-                  ₹{course.discountPrice || course.price}
+                  {formatPrice(coursePrice)}
                 </span>
-                {course.discountPrice && course.price && (
+                {coursePrice > 0 && course.discountPrice && course.price && (
                   <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                    ₹{course.price}
+                    {formatPrice(course.price)}
                   </span>
                 )}
               </div>
@@ -398,15 +407,15 @@ const CourseVideoWatchPage = () => {
           )}
 
           {/* Player Nav Controls (Previous / Next / Mark Complete) */}
-          <div
+          <div className="watch-controls"
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              backgroundColor: '#161826',
+              backgroundColor: 'var(--bg-card)',
               padding: '0.85rem 1.25rem',
               borderRadius: '12px',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              border: '1px solid var(--border)',
               flexWrap: 'wrap',
               gap: '0.75rem',
             }}
@@ -451,7 +460,7 @@ const CourseVideoWatchPage = () => {
 
           {/* Active Lesson Details & Tabs (Overview / Notes) */}
           {currentLesson && (
-            <div className="card-glass" style={{ padding: '1.75rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div className="card-glass watch-detail-card" style={{ padding: '1.75rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
@@ -549,9 +558,10 @@ const CourseVideoWatchPage = () => {
                     notes.map((note) => (
                       <div
                         key={note.id || note._id}
+                        className="watch-note-row"
                         style={{
-                          backgroundColor: '#161826',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
                           borderRadius: '10px',
                           padding: '1rem 1.25rem',
                           display: 'flex',
@@ -600,10 +610,10 @@ const CourseVideoWatchPage = () => {
         </div>
 
         {/* Right Column: Hierarchical Navigation (Course -> Subject -> Chapter -> Lesson) */}
-        <div
+        <div className="watch-sidebar"
           style={{
-            backgroundColor: '#161826',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border)',
             borderRadius: '16px',
             overflow: 'hidden',
             display: 'flex',
@@ -614,10 +624,10 @@ const CourseVideoWatchPage = () => {
           }}
         >
           {/* Syllabus Header */}
-          <div
+          <div className="watch-sidebar-header"
             style={{
               padding: '1.1rem 1.25rem',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid var(--border)',
               backgroundColor: '#1a1c2d',
               display: 'flex',
               justifyContent: 'space-between',
@@ -701,7 +711,8 @@ const CourseVideoWatchPage = () => {
                                 {lessons.map((lesson, lIdx) => {
                                   const lId = lesson.id || lesson._id || `lesson-${sIdx}-${cIdx}-${lIdx}`;
                                   const isActive = lId === activeLessonId;
-                                  const isLocked = !isEnrolled && !lesson.isFree;
+                                  const lessonIsFree = lesson.isFree === true || lesson.is_free === true;
+                                  const isLocked = !isEnrolled && !lessonIsFree;
                                   const isDone = completedLessons.has(lId);
 
                                   return (
@@ -759,7 +770,7 @@ const CourseVideoWatchPage = () => {
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                                           <span>{lesson.duration || '25 min'}</span>
-                                          <span>{lesson.isFree ? 'Free Preview' : isEnrolled ? 'Unlocked' : 'Locked'}</span>
+                                          <span>{lessonIsFree ? 'Free Preview' : isEnrolled ? 'Unlocked' : 'Locked'}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -797,7 +808,7 @@ const CourseVideoWatchPage = () => {
         >
           <div
             style={{
-              backgroundColor: '#1b1c2b',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               width: '100%',
               maxWidth: '920px',
@@ -805,7 +816,8 @@ const CourseVideoWatchPage = () => {
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-xl)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -815,11 +827,11 @@ const CourseVideoWatchPage = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid var(--border)',
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{selectedPdf.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{selectedPdf.title}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {selectedPdf.fileName || 'Study Document'} • {selectedPdf.fileSize || '2.5 MB'}
                 </span>
@@ -839,7 +851,7 @@ const CourseVideoWatchPage = () => {
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#2d3047' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={selectedPdf.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                 title={selectedPdf.title}

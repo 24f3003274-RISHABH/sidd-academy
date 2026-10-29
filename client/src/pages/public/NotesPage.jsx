@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllNotes, getSecureAccess, downloadNote } from '../../api/noteApi';
-import { createOrder, verifyPayment } from '../../api/paymentApi';
+import { createOrder, verifyPayment, cancelOrder, failOrder } from '../../api/orderApi';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
 import NoteCard from '../../components/notes/NoteCard';
@@ -26,6 +26,7 @@ const NotesPage = () => {
   const [loading, setLoading] = useState(true);
   const { isAuthenticated, user } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'modular'
   const [filterType, setFilterType] = useState('all'); // 'all' | 'free' | 'paid'
   const [selectedSubject, setSelectedSubject] = useState('all');
@@ -126,9 +127,20 @@ const NotesPage = () => {
   };
 
   const loadRazorpayScript = () => {
+    if (window.Razorpay) return Promise.resolve(true);
+    const existingScript = document.querySelector('script[data-razorpay-checkout]');
+    if (existingScript) {
+      return new Promise((resolve) => {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+      });
+    }
+
     return new Promise((resolve) => {
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.dataset.razorpayCheckout = 'true';
+      script.async = true;
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
@@ -141,6 +153,8 @@ const NotesPage = () => {
       return;
     }
     setPaymentLoading(true);
+    setCheckoutMessage('');
+    let checkoutOpened = false;
     try {
       const noteId = note.id || note._id;
       const orderRes = await createOrder({
@@ -152,6 +166,7 @@ const NotesPage = () => {
       if (orderData.isFree || orderData.status === 'PAID') {
         toast.success(orderData.message || 'Digital note added to your library!');
         fetchNotes();
+        setPaymentLoading(false);
         return;
       }
 
@@ -159,21 +174,12 @@ const NotesPage = () => {
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
-        // Fallback for sandboxed development/mock simulation if external script blocked
-        await verifyPayment({
-          orderId,
-          razorpayOrderId: razorpayOrderId || `sim_rzp_${Date.now()}`,
-          razorpayPaymentId: `sim_pay_${Date.now()}`,
-          razorpaySignature: 'simulated_dev_signature',
-        });
-        toast.success('Test checkout completed! Digital note unlocked.');
-        fetchNotes();
-        return;
+        throw new Error('Razorpay checkout could not be loaded. Please check your connection and try again.');
       }
 
       const options = {
-        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-        amount: Math.round(Number(amount) * 100).toString(),
+        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
         currency: currency || 'INR',
         name: 'Sidd Academy',
         description: `Digital Note: ${note.title}`,
@@ -187,27 +193,67 @@ const NotesPage = () => {
               razorpaySignature: response.razorpay_signature,
             });
             toast.success('Payment verified! Digital note unlocked.');
+            setPaymentLoading(false);
             fetchNotes();
           } catch (err) {
+            setPaymentLoading(false);
             toast.error(err.response?.data?.message || 'Payment verification failed');
           }
         },
         prefill: {
           name: user?.name || '',
           email: user?.email || '',
+          contact: user?.phone || '',
         },
         theme: { color: '#6c63ff' },
       };
 
       const paymentObject = new window.Razorpay(options);
+      const finishCheckout = () => {
+        setPaymentLoading(false);
+      };
+
       paymentObject.on('payment.failed', function (resp) {
+        finishCheckout();
+        failOrder(orderId).catch(() => {});
+        setCheckoutMessage('Payment was declined or failed. You can try again.');
         toast.error(`Payment failed: ${resp.error?.description || 'Transaction declined'}`);
       });
+
+      paymentObject.on('modal.ondismiss', async () => {
+        finishCheckout();
+        try {
+          await cancelOrder(orderId);
+          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
+          toast('Checkout cancelled. No payment was recorded.', { icon: 'ℹ️' });
+          fetchNotes();
+        } catch (err) {
+          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
+        }
+      });
+
       paymentObject.open();
+      checkoutOpened = true;
+
+      // Safety timeout guard so UI never stays stuck on Processing...
+      window.setTimeout(() => {
+        finishCheckout();
+      }, 60000);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to initiate purchase order');
-    } finally {
       setPaymentLoading(false);
+      const status = err.response?.status;
+      const serverMsg = err.response?.data?.message;
+      if (status === 401) {
+        toast.error('Your session has expired. Please log in again.');
+        navigate('/login', { state: { from: '/notes' } });
+      } else if (status === 400 && serverMsg?.includes('already purchased')) {
+        toast.success('You already have access to this note!');
+        fetchNotes();
+      } else {
+        toast.error(serverMsg || err.message || 'Failed to initiate purchase order');
+      }
+    } finally {
+      if (!checkoutOpened) setPaymentLoading(false);
     }
   };
 
@@ -312,6 +358,12 @@ const NotesPage = () => {
         </div>
       </div>
 
+        {checkoutMessage && (
+          <div role="status" className="admin-inline-error" style={{ marginTop: '1rem', borderColor: 'var(--border)', background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
+            {checkoutMessage}
+          </div>
+        )}
+
       {/* Main Content Area */}
       {loading ? (
         <Loader fullPage />
@@ -373,7 +425,7 @@ const NotesPage = () => {
         >
           <div
             style={{
-              backgroundColor: '#1b1c2b',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               width: '100%',
               maxWidth: '900px',
@@ -381,7 +433,8 @@ const NotesPage = () => {
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-xl)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -391,11 +444,11 @@ const NotesPage = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid var(--border)',
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{activePdfPreview.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{activePdfPreview.title}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {activePdfPreview.fileName} • {activePdfPreview.fileSize || '2.5 MB'}
                 </span>
@@ -415,7 +468,7 @@ const NotesPage = () => {
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#2d3047' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                 title={activePdfPreview.title}

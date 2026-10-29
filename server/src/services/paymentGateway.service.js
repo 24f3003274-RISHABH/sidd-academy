@@ -5,8 +5,7 @@ import ENV from '../config/env.js';
 /**
  * Payment Gateway Abstraction Service
  * 
- * Encapsulates Razorpay payment gateway integration with clean fallback
- * to a verified development/mock simulator when live credentials are not configured.
+ * Encapsulates Razorpay payment gateway integration.
  * 
  * SECURITY:
  * - Gateway secrets are read exclusively from environment variables.
@@ -29,15 +28,19 @@ class PaymentGatewayService {
     );
   }
 
+  getMode() {
+    if (!this.isConfigured()) return 'unconfigured';
+    return ENV.RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : 'live';
+  }
+
   /**
    * Get public Razorpay Key ID for client checkout initialization
    */
   getPublicKey() {
-    if (this.isConfigured()) {
-      return ENV.RAZORPAY_KEY_ID;
+    if (!this.isConfigured()) {
+      throw new Error('Razorpay credentials are not configured on the server.');
     }
-    // Safe public test sandbox identifier for development mode
-    return ENV.RAZORPAY_KEY_ID || 'rzp_test_siddacademy_dev';
+    return ENV.RAZORPAY_KEY_ID;
   }
 
   /**
@@ -61,36 +64,46 @@ class PaymentGatewayService {
   async createGatewayOrder({ amount, currency = 'INR', receipt, notes = {} }) {
     const amountInPaise = Math.round(Number(amount) * 100);
 
-    if (this.isConfigured()) {
-      try {
-        const rzp = this.getInstance();
-        const rzpOrder = await rzp.orders.create({
-          amount: amountInPaise,
-          currency,
-          receipt: receipt || `rcpt_${Date.now()}`,
-          notes,
-        });
-
-        return {
-          gatewayOrderId: rzpOrder.id,
-          amount: Number(amount),
-          amountInPaise,
-          currency: rzpOrder.currency || currency,
-          isMock: false,
-        };
-      } catch (err) {
-        console.warn('⚠️ [PaymentGateway] Razorpay order creation failed, falling back to secure sandbox order:', err.message);
-      }
+    if (!Number.isFinite(amountInPaise) || amountInPaise < 100) {
+      throw new Error('Razorpay orders must be at least 100 paise.');
     }
 
-    // Secure Simulated Gateway Order (Sandbox / Development Mode)
-    const simulatedOrderId = `order_sim_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    if (!this.isConfigured()) {
+      throw new Error('Razorpay credentials are not configured on the server.');
+    }
+
+    let rzpOrder;
+    try {
+      rzpOrder = await this.getInstance().orders.create({
+        amount: amountInPaise,
+        currency,
+        receipt: receipt || `rcpt_${Date.now()}`,
+        notes,
+      });
+    } catch (rzpErr) {
+      // Razorpay SDK errors are plain objects with statusCode/error fields – NOT Error instances.
+      // We must never let a Razorpay 401 (bad credentials) reach the client as our own 401.
+      const rzpMsg =
+        rzpErr?.error?.description ||
+        rzpErr?.error?.reason ||
+        rzpErr?.message ||
+        'Razorpay order creation failed';
+      const rzpStatus = rzpErr?.statusCode || rzpErr?.status;
+      console.error('[PaymentGateway] Razorpay order creation error:', rzpStatus, rzpMsg);
+
+      // Map upstream Razorpay errors to application-level 502 Bad Gateway
+      const appError = new Error(`Payment gateway error: ${rzpMsg}`);
+      appError.statusCode = 502;
+      throw appError;
+    }
+
     return {
-      gatewayOrderId: simulatedOrderId,
+      gatewayOrderId: rzpOrder.id,
       amount: Number(amount),
       amountInPaise,
-      currency,
-      isMock: true,
+      currency: rzpOrder.currency || currency,
+      isMock: false,
+      mode: this.getMode(),
     };
   }
 
@@ -115,10 +128,10 @@ class PaymentGatewayService {
         .update(payload)
         .digest('hex');
 
-      const isMatch = crypto.timingSafeEqual(
-        Buffer.from(expectedSignature, 'utf-8'),
-        Buffer.from(razorpaySignature, 'utf-8')
-      );
+      const expectedBuffer = Buffer.from(expectedSignature, 'utf-8');
+      const receivedBuffer = Buffer.from(razorpaySignature, 'utf-8');
+      const isMatch = expectedBuffer.length === receivedBuffer.length &&
+        crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 
       if (!isMatch) {
         return {
@@ -130,15 +143,9 @@ class PaymentGatewayService {
       return { isValid: true };
     }
 
-    // In development / mock mode, ensure the signature complies with expected format
-    // or simulation pattern (e.g. non-empty string or 'simulated_sig' or hash)
-    if (typeof razorpaySignature === 'string' && razorpaySignature.trim().length > 0) {
-      return { isValid: true, isMock: true };
-    }
-
     return {
       isValid: false,
-      reason: 'Invalid development signature token',
+      reason: 'Razorpay credentials are not configured on the server.',
     };
   }
 }

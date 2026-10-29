@@ -4,6 +4,8 @@ import ENV from '../config/env.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '../constants/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 /**
  * Order & Payment Repository
  * 
@@ -25,8 +27,16 @@ export class OrderRepository {
     const userId = order.user_id || (order.user && (order.user._id || order.user.id || order.user)) || order.userId;
     
     // Status normalizer
-    let status = order.status || order.payment_status || order.paymentStatus || 'PENDING';
-    status = status.toUpperCase();
+    const rawStatuses = [order.status, order.payment_status, order.paymentStatus]
+      .filter(Boolean)
+      .map((value) => String(value).toUpperCase());
+    let status = rawStatuses.includes('PAID') || rawStatuses.includes('COMPLETED')
+      ? 'PAID'
+      : rawStatuses.includes('CANCELLED')
+        ? 'CANCELLED'
+        : rawStatuses.includes('FAILED')
+          ? 'FAILED'
+          : rawStatuses[0] || 'PENDING';
     if (status === 'COMPLETED') status = 'PAID';
 
     return {
@@ -81,7 +91,7 @@ export class OrderRepository {
   async checkUserEnrollment(userId, courseId) {
     if (!userId || !courseId) return false;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId) && isUuid(courseId)) {
       try {
         const sql = `SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2 AND status = 'active' LIMIT 1`;
         const res = await query(sql, [userId, courseId]);
@@ -104,7 +114,7 @@ export class OrderRepository {
   async checkUserNotePurchase(userId, noteId) {
     if (!userId || !noteId) return false;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId) && isUuid(noteId)) {
       try {
         const sql = `SELECT id FROM note_purchases WHERE user_id = $1 AND note_id = $2 LIMIT 1`;
         const res = await query(sql, [userId, noteId]);
@@ -314,7 +324,7 @@ export class OrderRepository {
   async findById(orderId) {
     if (!orderId) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(orderId)) {
       try {
         const orderSql = `
           SELECT o.*, u.name as user_name, u.email as user_email
@@ -324,17 +334,17 @@ export class OrderRepository {
           LIMIT 1
         `;
         const orderRes = await query(orderSql, [orderId]);
-        if (orderRes.rows.length === 0) return null;
+        if (orderRes.rows.length > 0) {
+          const order = orderRes.rows[0];
 
-        const order = orderRes.rows[0];
+          const itemsSql = `SELECT * FROM order_items WHERE order_id = $1 ORDER BY created_at ASC`;
+          const itemsRes = await query(itemsSql, [orderId]);
 
-        const itemsSql = `SELECT * FROM order_items WHERE order_id = $1 ORDER BY created_at ASC`;
-        const itemsRes = await query(itemsSql, [orderId]);
+          const paymentsSql = `SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC`;
+          const paymentsRes = await query(paymentsSql, [orderId]);
 
-        const paymentsSql = `SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC`;
-        const paymentsRes = await query(paymentsSql, [orderId]);
-
-        return this.normalizeOrder(order, itemsRes.rows, paymentsRes.rows);
+          return this.normalizeOrder(order, itemsRes.rows, paymentsRes.rows);
+        }
       } catch (err) {
         console.warn('OrderRepository findById fallback to mockStore:', err.message);
       }
@@ -453,7 +463,7 @@ export class OrderRepository {
         let pIdx = 1;
 
         if (status) {
-          where += ` AND (o.status = $${pIdx} OR o.payment_status = $${pIdx} OR UPPER(o.status) = UPPER($${pIdx}))`;
+          where += ` AND (o.status = $${pIdx} OR o.payment_status = $${pIdx} OR UPPER(o.status) = UPPER($${pIdx}) OR UPPER(o.payment_status) = UPPER($${pIdx}))`;
           params.push(status);
           pIdx++;
         }
@@ -714,19 +724,25 @@ export class OrderRepository {
     const order = await this.findById(orderId);
     if (!order) return null;
 
-    if (!isAdmin && order.userId !== userId) {
+    const matchesUser = order.userId === userId || order.user?.id === userId || order.user?._id === userId;
+    if (!isAdmin && !matchesUser) {
       throw new Error('Unauthorized to cancel this order');
     }
 
     if (order.status === ORDER_STATUS.PAID) {
       throw new Error('Cannot cancel an already completed and paid order');
     }
+    if (order.status === ORDER_STATUS.FAILED) {
+      return order;
+    }
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(orderId)) {
       try {
-        await query(`UPDATE orders SET status = $1, payment_status = 'cancelled', updated_at = NOW() WHERE id = $2`, [
+        await query(`UPDATE orders SET status = $1, payment_status = 'cancelled', updated_at = NOW() WHERE id = $2 AND COALESCE(status, payment_status) NOT IN ($3, $4, 'CANCELLED')`, [
           ORDER_STATUS.CANCELLED,
           orderId,
+          ORDER_STATUS.PAID,
+          ORDER_STATUS.FAILED,
         ]);
         await query(`UPDATE payments SET status = $1, updated_at = NOW() WHERE order_id = $2`, [
           PAYMENT_STATUS.FAILED,
@@ -740,6 +756,40 @@ export class OrderRepository {
 
     order.status = ORDER_STATUS.CANCELLED;
     order.paymentStatus = 'cancelled';
+    return order;
+  }
+
+  async failOrder(orderId, userId, isAdmin = false) {
+    const order = await this.findById(orderId);
+    if (!order) return null;
+
+    const matchesUser = order.userId === userId || order.user?.id === userId || order.user?._id === userId;
+    if (!isAdmin && !matchesUser) {
+      throw new Error('Unauthorized to update this order');
+    }
+    if (order.status === ORDER_STATUS.PAID) {
+      throw new Error('Cannot fail an already paid order');
+    }
+
+    if (ENV.DATABASE_URL && isUuid(orderId)) {
+      try {
+        await query(
+          `UPDATE orders SET status = $1, payment_status = 'failed', updated_at = NOW()
+           WHERE id = $2 AND status <> $3`,
+          [ORDER_STATUS.FAILED, orderId, ORDER_STATUS.PAID]
+        );
+        await query(
+          `UPDATE payments SET status = $1, updated_at = NOW() WHERE order_id = $2`,
+          [PAYMENT_STATUS.FAILED, orderId]
+        );
+        return this.findById(orderId);
+      } catch (err) {
+        console.warn('OrderRepository failOrder fallback:', err.message);
+      }
+    }
+
+    order.status = ORDER_STATUS.FAILED;
+    order.paymentStatus = 'failed';
     return order;
   }
 

@@ -128,7 +128,7 @@ export class CourseRepository {
 
     if (ENV.DATABASE_URL) {
       try {
-        // Fetch subjects
+        // Fetch the hierarchy in batches instead of querying once per row.
         const subjectsRes = await query(
           `SELECT id, course_id, title, title as name, order_num as order_index, created_at, updated_at 
            FROM subjects WHERE course_id = $1 ORDER BY order_num ASC, created_at ASC`,
@@ -137,57 +137,95 @@ export class CourseRepository {
 
         const subjects = subjectsRes.rows;
 
-        for (const subj of subjects) {
-          const chaptersRes = await query(
-            `SELECT id, subject_id, title, order_num as order_index, created_at, updated_at 
-             FROM chapters WHERE subject_id = $1 ORDER BY order_num ASC, created_at ASC`,
-            [subj.id]
-          );
+        const subjectIds = subjects.map((subject) => subject.id);
+        const chaptersRes = subjectIds.length
+          ? await query(
+              `SELECT id, subject_id, title, order_num as order_index, created_at, updated_at
+               FROM chapters WHERE subject_id = ANY($1::uuid[]) ORDER BY order_num ASC, created_at ASC`,
+              [subjectIds]
+            )
+          : { rows: [] };
+        const chapters = chaptersRes.rows;
+        const chapterIds = chapters.map((chapter) => chapter.id);
+        const lessonsRes = chapterIds.length
+          ? await query(
+              `SELECT id, chapter_id, title, class_date, duration, is_free, is_protected, order_num as order_index, false as is_live, created_at, updated_at
+               FROM lessons WHERE chapter_id = ANY($1::uuid[]) ORDER BY order_num ASC, class_date ASC`,
+              [chapterIds]
+            )
+          : { rows: [] };
+        const lessons = lessonsRes.rows;
+        const lessonIds = lessons.map((lesson) => lesson.id);
+        const [videosRes, notesRes] = await Promise.all([
+          lessonIds.length
+            ? query(
+                `SELECT id, lesson_id, title, video_url, video_provider, quality, false as is_free_preview
+                 FROM videos WHERE lesson_id = ANY($1::uuid[])`,
+                [lessonIds]
+              )
+            : Promise.resolve({ rows: [] }),
+          lessonIds.length
+            ? query(
+                `SELECT id, lesson_id, title, file_url, is_free, price FROM notes WHERE lesson_id = ANY($1::uuid[])`,
+                [lessonIds]
+              )
+            : Promise.resolve({ rows: [] }),
+        ]);
 
-          subj.chapters = chaptersRes.rows;
-
-          for (const chap of subj.chapters) {
-            const lessonsRes = await query(
-              `SELECT id, chapter_id, title, class_date, duration, order_num as order_index, false as is_live, created_at, updated_at 
-               FROM lessons WHERE chapter_id = $1 ORDER BY order_num ASC, class_date ASC`,
-              [chap.id]
-            );
-
-            chap.lessons = lessonsRes.rows;
-            chap.dailyClasses = lessonsRes.rows; // Compatibility alias
-
-            for (const lesson of chap.lessons) {
-              // Fetch attached video
-              const videoRes = await query(
-                `SELECT id, lesson_id, title, video_url, video_provider, quality, false as is_free_preview 
-                 FROM videos WHERE lesson_id = $1 LIMIT 1`,
-                [lesson.id]
-              );
-              lesson.video = videoRes.rows.length > 0 ? videoRes.rows[0] : null;
-
-              // Fetch attached notes
-              const notesRes = await query(
-                `SELECT id, title, file_url, is_free, price FROM notes WHERE lesson_id = $1`,
-                [lesson.id]
-              );
-              lesson.notes = notesRes.rows;
-            }
-          }
-        }
+        const chaptersBySubject = new Map();
+        chapters.forEach((chapter) => {
+          chapter.lessons = [];
+          chaptersBySubject.set(chapter.id, chapter);
+          const subjectChapters = chaptersBySubject.get(chapter.subject_id) || [];
+          subjectChapters.push(chapter);
+          chaptersBySubject.set(chapter.subject_id, subjectChapters);
+        });
+        const videosByLesson = new Map(videosRes.rows.map((video) => [video.lesson_id, video]));
+        const notesByLesson = new Map();
+        notesRes.rows.forEach((note) => {
+          const list = notesByLesson.get(note.lesson_id) || [];
+          list.push(note);
+          notesByLesson.set(note.lesson_id, list);
+        });
+        lessons.forEach((lesson) => {
+          lesson.video = videosByLesson.get(lesson.id) || null;
+          lesson.videoUrl = lesson.video?.video_url || null;
+          lesson.notes = notesByLesson.get(lesson.id) || [];
+          const chapter = chaptersBySubject.get(lesson.chapter_id);
+          if (chapter) chapter.lessons.push(lesson);
+        });
 
         course.subjects = subjects.map(s => ({
           ...s,
           _id: s.id,
-          chapters: (s.chapters || []).map(ch => ({
+          chapters: (chaptersBySubject.get(s.id) || []).map(ch => ({
             ...ch,
             _id: ch.id,
             dailyClasses: (ch.lessons || []).map(l => ({
               ...l,
               _id: l.id,
+              chapterId: l.chapter_id,
+              classDate: l.class_date,
+              classNumber: l.class_number,
+              order: l.order_index,
+              order_index: l.order_index,
+              isFree: Boolean(l.is_free),
+              isProtected: l.is_protected !== undefined ? Boolean(l.is_protected) : true,
+              videoUrl: l.video_url || l.videoUrl || null,
+              videoProvider: l.video_provider || l.videoProvider || 'youtube',
             })),
             lessons: (ch.lessons || []).map(l => ({
               ...l,
               _id: l.id,
+              chapterId: l.chapter_id,
+              classDate: l.class_date,
+              classNumber: l.class_number,
+              order: l.order_index,
+              order_index: l.order_index,
+              isFree: Boolean(l.is_free),
+              isProtected: l.is_protected !== undefined ? Boolean(l.is_protected) : true,
+              videoUrl: l.video_url || l.videoUrl || null,
+              videoProvider: l.video_provider || l.videoProvider || 'youtube',
             }))
           }))
         }));
@@ -246,7 +284,7 @@ export class CourseRepository {
     const safeRating = rating !== undefined && rating !== null ? Math.max(0, Math.min(5, Number(rating))) : 4.90;
     const safePrice = Math.max(0, Number(price) || 0);
     const safeDiscountPrice = Math.max(0, Number(discountPrice) || 0);
-    const safeIsFree = Boolean(isFree || safePrice === 0);
+    const safeIsFree = isFree === true || isFree === 'true' || safePrice === 0;
 
     if (ENV.DATABASE_URL) {
       try {
@@ -372,7 +410,7 @@ export class CourseRepository {
         }
         if (updates.isFree !== undefined) {
           fields.push(`is_free = $${pIndex++}`);
-          values.push(Boolean(updates.isFree));
+          values.push(updates.isFree === true || updates.isFree === 'true');
         }
         if (updates.orderNum !== undefined || updates.order !== undefined) {
           fields.push(`order_num = $${pIndex++}`);
@@ -410,7 +448,7 @@ export class CourseRepository {
     if (updates.rating !== undefined) course.rating = Math.max(0, Math.min(5, Number(updates.rating)));
     if (updates.instructor !== undefined) course.instructor = updates.instructor;
     if (updates.language !== undefined) course.language = updates.language;
-    if (updates.isFree !== undefined) course.isFree = Boolean(updates.isFree);
+    if (updates.isFree !== undefined) course.isFree = updates.isFree === true || updates.isFree === 'true';
     if (updates.orderNum !== undefined) course.orderNum = Number(updates.orderNum);
     course.updatedAt = new Date().toISOString();
 

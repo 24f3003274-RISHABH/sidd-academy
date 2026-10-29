@@ -10,6 +10,7 @@ const ManageOrders = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [searching, setSearching] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -34,7 +35,8 @@ const ManageOrders = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchOrders();
+    setSearching(true);
+    fetchOrders().finally(() => setSearching(false));
   };
 
   const getStatusBadge = (status) => {
@@ -97,8 +99,8 @@ const ManageOrders = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <button type="submit" className="btn btn-sm btn-primary" style={{ whiteSpace: 'nowrap' }}>
-            Search
+          <button type="submit" className="btn btn-sm btn-primary" style={{ whiteSpace: 'nowrap' }} disabled={searching}>
+            {searching ? 'Searching...' : 'Search'}
           </button>
         </form>
 

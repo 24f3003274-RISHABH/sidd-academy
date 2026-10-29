@@ -37,14 +37,24 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+    };
+    window.addEventListener('sidd-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('sidd-auth-expired', handleAuthExpired);
+  }, []);
+
   const login = async (credentials) => {
     const res = await apiLogin(credentials);
     const payload = res.data?.data || res.data;
     const token = payload?.token;
     const userData = payload?.user;
-    if (token) {
-      localStorage.setItem('siddToken', token);
+    if (!token || !userData) {
+      throw new Error('Login response did not include a valid session token.');
     }
+    localStorage.setItem('siddToken', token);
     setUser(userData);
     setIsAuthenticated(true);
     return payload;
@@ -55,9 +65,10 @@ export const AuthProvider = ({ children }) => {
     const payload = res.data?.data || res.data;
     const token = payload?.token;
     const userData = payload?.user;
-    if (token) {
-      localStorage.setItem('siddToken', token);
+    if (!token || !userData) {
+      throw new Error('Registration response did not include a valid session token.');
     }
+    localStorage.setItem('siddToken', token);
     setUser(userData);
     setIsAuthenticated(true);
     return payload;

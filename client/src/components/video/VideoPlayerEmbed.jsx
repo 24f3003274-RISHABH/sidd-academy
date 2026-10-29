@@ -71,7 +71,7 @@ const VideoPlayerEmbed = ({
           position: 'relative',
           width: '100%',
           paddingTop: '56.25%', // 16:9 Aspect Ratio
-          backgroundColor: '#0f111a',
+          backgroundColor: 'var(--bg-card)',
           borderRadius: '12px',
           overflow: 'hidden',
           border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -107,7 +107,7 @@ const VideoPlayerEmbed = ({
             padding: '2rem',
             textAlign: 'center',
             zIndex: 2,
-            background: 'radial-gradient(circle, rgba(15,17,26,0.85) 0%, rgba(15,17,26,0.98) 100%)',
+            background: 'rgba(255, 255, 255, 0.92)',
           }}
         >
           <div
@@ -175,7 +175,7 @@ const VideoPlayerEmbed = ({
         position: 'relative',
         width: '100%',
         paddingTop: '56.25%', // 16:9 Aspect Ratio
-        backgroundColor: '#0a0b10',
+        backgroundColor: 'var(--bg-card)',
         borderRadius: '12px',
         overflow: 'hidden',
         boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
@@ -215,7 +215,7 @@ const VideoPlayerEmbed = ({
           }}
         >
           <FiYoutube size={48} style={{ color: '#ff0000', marginBottom: '1rem', opacity: 0.8 }} />
-          <h4 style={{ margin: '0 0 0.5rem 0', color: '#fff' }}>Video Stream Pending</h4>
+          <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Video Stream Pending</h4>
           <p style={{ margin: 0, fontSize: '0.9rem' }}>
             No YouTube video stream URL has been linked to this lesson yet.
           </p>

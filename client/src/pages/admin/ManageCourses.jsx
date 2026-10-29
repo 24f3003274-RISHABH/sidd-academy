@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getAllCourses, createCourse, updateCourse, deleteCourse } from '../../api/courseApi';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiPlus, FiLayers } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 
 const ManageCourses = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [thumbnailFile, setThumbnailFile] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '', description: '', price: 0, isFree: false,
@@ -37,6 +41,7 @@ const ManageCourses = () => {
   const openModal = (course = null) => {
     if (course) {
       setEditingId(course.id || course._id);
+      setThumbnailFile(null);
       setFormData({
         title: course.title || '',
         description: course.description || '',
@@ -49,6 +54,7 @@ const ManageCourses = () => {
       });
     } else {
       setEditingId(null);
+      setThumbnailFile(null);
       setFormData({
         title: '',
         description: '',
@@ -65,29 +71,40 @@ const ManageCourses = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
+      const payload = new FormData();
+      Object.entries(formData).forEach(([key, value]) => payload.append(key, value ?? ''));
+      if (thumbnailFile) payload.append('thumbnail', thumbnailFile);
       if (editingId) {
-        await updateCourse(editingId, formData);
+        await updateCourse(editingId, payload);
         toast.success('Course updated');
       } else {
-        await createCourse(formData);
+        await createCourse(payload);
         toast.success('Course created');
       }
       setIsModalOpen(false);
       fetchCourses();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error saving course');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (window.confirm('Are you sure you want to delete this course?')) {
+      setDeletingId(id);
       try {
         await deleteCourse(id);
         toast.success('Course deleted');
         fetchCourses();
       } catch (err) {
         toast.error('Error deleting course');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -130,10 +147,13 @@ const ManageCourses = () => {
                       <td style={{ padding: '1rem 0', fontWeight: 600 }}>{course.title}</td>
                       <td style={{ padding: '1rem 0' }}>{course.instructor || 'Faculty'}</td>
                       <td style={{ padding: '1rem 0' }}><span className="badge badge-primary">{course.level || 'All Levels'}</span></td>
-                      <td style={{ padding: '1rem 0' }}>{course.isFree ? 'Free' : formatPrice(course.price)}</td>
-                      <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => openModal(course)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Course"><FiEdit2 /></button>
-                        <button onClick={() => handleDelete(cId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Course"><FiTrash2 /></button>
+                      <td style={{ padding: '1rem 0' }}>{formatPrice(getEffectivePrice(course))}</td>
+                      <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <Link to={`/admin/curriculum?courseId=${cId}`} className="btn btn-sm btn-primary" style={{ padding: '0.35rem 0.65rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }} title="Manage Syllabus & Lessons">
+                          <FiLayers /> Curriculum
+                        </Link>
+                        <button onClick={() => openModal(course)} className="btn btn-sm btn-outline" style={{ padding: '0.45rem' }} title="Edit Course"><FiEdit2 /></button>
+                        <button onClick={() => handleDelete(cId)} disabled={deletingId === cId} className="btn btn-sm btn-danger" style={{ padding: '0.45rem' }} title="Delete Course"><FiTrash2 /></button>
                       </td>
                     </tr>
                   );
@@ -144,7 +164,7 @@ const ManageCourses = () => {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Course' : 'Add Course'} size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} closeDisabled={submitting} title={editingId ? 'Edit Course' : 'Add Course'} size="lg">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="grid-2">
             <div className="form-group">
@@ -173,7 +193,7 @@ const ManageCourses = () => {
             </div>
             <div className="form-group">
               <label className="form-label">Price</label>
-              <input type="number" className="form-input" disabled={formData.isFree} value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} />
+              <input type="number" min="0" step="0.01" inputMode="decimal" className="form-input" disabled={formData.isFree} value={formData.price} onChange={e => setFormData({...formData, price: e.target.value === '' ? '' : Number(e.target.value)})} />
             </div>
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -189,14 +209,17 @@ const ManageCourses = () => {
               <input type="text" className="form-input" placeholder="e.g. 10 Hours" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} />
             </div>
             <div className="form-group">
-              <label className="form-label">Thumbnail URL</label>
-              <input type="text" className="form-input" placeholder="https://..." value={formData.thumbnail} onChange={e => setFormData({...formData, thumbnail: e.target.value})} />
+              <label className="form-label">Course thumbnail</label>
+              <input type="file" className="form-input" accept="image/jpeg,image/png,image/webp" onChange={e => setThumbnailFile(e.target.files?.[0] || null)} />
+              <small style={{ color: 'var(--text-muted)' }}>{thumbnailFile ? thumbnailFile.name : editingId && formData.thumbnail ? 'Current thumbnail will be kept unless replaced.' : 'JPG, PNG, or WebP up to 5 MB.'}</small>
             </div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
-            <button type="submit" className="btn btn-primary">Save Course</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Course'}
+            </button>
           </div>
         </form>
       </Modal>
