@@ -4,6 +4,7 @@ import { authenticate, optionalAuth } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { createCourseValidator, updateCourseValidator, courseQueryValidator } from '../validators/course.validator.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
+import { uploadImage } from '../middleware/upload.middleware.js';
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.post(
   '/',
   authenticate,
   authorize('ADMIN'),
+  uploadImage.single('thumbnail'),
   createCourseValidator,
   validateRequest,
   courseController.createCourse
@@ -30,6 +32,7 @@ router.put(
   '/:id',
   authenticate,
   authorize('ADMIN'),
+  uploadImage.single('thumbnail'),
   updateCourseValidator,
   validateRequest,
   courseController.updateCourse

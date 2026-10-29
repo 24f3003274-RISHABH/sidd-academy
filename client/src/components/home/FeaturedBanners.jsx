@@ -90,7 +90,7 @@ const FeaturedBanners = ({ banners = [] }) => {
             minHeight: '260px',
             boxShadow: '0 20px 45px rgba(0, 0, 0, 0.45)',
             border: '1px solid rgba(255, 255, 255, 0.12)',
-            background: 'linear-gradient(135deg, #181926 0%, #0d0e15 100%)',
+            background: 'var(--gradient-primary)',
           }}
         >
           {/* Background Image with Gradient Overlay */}

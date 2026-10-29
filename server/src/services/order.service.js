@@ -55,12 +55,10 @@ export class OrderService {
         }
 
         // 3. Retrieve actual server price (never trust frontend)
-        let genuinePrice = 0;
-        if (course.discountPrice !== undefined && course.discountPrice !== null && Number(course.discountPrice) >= 0) {
-          genuinePrice = Number(course.discountPrice);
-        } else if (course.price !== undefined && course.price !== null) {
-          genuinePrice = Number(course.price);
-        }
+        const basePrice = Number(course.price || 0);
+        const discountPrice = Number(course.discountPrice || 0);
+        const hasDiscount = discountPrice > 0 && discountPrice < basePrice;
+        let genuinePrice = hasDiscount ? discountPrice : basePrice;
 
         // Handle free courses
         if (course.isFree || genuinePrice < 0) {
@@ -168,6 +166,7 @@ export class OrderService {
       keyId: paymentGatewayService.getPublicKey(),
       status: ORDER_STATUS.PENDING,
       isMock: gatewayOrder.isMock,
+      paymentMode: gatewayOrder.mode,
       items: validatedItems,
     };
   }
@@ -299,6 +298,10 @@ export class OrderService {
    */
   async cancelOrder(orderId, userId, isAdmin = false) {
     return orderRepository.cancelOrder(orderId, userId, isAdmin);
+  }
+
+  async failOrder(orderId, userId, isAdmin = false) {
+    return orderRepository.failOrder(orderId, userId, isAdmin);
   }
 }
 

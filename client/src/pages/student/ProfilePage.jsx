@@ -189,7 +189,7 @@ const ProfilePage = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><FiCalendar /> Member Since:</span>
-                <strong style={{ color: '#fff' }}>{formatDate(user?.createdAt)}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{formatDate(user?.createdAt)}</strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
@@ -201,12 +201,12 @@ const ProfilePage = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><FiBook /> Enrolled Courses:</span>
-                <strong style={{ color: '#fff' }}>{user?.purchasedCourses?.length || 0}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{user?.purchasedCourses?.length || 0}</strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><FiFileText /> Purchased Notes:</span>
-                <strong style={{ color: '#fff' }}>{user?.purchasedNotes?.length || 0}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{user?.purchasedNotes?.length || 0}</strong>
               </div>
             </div>
           </div>

@@ -167,7 +167,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                         key={note._id}
                         id={`pdf-module-${note._id}`}
                         style={{
-                          backgroundColor: '#1b1c2b',
+                          backgroundColor: 'var(--bg-card)',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                           borderRadius: '10px',
                           padding: '1.2rem',
@@ -305,7 +305,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
         >
           <div 
             style={{
-              backgroundColor: '#1b1c2b',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               width: '100%',
               maxWidth: '900px',
@@ -338,7 +338,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#2d3047' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                 title={activePdfPreview.title}

@@ -116,7 +116,7 @@ const HomePage = () => {
       {banners.length > 0 && <FeaturedBanners banners={banners} />}
 
       {/* Target Classes Selection Grid */}
-      <section style={{ backgroundColor: '#ffffff', padding: '3.5rem 0', borderBottom: '1px solid var(--border)' }}>
+      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '3.5rem 0', borderBottom: '1px solid var(--border)' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
             <h2 style={{ fontSize: '1.875rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
@@ -194,7 +194,7 @@ const HomePage = () => {
       </section>
 
       {/* YouTube Video Classes Showcase */}
-      <section style={{ backgroundColor: '#ffffff', padding: '4.5rem 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div className="container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1.25rem' }}>
             <div>
@@ -249,7 +249,7 @@ const HomePage = () => {
       </section>
 
       {/* Why Choose Section */}
-      <section style={{ backgroundColor: '#ffffff', padding: '4.5rem 0', borderTop: '1px solid var(--border)' }}>
+      <section style={{ backgroundColor: 'var(--bg-secondary)', padding: '4.5rem 0', borderTop: '1px solid var(--border)' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
             <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)' }}>विद्यार्थियों का भरोसा Sidd Academy क्यों है?</h2>

@@ -188,7 +188,7 @@ const ManageUsers = () => {
                             className={`btn btn-sm ${isActive ? 'btn-outline' : 'btn-primary'}`}
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {isActive ? 'Suspend' : 'Reactivate'}
+                            {isBusy ? 'Updating...' : isActive ? 'Suspend' : 'Reactivate'}
                           </button>
                         </td>
                       </tr>

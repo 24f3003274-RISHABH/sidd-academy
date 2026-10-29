@@ -151,7 +151,7 @@ const MyOrdersPage = () => {
               >
                 <div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    ORDER ID: <span style={{ fontFamily: 'monospace', color: '#fff' }}>{order.id || order._id}</span>
+                    ORDER ID: <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{order.id || order._id}</span>
                   </div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                     Placed on: {formatDate(order.createdAt)}

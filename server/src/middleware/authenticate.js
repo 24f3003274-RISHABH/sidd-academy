@@ -20,9 +20,12 @@ export const authenticate = async (req, res, next) => {
   try {
     let token = null;
 
-    // 1. Extract Bearer Token from HTTP Authorization Header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1].trim();
+    // 1. Extract Bearer Token from HTTP Authorization Header (case-insensitive, trims commas/spaces)
+    if (req.headers.authorization) {
+      const match = req.headers.authorization.match(/^Bearer\s+([^\s,]+)/i);
+      if (match) {
+        token = match[1].trim();
+      }
     } else if (req.cookies && req.cookies.token) {
       // Fallback: check cookie if header not provided
       token = req.cookies.token;
@@ -85,8 +88,11 @@ export const authenticate = async (req, res, next) => {
 export const optionalAuth = async (req, res, next) => {
   try {
     let token = null;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1].trim();
+    if (req.headers.authorization) {
+      const match = req.headers.authorization.match(/^Bearer\s+([^\s,]+)/i);
+      if (match) {
+        token = match[1].trim();
+      }
     }
     if (token && token !== 'undefined' && token !== 'null') {
       const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET;

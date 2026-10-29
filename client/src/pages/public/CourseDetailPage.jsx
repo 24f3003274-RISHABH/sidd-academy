@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
-import { createOrder, verifyPayment } from '../../api/paymentApi';
+import { createOrder, verifyPayment, cancelOrder, failOrder } from '../../api/orderApi';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
 import YouTubeVideoCard from '../../components/video/YouTubeVideoCard';
 import VideoModal from '../../components/video/VideoModal';
 import toast from 'react-hot-toast';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import { 
   FiClock, 
   FiVideo, 
@@ -31,6 +31,7 @@ const CourseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [purchased, setPurchased] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState('');
   const [previewVideo, setPreviewVideo] = useState(null);
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
@@ -60,7 +61,7 @@ const CourseDetailPage = () => {
 
         // Check if user already purchased or enrolled
         const courseId = fetchedCourse.id || fetchedCourse._id;
-        if (isAuthenticated && (user?.purchasedCourses?.includes(courseId) || user?.role?.toLowerCase() === 'admin')) {
+        if (fetchedCourse.isEnrolled || (isAuthenticated && (user?.purchasedCourses?.includes(courseId) || user?.role?.toLowerCase() === 'admin'))) {
           setPurchased(true);
         }
       } catch (err) {
@@ -82,9 +83,19 @@ const CourseDetailPage = () => {
   };
 
   const loadRazorpayScript = () => {
+    if (window.Razorpay) return Promise.resolve(true);
+    const existingScript = document.querySelector('script[data-razorpay-checkout]');
+    if (existingScript) {
+      return new Promise((resolve) => {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+      });
+    }
     return new Promise((resolve) => {
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.dataset.razorpayCheckout = 'true';
+      script.async = true;
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
@@ -98,6 +109,8 @@ const CourseDetailPage = () => {
     }
 
     setPaymentLoading(true);
+    setCheckoutMessage('');
+    let checkoutOpened = false;
     try {
       const courseId = course.id || course._id;
       const orderRes = await createOrder({ items: [{ itemId: courseId, itemType: 'course' }] });
@@ -113,24 +126,18 @@ const CourseDetailPage = () => {
 
       const { orderId, razorpayOrderId, amount, currency, keyId } = orderData;
 
+      if (!razorpayOrderId) {
+        throw new Error('No payment order was created. Please try again.');
+      }
+
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
-        // Fallback for sandboxed development/mock simulation if external script blocked
-        const verifyRes = await verifyPayment({
-          orderId,
-          razorpayOrderId: razorpayOrderId || `sim_rzp_${Date.now()}`,
-          razorpayPaymentId: `sim_pay_${Date.now()}`,
-          razorpaySignature: 'simulated_dev_signature',
-        });
-        toast.success('Test checkout completed! Course added to your library.');
-        setPurchased(true);
-        navigate(`/student/my-courses`);
-        return;
+        throw new Error('Razorpay checkout could not be loaded. Please check your connection and try again.');
       }
 
       const options = {
-        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-        amount: Math.round(Number(amount) * 100).toString(),
+        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
         currency: currency || 'INR',
         name: 'Sidd Academy',
         description: `Enrollment in ${course.title}`,
@@ -145,35 +152,89 @@ const CourseDetailPage = () => {
             });
             toast.success('Payment verified! Course added to your library.');
             setPurchased(true);
+            setPaymentLoading(false);
             navigate(`/student/my-courses`);
           } catch (err) {
-            toast.error(err.response?.data?.message || 'Payment verification failed');
+            setPaymentLoading(false);
+            toast.error(err.response?.data?.message || 'Payment verification failed. Please contact support.');
           }
         },
         prefill: {
           name: user?.name || '',
           email: user?.email || '',
+          contact: user?.phone || '',
         },
         theme: {
           color: '#6c63ff'
-        }
+        },
+        modal: {
+          escape: true,
+          backdropclose: false,
+        },
       };
 
       const paymentObject = new window.Razorpay(options);
+      const finishCheckout = () => {
+        setPaymentLoading(false);
+      };
+
       paymentObject.on('payment.failed', function (resp) {
+        finishCheckout();
+        failOrder(orderId).catch(() => {});
+        setCheckoutMessage('Payment was declined or failed. You can try again.');
         toast.error(`Payment failed: ${resp.error?.description || 'Transaction declined'}`);
       });
+
+      paymentObject.on('modal.ondismiss', async () => {
+        finishCheckout();
+        try {
+          await cancelOrder(orderId);
+          setCheckoutMessage('Checkout closed. You can enroll whenever you are ready.');
+          toast('Checkout closed. No payment was recorded.', { icon: 'ℹ️' });
+        } catch (err) {
+          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
+        }
+      });
+
       paymentObject.open();
+      checkoutOpened = true;
+
+      // Safety timeout guard so UI never stays stuck on Processing...
+      window.setTimeout(() => {
+        finishCheckout();
+      }, 60000);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to initiate enrollment order');
-      console.error(err);
-    } finally {
       setPaymentLoading(false);
+      // Provide meaningful error messages
+      const status = err.response?.status;
+      const serverMsg = err.response?.data?.message;
+      if (status === 401) {
+        toast.error('Your session has expired. Please log in again to enroll.');
+        navigate('/login', { state: { from: `/courses/${id}` } });
+      } else if (status === 400 && serverMsg?.includes('already enrolled')) {
+        toast.success('You are already enrolled in this course!');
+        setPurchased(true);
+      } else {
+        toast.error(serverMsg || err.message || 'Failed to initiate enrollment. Please try again.');
+      }
+      console.error('[Enroll Error]', err);
+    } finally {
+      if (!checkoutOpened) setPaymentLoading(false);
     }
   };
 
   const handleLessonPlay = (lesson, chapterTitle) => {
-    const videoUrl = lesson.videoUrl || lesson.video?.youtube_url || lesson.video?.video_url || lesson.video?.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    // Only allow free lessons to preview. Paid lessons require enrollment.
+    const lessonIsFree = lesson.isFree === true || lesson.is_free === true;
+    if (!lessonIsFree && !purchased) {
+      toast('This lecture is locked. Enroll to watch it.', { icon: '🔒' });
+      return;
+    }
+    const videoUrl = lesson.videoUrl || lesson.video?.youtube_url || lesson.video?.video_url || lesson.video?.videoUrl;
+    if (!videoUrl) {
+      toast('No video available for this lecture yet.', { icon: 'ℹ️' });
+      return;
+    }
     setPreviewVideo({
       videoUrl,
       title: lesson.title,
@@ -185,14 +246,25 @@ const CourseDetailPage = () => {
   if (loading) return <Loader fullPage />;
   if (!course) return null;
 
-  const effectivePrice = course.discountPrice !== undefined && course.discountPrice !== null ? course.discountPrice : course.price;
-  const isFree = effectivePrice === 0 || course.isFree;
+  const effectivePrice = getEffectivePrice({
+    price: course.price,
+    discountPrice: course.discountPrice,
+    isFree: course.isFree === true,
+  });
+  const isFree = effectivePrice <= 0;
+  const priceLabel = isFree ? 'Free' : formatPrice(effectivePrice);
+  const originalPrice = Number(course.price);
+  const discountedPrice = Number(course.discountPrice);
+  const hasDiscount = Number.isFinite(originalPrice)
+    && Number.isFinite(discountedPrice)
+    && discountedPrice > 0
+    && discountedPrice < originalPrice;
   const subjects = course.subjects || [];
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '5rem' }}>
       {/* Header Banner */}
-      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '3.5rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '3.5rem 0', borderBottom: '1px solid var(--border)' }}>
         <div className="container grid-2" style={{ alignItems: 'center', gap: '3rem' }}>
           <div>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
@@ -221,8 +293,8 @@ const CourseDetailPage = () => {
                 style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '10px', marginBottom: '1.5rem' }} 
               />
               <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFree ? '#43e97b' : 'var(--primary)', marginBottom: '1.5rem' }}>
-                {isFree ? 'Free' : formatPrice(effectivePrice)}
-                {course.discountPrice && course.price > course.discountPrice && (
+                {priceLabel}
+                {hasDiscount && (
                   <span style={{ fontSize: '1.1rem', textDecoration: 'line-through', color: 'var(--text-muted)', marginLeft: '0.75rem' }}>
                     {formatPrice(course.price)}
                   </span>
@@ -244,9 +316,24 @@ const CourseDetailPage = () => {
                     onClick={handleEnroll} 
                     disabled={paymentLoading}
                     className="btn btn-primary btn-full btn-lg"
+                    aria-busy={paymentLoading}
+                    style={{ position: 'relative', overflow: 'hidden' }}
                   >
-                    {paymentLoading ? 'Processing...' : isFree ? 'Enroll for Free' : 'Enroll Now'}
+                    {paymentLoading ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          width: '16px', height: '16px',
+                          border: '2px solid rgba(255,255,255,0.4)',
+                          borderTopColor: '#fff',
+                          borderRadius: '50%',
+                          display: 'inline-block',
+                          animation: 'loader-spin 0.8s linear infinite',
+                        }} />
+                        Opening Checkout…
+                      </span>
+                    ) : isFree ? 'Enroll for Free' : `Enroll — ${priceLabel}`}
                   </button>
+                  {checkoutMessage && <p role="status" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>{checkoutMessage}</p>}
                   <Link to={`/courses/${id}/watch`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                     <FiPlay /> Preview Course Lectures
                   </Link>
@@ -286,7 +373,7 @@ const CourseDetailPage = () => {
                 const chapters = subject.chapters || [];
 
                 return (
-                  <div key={subId} className="card-glass" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div key={subId} className="card-glass" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {/* Subject Header */}
                     <div 
                       onClick={() => toggleSubject(subId)}
@@ -296,8 +383,8 @@ const CourseDetailPage = () => {
                         justifyContent: 'space-between', 
                         alignItems: 'center', 
                         cursor: 'pointer',
-                        backgroundColor: 'rgba(255,255,255,0.02)',
-                        borderBottom: isSubExpanded ? '1px solid rgba(255,255,255,0.08)' : 'none'
+                        backgroundColor: 'var(--bg-muted)',
+                        borderBottom: isSubExpanded ? '1px solid var(--border)' : 'none'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -337,7 +424,7 @@ const CourseDetailPage = () => {
                             const classes = chapter.lessons || chapter.dailyClasses || [];
 
                             return (
-                              <div key={chapId} style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.04)' }}>
+                              <div key={chapId} style={{ backgroundColor: 'var(--bg-card, var(--bg-muted))', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                 <div 
                                   onClick={() => toggleChapter(chapId)}
                                   style={{ 
@@ -345,7 +432,8 @@ const CourseDetailPage = () => {
                                     display: 'flex', 
                                     justifyContent: 'space-between', 
                                     alignItems: 'center', 
-                                    cursor: 'pointer' 
+                                    cursor: 'pointer',
+                                    backgroundColor: 'var(--bg-muted)'
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -357,12 +445,15 @@ const CourseDetailPage = () => {
                                 </div>
 
                                 {isChapExpanded && (
-                                  <div style={{ padding: '0.5rem 1.25rem 1rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                  <div style={{ padding: '0.5rem 1.25rem 1rem 1.25rem', borderTop: '1px solid var(--border)' }}>
                                     {classes.length === 0 ? (
                                       <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Classes will be scheduled soon.</p>
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                        {classes.map((cls, lIdx) => (
+                                        {classes.map((cls, lIdx) => {
+                                          const lessonIsFree = cls.isFree === true || cls.is_free === true;
+                                          const isLocked = !purchased && !lessonIsFree;
+                                          return (
                                           <div 
                                             key={cls.id || cls._id || lIdx}
                                             style={{ 
@@ -371,8 +462,10 @@ const CourseDetailPage = () => {
                                               alignItems: 'center', 
                                               padding: '0.6rem 0.8rem', 
                                               borderRadius: '6px', 
-                                              backgroundColor: 'rgba(255,255,255,0.02)',
-                                              fontSize: '0.9rem'
+                                              backgroundColor: isLocked ? 'var(--bg-muted)' : 'var(--bg-card)',
+                                              border: '1px solid var(--border)',
+                                              fontSize: '0.9rem',
+                                              opacity: isLocked ? 0.75 : 1,
                                             }}
                                           >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -380,6 +473,9 @@ const CourseDetailPage = () => {
                                               <span style={{ fontWeight: 500 }}>{cls.title}</span>
                                               {cls.isLive && (
                                                 <span className="badge badge-danger" style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>LIVE</span>
+                                              )}
+                                              {lessonIsFree && !purchased && (
+                                                <span style={{ fontSize: '0.7rem', color: '#43e97b', fontWeight: 600, border: '1px solid #43e97b', borderRadius: '4px', padding: '0.05rem 0.35rem' }}>FREE</span>
                                               )}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
@@ -389,16 +485,31 @@ const CourseDetailPage = () => {
                                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                                 <FiClock /> {cls.duration || 60}m
                                               </span>
-                                              <button 
-                                                onClick={() => handleLessonPlay(cls, chapter.title)}
-                                                className="btn btn-secondary"
-                                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                                              >
-                                                <FiPlay size={12} /> Watch
-                                              </button>
+                                              {isLocked ? (
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                                  <FiLock size={13} /> Locked
+                                                </span>
+                                              ) : purchased ? (
+                                                <Link 
+                                                  to={`/courses/${id}/watch?lessonId=${cls.id || cls._id}`}
+                                                  className="btn btn-primary"
+                                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                >
+                                                  <FiPlay size={12} /> Play in Classroom
+                                                </Link>
+                                              ) : (
+                                                <button 
+                                                  onClick={() => handleLessonPlay(cls, chapter.title)}
+                                                  className="btn btn-secondary"
+                                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                >
+                                                  <FiPlay size={12} /> Watch Preview
+                                                </button>
+                                              )}
                                             </div>
                                           </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     )}
                                   </div>

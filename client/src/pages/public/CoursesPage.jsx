@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
-import { formatPrice, debounce } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
 import { FiSearch, FiClock, FiBook, FiStar, FiFilter, FiArrowRight } from 'react-icons/fi';
 
@@ -36,32 +36,29 @@ const CoursesPage = () => {
   };
 
   useEffect(() => {
-    fetchCourses(search, level, page);
-  }, [page]);
+    const timer = setTimeout(() => {
+      fetchCourses(search, level, page);
+    }, search ? 400 : 0);
+
+    return () => clearTimeout(timer);
+  }, [page, search, level]);
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearch(val);
     setPage(1);
-    debouncedSearch(val, level);
   };
-
-  const debouncedSearch = debounce((s, l) => {
-    fetchCourses(s, l, 1);
-  }, 400);
 
   const handleLevelChange = (e) => {
     const val = e.target.value;
     setLevel(val);
     setPage(1);
-    fetchCourses(search, val, 1);
   };
 
   const clearFilters = () => {
     setSearch('');
     setLevel('');
     setPage(1);
-    fetchCourses('', '', 1);
   };
 
   return (
@@ -115,12 +112,17 @@ const CoursesPage = () => {
       </div>
 
       {/* Results Content */}
-      {loading ? (
+      {loading && courses.length === 0 ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem 0' }}>
           <Loader />
         </div>
       ) : (
         <>
+          {loading && courses.length > 0 && (
+            <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              <Loader size={18} label="Updating courses" /> Updating results...
+            </div>
+          )}
           {courses.length === 0 ? (
             <div className="card-glass" style={{ textAlign: 'center', padding: '4rem 2rem', borderRadius: '16px' }}>
               <FiFilter style={{ fontSize: '3rem', color: 'var(--text-muted)', marginBottom: '1rem' }} />
@@ -137,34 +139,41 @@ const CoursesPage = () => {
               <div className="grid-3" style={{ gap: '2rem', marginBottom: '3rem' }}>
                 {courses.map(course => {
                   const id = course.id || course._id;
-                  const price = course.discountPrice !== undefined && course.discountPrice !== null ? course.discountPrice : course.price;
-                  const isFree = price === 0 || course.isFree;
+                  const price = getEffectivePrice(course);
+                  const isFree = price <= 0;
+                  const priceLabel = isFree ? 'Free' : formatPrice(price);
+                  const originalPrice = Number(course.price);
+                  const discountedPrice = Number(course.discountPrice);
+                  const hasDiscount = Number.isFinite(originalPrice)
+                    && Number.isFinite(discountedPrice)
+                    && discountedPrice > 0
+                    && discountedPrice < originalPrice;
 
                   return (
-                    <div key={id} className="course-card card-glass" style={{ display: 'flex', flexDirection: 'column', borderRadius: '14px', overflow: 'hidden' }}>
-                      <div style={{ position: 'relative' }}>
+                    <article key={id} className="course-card card-glass">
+                      <div className="course-card-media">
                         <img 
                           src={course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'} 
                           alt={course.title} 
-                          style={{ width: '100%', height: '190px', objectFit: 'cover' }} 
+                          className="course-card-image"
                         />
                         <span 
                           className="badge badge-primary" 
-                          style={{ position: 'absolute', top: '12px', left: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+                          style={{ position: 'absolute', top: '12px', left: '12px' }}
                         >
                           {course.level || 'Class 10'}
                         </span>
                         {course.rating && (
                           <span 
                             className="badge badge-warning" 
-                            style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffb703', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                            style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                           >
                             <FiStar size={12} fill="#ffb703" /> {course.rating.toFixed(1)}
                           </span>
                         )}
                       </div>
 
-                      <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <div className="course-card-body">
                         <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.6rem', lineHeight: 1.4 }}>
                           {course.title}
                         </h3>
@@ -174,7 +183,7 @@ const CoursesPage = () => {
                             : course.description}
                         </p>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+                        <div className="course-card-meta">
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                             <FiClock /> {course.duration || '6 Months'}
                           </span>
@@ -183,12 +192,12 @@ const CoursesPage = () => {
                           )}
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
+                        <div className="course-card-footer">
                           <div>
                             <span style={{ fontWeight: 800, color: isFree ? '#43e97b' : 'var(--primary)', fontSize: '1.3rem' }}>
-                              {isFree ? 'Free' : formatPrice(price)}
+                              {priceLabel}
                             </span>
-                            {course.discountPrice && course.price > course.discountPrice && (
+                            {hasDiscount && (
                               <span style={{ fontSize: '0.85rem', textDecoration: 'line-through', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
                                 {formatPrice(course.price)}
                               </span>
@@ -203,7 +212,7 @@ const CoursesPage = () => {
                           </Link>
                         </div>
                       </div>
-                    </div>
+                    </article>
                   );
                 })}
               </div>

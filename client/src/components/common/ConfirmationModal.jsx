@@ -22,46 +22,16 @@ const ConfirmationModal = ({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '1rem',
-      }}
+      className="confirmation-overlay"
       onClick={onCancel}
     >
       <div
-        className="card-glass"
-        style={{
-          width: '100%',
-          maxWidth: '460px',
-          backgroundColor: '#131728',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: '16px',
-          padding: '2rem',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-        }}
+        className="confirmation-dialog card"
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.5rem' }}>
           <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              backgroundColor: confirmVariant === 'danger' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(108, 99, 255, 0.15)',
-              color: confirmVariant === 'danger' ? '#ef4444' : 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              fontSize: '1.25rem',
-            }}
+            className={`confirmation-icon ${confirmVariant === 'danger' ? 'is-danger' : 'is-neutral'}`}
           >
             {confirmVariant === 'danger' ? <FiAlertTriangle /> : <FiCheck />}
           </div>

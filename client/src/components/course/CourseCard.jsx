@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiClock, FiBook, FiStar, FiUsers } from 'react-icons/fi';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 
 const CourseCard = ({ course }) => {
   const {
     _id,
+    id,
     title,
     instructor,
     thumbnail,
@@ -18,18 +19,22 @@ const CourseCard = ({ course }) => {
     rating,
     enrolledCount,
   } = course;
+  const courseId = _id || id;
+  const effectivePrice = getEffectivePrice({ price, discountPrice, isFree: isFree === true });
+  const originalPrice = Number(price);
+  const discountedPrice = Number(discountPrice);
+  const isFreeCourse = effectivePrice <= 0;
+  const hasDiscount = Number.isFinite(originalPrice)
+    && Number.isFinite(discountedPrice)
+    && discountedPrice > 0
+    && discountedPrice < originalPrice;
 
   return (
     <div 
-      id={`course-card-${_id}`}
-      className="card-glass" 
+      id={`course-card-${courseId}`}
+      className="course-card card-glass" 
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: '14px',
-        overflow: 'hidden',
         transition: 'transform 0.2s ease, border-color 0.2s ease',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-4px)';
@@ -37,14 +42,14 @@ const CourseCard = ({ course }) => {
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        e.currentTarget.style.borderColor = 'var(--border)';
       }}
     >
-      <div style={{ position: 'relative', width: '100%', height: '180px', backgroundColor: '#0d0f18' }}>
+      <div className="course-card-media">
         <img 
           src={thumbnail || 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80'} 
           alt={title}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className="course-card-image"
         />
         <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '0.4rem' }}>
           <span className="badge badge-primary" style={{ fontSize: '0.75rem', fontWeight: 600 }}>{level}</span>
@@ -52,13 +57,13 @@ const CourseCard = ({ course }) => {
         </div>
       </div>
 
-      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1, gap: '0.75rem' }}>
+      <div className="course-card-body" style={{ gap: '0.75rem' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>
           {title}
         </h3>
         
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-          Instructor: <span style={{ color: '#fff' }}>{instructor}</span>
+          Instructor: <span style={{ color: 'var(--text-primary)' }}>{instructor}</span>
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 'auto' }}>
@@ -79,19 +84,19 @@ const CourseCard = ({ course }) => {
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', marginTop: '0.25rem' }}>
+        <div className="course-card-footer" style={{ marginTop: '0.25rem' }}>
           <div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isFree ? '#43e97b' : 'var(--primary)' }}>
-              {isFree ? 'Free' : formatPrice(discountPrice || price)}
+            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isFreeCourse ? '#43e97b' : 'var(--primary)' }}>
+              {isFreeCourse ? 'Free' : formatPrice(effectivePrice)}
             </span>
-            {!isFree && discountPrice && (
+            {hasDiscount && (
               <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
                 {formatPrice(price)}
               </span>
             )}
           </div>
 
-          <Link to={`/courses/${_id}`} className="btn btn-sm btn-primary">
+          <Link to={`/courses/${courseId}`} className="btn btn-sm btn-primary">
             View Details
           </Link>
         </div>

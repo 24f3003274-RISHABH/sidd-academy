@@ -48,10 +48,14 @@ export class LessonService {
     return await lessonRepository.create({
       chapterId,
       title: data.title,
+      description: data.description || data.content || '',
       classDate: data.classDate || new Date().toISOString(),
       duration: Number(data.duration) || 60,
       order,
       isLive: Boolean(data.isLive),
+      isFree: data.isFree === true || data.isFree === 'true',
+      isProtected: data.isProtected !== undefined ? data.isProtected !== false && data.isProtected !== 'false' : true,
+      classNumber: Number(data.classNumber) || order || 1,
       videoUrl: data.videoUrl || '',
       videoProvider: data.videoProvider || 'youtube',
     });

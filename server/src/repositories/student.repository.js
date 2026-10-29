@@ -3,6 +3,8 @@ import ENV from '../config/env.js';
 import { mockData } from '../data/mockStore.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 /**
  * Student Repository
  * Handles database operations for student dashboard, enrollments, course progress, and activities
@@ -14,7 +16,7 @@ export class StudentRepository {
   async getEnrolledCourses(userId) {
     if (!userId) return [];
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const sql = `
           SELECT 
@@ -108,7 +110,7 @@ export class StudentRepository {
   async getPurchasedNotes(userId) {
     if (!userId) return [];
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const sql = `
           SELECT 
@@ -182,7 +184,7 @@ export class StudentRepository {
    * Get recent daily classes from enrolled courses
    */
   async getRecentClasses(userId) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const sql = `
           SELECT 
@@ -268,7 +270,7 @@ export class StudentRepository {
    * Get available catalog courses (not yet enrolled)
    */
   async getAvailableCourses(userId, limit = 4) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const sql = `
           SELECT c.*, 
@@ -332,7 +334,7 @@ export class StudentRepository {
   async getCourseProgress(userId, courseId) {
     if (!userId || !courseId) return { completedLessonIds: [], progressPercentage: 0 };
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const lpSql = `SELECT lesson_id FROM lesson_progress WHERE user_id = $1 AND course_id = $2 AND is_completed = true`;
         const lpRes = await query(lpSql, [userId, courseId]);
@@ -363,7 +365,7 @@ export class StudentRepository {
    * Mark or toggle lesson completion status and recalculate course progress
    */
   async toggleLessonProgress(userId, courseId, lessonId, isCompleted = true) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId) && isUuid(courseId) && isUuid(lessonId)) {
       try {
         const id = uuidv4();
         const upsertSql = `

@@ -20,7 +20,7 @@ export const getAllCourses = async (req, res, next) => {
  */
 export const getCourseById = async (req, res, next) => {
   try {
-    const course = await courseService.getCourseById(req.params.id, true);
+    const course = await courseService.getCourseById(req.params.id, true, req.user);
     return sendSuccess(res, 200, 'Course fetched successfully', { course });
   } catch (error) {
     next(error);
@@ -33,7 +33,7 @@ export const getCourseById = async (req, res, next) => {
  */
 export const getCourseContent = async (req, res, next) => {
   try {
-    const course = await courseService.getCourseById(req.params.id, true);
+    const course = await courseService.getCourseById(req.params.id, true, req.user);
     return sendSuccess(res, 200, 'Course content fetched successfully', {
       courseId: course.id,
       title: course.title,
@@ -50,7 +50,9 @@ export const getCourseContent = async (req, res, next) => {
  */
 export const createCourse = async (req, res, next) => {
   try {
-    const course = await courseService.createCourse(req.body);
+    const data = { ...req.body };
+    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    const course = await courseService.createCourse(data);
     return sendSuccess(res, 201, 'Course created successfully', { course });
   } catch (error) {
     next(error);
@@ -63,7 +65,9 @@ export const createCourse = async (req, res, next) => {
  */
 export const updateCourse = async (req, res, next) => {
   try {
-    const course = await courseService.updateCourse(req.params.id, req.body);
+    const data = { ...req.body };
+    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    const course = await courseService.updateCourse(req.params.id, data);
     return sendSuccess(res, 200, 'Course updated successfully', { course });
   } catch (error) {
     next(error);

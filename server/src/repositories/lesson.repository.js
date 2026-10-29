@@ -16,7 +16,7 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
+          SELECT l.id, l.chapter_id, l.title, l.description, l.class_date, l.duration, l.class_number, l.is_free, l.is_protected, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
                  v.id as video_id, v.title as video_title, v.video_url, v.video_provider, false as is_free_preview
           FROM lessons l
           LEFT JOIN videos v ON v.lesson_id = l.id
@@ -45,7 +45,7 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          SELECT l.id, l.chapter_id, l.title, l.class_date, l.duration, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
+          SELECT l.id, l.chapter_id, l.title, l.description, l.class_date, l.duration, l.class_number, l.is_free, l.is_protected, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
                  v.id as video_id, v.title as video_title, v.video_url, v.video_provider, false as is_free_preview
           FROM lessons l
           LEFT JOIN videos v ON v.lesson_id = l.id
@@ -68,7 +68,7 @@ export class LessonRepository {
   /**
    * Create lesson
    */
-  async create({ chapterId, title, classDate, duration = 60, order = 0, isLive = false, videoUrl = '', videoProvider = 'youtube' }) {
+  async create({ chapterId, title, description = '', classDate, duration = 60, order = 0, classNumber = 1, isLive = false, isFree = false, isProtected = true, videoUrl = '', videoProvider = 'youtube' }) {
     const id = uuidv4();
     const dateVal = classDate ? new Date(classDate).toISOString() : new Date().toISOString();
     const ord = Number(order) || 0;
@@ -76,11 +76,11 @@ export class LessonRepository {
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
-          INSERT INTO lessons (id, chapter_id, title, class_date, duration, order_num, order_index, is_free, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $6, false, NOW(), NOW())
+          INSERT INTO lessons (id, chapter_id, title, description, class_date, class_number, duration, order_num, order_index, is_free, is_protected, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, chapterId, title.trim(), dateVal, `${duration} mins`, ord]);
+        const res = await query(sql, [id, chapterId, title.trim(), description.trim(), dateVal, Number(classNumber) || 1, `${duration} mins`, ord, Boolean(isFree), Boolean(isProtected)]);
         const createdLesson = res.rows[0];
 
         if (videoUrl) {
@@ -105,11 +105,15 @@ export class LessonRepository {
       chapter: chapterId,
       chapterId,
       title: title.trim(),
+      description: description.trim(),
       classDate: dateVal,
+      classNumber: Number(classNumber) || 1,
       duration: Number(duration) || 60,
       order: ord,
       order_index: ord,
       isLive: Boolean(isLive),
+      isFree: Boolean(isFree),
+      isProtected: Boolean(isProtected),
       videoUrl: videoUrl.trim(),
       videoProvider: videoProvider || 'youtube',
       createdAt: new Date().toISOString(),
@@ -133,6 +137,10 @@ export class LessonRepository {
           fields.push(`title = $${pIndex++}`);
           values.push(updates.title.trim());
         }
+        if (updates.description !== undefined || updates.content !== undefined) {
+          fields.push(`description = $${pIndex++}`);
+          values.push(String(updates.description ?? updates.content ?? '').trim());
+        }
         if (updates.classDate !== undefined) {
           fields.push(`class_date = $${pIndex++}`);
           values.push(new Date(updates.classDate).toISOString());
@@ -151,6 +159,18 @@ export class LessonRepository {
         if (updates.isLive !== undefined) {
           fields.push(`is_live = $${pIndex++}`);
           values.push(Boolean(updates.isLive));
+        }
+        if (updates.classNumber !== undefined) {
+          fields.push(`class_number = $${pIndex++}`);
+          values.push(Number(updates.classNumber) || 1);
+        }
+        if (updates.isFree !== undefined) {
+          fields.push(`is_free = $${pIndex++}`);
+          values.push(Boolean(updates.isFree));
+        }
+        if (updates.isProtected !== undefined) {
+          fields.push(`is_protected = $${pIndex++}`);
+          values.push(Boolean(updates.isProtected));
         }
         fields.push(`updated_at = NOW()`);
 
@@ -181,10 +201,14 @@ export class LessonRepository {
     if (!dc) return null;
 
     if (updates.title !== undefined) dc.title = updates.title.trim();
+    if (updates.description !== undefined || updates.content !== undefined) dc.description = String(updates.description ?? updates.content ?? '').trim();
     if (updates.classDate !== undefined) dc.classDate = new Date(updates.classDate).toISOString();
     if (updates.duration !== undefined) dc.duration = Number(updates.duration);
     if (updates.order !== undefined) dc.order = Number(updates.order);
     if (updates.isLive !== undefined) dc.isLive = Boolean(updates.isLive);
+    if (updates.classNumber !== undefined) dc.classNumber = Number(updates.classNumber) || 1;
+    if (updates.isFree !== undefined) dc.isFree = Boolean(updates.isFree);
+    if (updates.isProtected !== undefined) dc.isProtected = Boolean(updates.isProtected);
     if (updates.videoUrl !== undefined) dc.videoUrl = updates.videoUrl.trim();
     dc.updatedAt = new Date().toISOString();
 
@@ -227,17 +251,24 @@ export class LessonRepository {
     if (!l) return null;
     const id = l.id || l._id;
     const chapterId = l.chapter_id || l.chapterId || l.chapter;
+    const rawDuration = l.duration !== undefined ? l.duration : 60;
+    const parsedDuration = Number.parseInt(rawDuration, 10);
     return {
       id,
       _id: id,
       chapterId,
       chapter: chapterId,
       title: l.title,
+      description: l.description || '',
+      content: l.description || l.content || '',
+      classNumber: l.class_number !== undefined ? Number(l.class_number) : (l.classNumber !== undefined ? Number(l.classNumber) : 1),
       classDate: l.class_date || l.classDate || new Date().toISOString(),
-      duration: l.duration !== undefined ? Number(l.duration) : 60,
+      duration: Number.isFinite(parsedDuration) ? parsedDuration : 60,
       order: l.order_index !== undefined ? Number(l.order_index) : (l.order !== undefined ? Number(l.order) : 0),
       order_index: l.order_index !== undefined ? Number(l.order_index) : (l.order !== undefined ? Number(l.order) : 0),
       isLive: l.is_live !== undefined ? Boolean(l.is_live) : (l.isLive !== undefined ? Boolean(l.isLive) : false),
+      isFree: l.is_free !== undefined ? Boolean(l.is_free) : Boolean(l.isFree),
+      isProtected: l.is_protected !== undefined ? Boolean(l.is_protected) : (l.isProtected !== undefined ? Boolean(l.isProtected) : true),
       videoUrl: l.video_url || l.videoUrl || '',
       videoProvider: l.video_provider || l.videoProvider || 'youtube',
       createdAt: l.created_at || l.createdAt,

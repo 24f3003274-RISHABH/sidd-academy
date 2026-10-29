@@ -1,6 +1,14 @@
 export const formatPrice = (amount) => {
-  if (amount === 0) return 'Free';
-  return `₹${amount}`;
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) return 'Free';
+  return `₹${numericAmount.toLocaleString('en-IN')}`;
+};
+
+export const getEffectivePrice = (resource) => {
+  if (!resource || resource.isFree) return 0;
+  const price = Number(resource.price) || 0;
+  const discountPrice = Number(resource.discountPrice);
+  return discountPrice > 0 && discountPrice < price ? discountPrice : price;
 };
 
 export const formatDate = (date) => {

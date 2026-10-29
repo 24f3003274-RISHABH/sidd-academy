@@ -1,4 +1,5 @@
 import { courseRepository } from '../repositories/course.repository.js';
+import { orderRepository } from '../repositories/order.repository.js';
 import { AppError } from '../utils/apiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 
@@ -44,7 +45,7 @@ export class CourseService {
   /**
    * Get single course details by ID or Slug
    */
-  async getCourseById(id, withHierarchy = true) {
+  async getCourseById(id, withHierarchy = true, user = null) {
     if (!id) {
       throw new AppError('Course ID or slug is required', HTTP_STATUS.BAD_REQUEST);
     }
@@ -56,6 +57,18 @@ export class CourseService {
     if (!course) {
       throw new AppError('Course not found', HTTP_STATUS.NOT_FOUND);
     }
+
+    const userId = user?.id || user?._id;
+    const isAdmin = (user?.role || '').toLowerCase() === 'admin';
+    const price = Number(course.price) || 0;
+    const discountPrice = Number(course.discountPrice) || 0;
+    const effectivePrice = discountPrice > 0 && discountPrice < price ? discountPrice : price;
+    const isActuallyFree = effectivePrice <= 0;
+    course.isEnrolled = Boolean(
+      isActuallyFree ||
+      isAdmin ||
+      (userId && await orderRepository.checkUserEnrollment(userId, course.id))
+    );
 
     return course;
   }
@@ -87,6 +100,7 @@ export class CourseService {
       slug,
       price,
       discountPrice,
+      isFree: data.isFree === true || data.isFree === 'true' || price === 0,
     });
   }
 
@@ -100,6 +114,9 @@ export class CourseService {
     }
 
     const updates = { ...data };
+    if (updates.isFree !== undefined) {
+      updates.isFree = updates.isFree === true || updates.isFree === 'true';
+    }
 
     if (updates.title && updates.title !== existing.title) {
       const baseSlug = this.generateSlug(updates.title);
