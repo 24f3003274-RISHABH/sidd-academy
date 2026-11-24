@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
 import Loader from '../../components/common/Loader';
 import toast from 'react-hot-toast';
+import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import {
   formatPrice,
   getEffectivePrice,

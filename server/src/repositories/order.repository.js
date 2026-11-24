@@ -830,6 +830,9 @@ export class OrderRepository {
     if (order.status === ORDER_STATUS.FAILED) {
       return order;
     }
+    if (order.status === ORDER_STATUS.FAILED) {
+      return order;
+    }
 
     if (ENV.DATABASE_URL && isUuid(orderId)) {
       try {

@@ -44,8 +44,8 @@ class PaymentGatewayService {
    * Get public Razorpay Key ID for client checkout initialization
    */
   getPublicKey() {
-    if (this.isConfigured()) {
-      return ENV.RAZORPAY_KEY_ID;
+    if (!this.isConfigured()) {
+      throw new Error('Razorpay credentials are not configured on the server.');
     }
     if (this.isProduction()) {
       throw new Error('Razorpay credentials are not configured on the production server.');
