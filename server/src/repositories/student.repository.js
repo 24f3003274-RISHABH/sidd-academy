@@ -146,7 +146,11 @@ export class StudentRepository {
       try {
         const sql = `
           SELECT DISTINCT ON (n.id)
-            n.*,
+            n.id, n.title, n.description, n.course_id, n.subject_id, n.chapter_id, n.lesson_id,
+            n.file_url, n.file_name, n.file_size, n.thumbnail, n.price, n.is_free, n.is_published,
+            n.page_count, n.download_count, n.drive_file_id, n.drive_folder_id, n.drive_view_url,
+            n.drive_preview_url, n.local_file_url, n.storage_provider, n.file_mime,
+            (n.file_data IS NOT NULL) AS has_file_data, n.created_at, n.updated_at,
             COALESCE(np.purchased_at, e.enrolled_at, n.created_at) as purchased_at,
             COALESCE(np.price_paid, n.price, 0) as price_paid,
             COALESCE(s.name, s.title, 'Academic Material') as subject_title,

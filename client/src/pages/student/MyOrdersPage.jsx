@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { getMyOrders, retryOrder, verifyPayment, cancelOrder, failOrder, getPaymentKey } from '../../api/orderApi';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getMyOrders, retryOrder } from '../../api/orderApi';
 import { clearGetCache } from '../../api/axiosInstance';
 import { useAuth } from '../../hooks/useAuth';
 import StudentLayout from '../../components/student/StudentLayout';
+import PaymentStatusBanner from '../../components/common/PaymentStatusBanner';
 import { SkeletonCard } from '../../components/common/SkeletonLoader';
 import { formatPrice, formatDate } from '../../utils/helpers';
+import launchRazorpayCheckout from '../../utils/razorpayCheckout';
 import toast from 'react-hot-toast';
 import {
   FiShoppingBag,
@@ -27,6 +29,8 @@ const MyOrdersPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryingOrderId, setRetryingOrderId] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const fetchOrders = async () => {
     try {
@@ -47,31 +51,22 @@ const MyOrdersPage = () => {
     fetchOrders();
   }, []);
 
-  const loadRazorpayScript = () => {
-    if (window.Razorpay) return Promise.resolve(true);
-    const existingScript = document.querySelector('script[data-razorpay-checkout]');
-    if (existingScript) {
-      return new Promise((resolve) => {
-        existingScript.addEventListener('load', () => resolve(true), { once: true });
-        existingScript.addEventListener('error', () => resolve(false), { once: true });
-      });
-    }
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.dataset.razorpayCheckout = 'true';
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === 'ALL') return orders;
+    return orders.filter((order) => {
+      const s = (order.status || order.paymentStatus || '').toUpperCase();
+      if (statusFilter === 'PAID') return s === 'PAID' || s === 'COMPLETED' || s === 'SUCCESS';
+      if (statusFilter === 'PENDING') return s === 'PENDING' || s === 'CREATED';
+      return s === statusFilter;
     });
-  };
+  }, [orders, statusFilter]);
 
   const handleRetryPayment = async (order) => {
     const targetOrderId = order.id || order._id;
     if (!targetOrderId || retryingOrderId) return;
 
     setRetryingOrderId(targetOrderId);
+    setPaymentStatus(null);
     let checkoutOpened = false;
     try {
       const res = await retryOrder(targetOrderId);
@@ -86,93 +81,87 @@ const MyOrdersPage = () => {
         return;
       }
 
-      const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
-
-      let resolvedKey = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
-      if (!resolvedKey) {
-        try {
-          const keyRes = await getPaymentKey();
-          resolvedKey = (keyRes.data?.data?.key || keyRes.data?.key || '').trim();
-        } catch {
-          resolvedKey = '';
-        }
-      }
-
-      if (isMock || !razorpayOrderId || razorpayOrderId.startsWith('order_mock_') || !resolvedKey) {
-        throw new Error(
-          'Razorpay payment gateway keys are not configured yet. Please add your live RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env.'
-        );
-      }
-
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
-        throw new Error('Razorpay checkout could not be loaded. Please check your connection and try again.');
-      }
-
       const itemTitles = (order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Course / Study Note';
 
-      const options = {
-        key: resolvedKey,
-        amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
-        currency: currency || 'INR',
-        name: 'Sidd Academy',
+      await launchRazorpayCheckout({
+        orderData,
+        fallbackOrderId: targetOrderId,
         description: `Order Payment: ${itemTitles}`,
-        order_id: razorpayOrderId,
-        handler: async (response) => {
-          try {
-            await verifyPayment({
-              orderId: orderId || targetOrderId,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            clearGetCache();
-            if (refreshUser) await refreshUser();
-            toast.success('Payment verified! Access has been unlocked.');
-            setRetryingOrderId(null);
-            fetchOrders();
-          } catch (err) {
-            setRetryingOrderId(null);
-            toast.error(err.response?.data?.message || 'Payment verification failed.');
-          }
+        user,
+        refreshUser,
+        onVerifying: ({ orderId, razorpayPaymentId }) => {
+          setPaymentStatus({
+            status: 'verifying',
+            title: 'Verifying Your Payment…',
+            message: `Confirming payment for ${itemTitles}.`,
+            orderId,
+            paymentId: razorpayPaymentId,
+            order,
+          });
         },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || '',
-        },
-        theme: { color: '#2563eb' },
-        modal: {
-          escape: true,
-          backdropclose: false,
-        },
-      };
-
-      const paymentObject = new window.Razorpay(options);
-      const finishRetry = () => setRetryingOrderId(null);
-
-      paymentObject.on('payment.failed', (resp) => {
-        finishRetry();
-        failOrder(orderId || targetOrderId).finally(() => fetchOrders());
-        toast.error(`Payment failed: ${resp.error?.description || 'Transaction declined'}`);
-      });
-
-      paymentObject.on('modal.ondismiss', async () => {
-        finishRetry();
-        try {
-          await cancelOrder(orderId || targetOrderId);
-          toast('Checkout closed. You can retry payment anytime.', { icon: 'ℹ️' });
-        } finally {
+        onSuccess: ({ orderId }) => {
+          setPaymentStatus({
+            status: 'success',
+            title: 'Payment Verified!',
+            message: `Access to ${itemTitles} has been unlocked on your account.`,
+            orderId,
+          });
+          toast.success('Payment verified! Access has been unlocked.');
           fetchOrders();
-        }
+        },
+        onFailed: ({ orderId, description, paymentId, modalClosed }) => {
+          setPaymentStatus({
+            status: 'failed',
+            title: 'Payment Failed',
+            message: description || 'Transaction was declined. You can retry with another payment method.',
+            orderId,
+            paymentId,
+            order,
+          });
+          if (!modalClosed) {
+            toast.error(`Payment failed: ${description || 'Transaction declined'}`);
+          }
+          fetchOrders();
+        },
+        onCancelled: ({ orderId, message }) => {
+          setPaymentStatus({
+            status: 'cancelled',
+            title: 'Checkout Cancelled',
+            message: message || 'Checkout was closed before payment. No amount was deducted.',
+            orderId,
+            order,
+          });
+          toast('Checkout closed. You can retry payment anytime.', { icon: 'ℹ️' });
+          fetchOrders();
+        },
+        onVerificationError: ({ orderId, razorpayPaymentId, message }) => {
+          setPaymentStatus({
+            status: 'verification_error',
+            title: 'Payment Verification Issue',
+            message,
+            orderId,
+            paymentId: razorpayPaymentId,
+            order,
+          });
+          toast.error(message);
+          fetchOrders();
+        },
+        onDone: () => {
+          setRetryingOrderId(null);
+        },
       });
-
-      paymentObject.open();
       checkoutOpened = true;
-      window.setTimeout(finishRetry, 60000);
     } catch (err) {
       setRetryingOrderId(null);
-      toast.error(err.response?.data?.message || err.message || 'Could not initiate payment retry');
+      const msg = err.response?.data?.message || err.message || 'Could not initiate payment retry';
+      setPaymentStatus({
+        status: 'failed',
+        title: 'Could Not Restart Checkout',
+        message: msg,
+        orderId: targetOrderId,
+        order,
+      });
+      toast.error(msg);
     } finally {
       if (!checkoutOpened) setRetryingOrderId(null);
     }
@@ -261,10 +250,66 @@ const MyOrdersPage = () => {
         </div>
       )}
 
-      {/* Orders List */}
+      {/* Live Payment Status Banner */}
+      {paymentStatus && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <PaymentStatusBanner
+            status={paymentStatus.status}
+            title={paymentStatus.title}
+            message={paymentStatus.message}
+            orderId={paymentStatus.orderId}
+            paymentId={paymentStatus.paymentId}
+            showOrdersLink={false}
+            retrying={Boolean(retryingOrderId)}
+            onRetry={
+              paymentStatus.order && (paymentStatus.status === 'failed' || paymentStatus.status === 'cancelled')
+                ? () => handleRetryPayment(paymentStatus.order)
+                : undefined
+            }
+            retryLabel={paymentStatus.status === 'failed' ? 'Retry Payment' : 'Resume Checkout'}
+            onDismiss={() => setPaymentStatus(null)}
+          />
+        </div>
+      )}
+
+      {/* Status Filter Pills */}
       {!loading && !error && orders.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+          {[
+            { key: 'ALL', label: `All (${orders.length})` },
+            { key: 'PAID', label: 'Paid' },
+            { key: 'PENDING', label: 'Pending' },
+            { key: 'FAILED', label: 'Failed' },
+            { key: 'CANCELLED', label: 'Cancelled' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              className={`btn btn-sm ${statusFilter === tab.key ? 'btn-primary' : 'btn-outline'}`}
+              style={{ borderRadius: '999px', padding: '0.32rem 0.85rem', fontSize: '0.8rem' }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Orders List */}
+      {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
+        <div className="card-glass" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '14px' }}>
+          <p style={{ color: 'var(--text-muted)', margin: '0 0 0.75rem 0' }}>
+            No orders found with status <strong>{statusFilter}</strong>.
+          </p>
+          <button type="button" onClick={() => setStatusFilter('ALL')} className="btn btn-sm btn-outline">
+            Show All Orders
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && filteredOrders.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {orders.map((order) => {
+          {filteredOrders.map((order) => {
             const ordId = order.id || order._id;
             const rawStatus = (order.status || order.paymentStatus || '').toUpperCase();
             const isPaid = rawStatus === 'PAID' || rawStatus === 'COMPLETED' || rawStatus === 'SUCCESS';
@@ -356,6 +401,31 @@ const MyOrdersPage = () => {
                     );
                   })}
                 </div>
+
+                {/* Failure / Cancellation Explanation */}
+                {!isPaid && (rawStatus === 'FAILED' || rawStatus === 'CANCELLED') && (
+                  <div
+                    style={{
+                      marginBottom: '0.85rem',
+                      padding: '0.65rem 0.9rem',
+                      borderRadius: '8px',
+                      backgroundColor: rawStatus === 'FAILED' ? '#fef2f2' : '#fffbeb',
+                      border: `1px solid ${rawStatus === 'FAILED' ? '#fecaca' : '#fde68a'}`,
+                      color: rawStatus === 'FAILED' ? '#991b1b' : '#92400e',
+                      fontSize: '0.82rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    {rawStatus === 'FAILED' ? <FiAlertCircle size={15} /> : <FiXCircle size={15} />}
+                    <span>
+                      {rawStatus === 'FAILED'
+                        ? (order.failureReason || 'Payment could not be completed. Click Retry Payment to try again.')
+                        : 'Checkout was closed before payment. No amount was deducted — you can resume anytime.'}
+                    </span>
+                  </div>
+                )}
 
                 {/* Actions Footer */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: '0.5rem' }}>

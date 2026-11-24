@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
 import { getSubjectsByCourse, getChaptersBySubject, createChapter, updateChapter, deleteChapter } from '../../api/adminApi';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import { FiEdit2, FiTrash2, FiPlus, FiFolder } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const ManageChapters = () => {
@@ -17,6 +19,7 @@ const ManageChapters = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -26,7 +29,7 @@ const ManageChapters = () => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
-        const res = await getAllCourses();
+        const res = await getAllCourses({ limit: 100 });
         const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setCourses(list);
         if (list.length > 0 && !selectedCourse) {
@@ -130,31 +133,47 @@ const ManageChapters = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (chapter) => {
+    const id = chapter.id || chapter._id;
     if (deletingId) return;
-    if (window.confirm('Are you sure you want to delete this chapter?')) {
-      setDeletingId(id);
-      try {
-        await deleteChapter(id);
-        toast.success('Chapter deleted');
-        fetchChapters(selectedSubject);
-      } catch (err) {
-        toast.error(err.response?.data?.message || 'Error deleting chapter');
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Chapter?',
+      message: `Permanently delete "${chapter.title}" and its lessons from this subject?`,
+      confirmText: 'Delete Chapter',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteChapter(id);
+          toast.success('Chapter deleted');
+          fetchChapters(selectedSubject);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Error deleting chapter');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   if (loading && courses.length === 0) return <Loader fullPage />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>Manage Chapters</h1>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800 }}>Manage Chapters</h1>
+          <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+            Create and edit chapters within a subject, or use Course Studio for full hierarchy editing.
+          </p>
+        </div>
+        <Link to={selectedCourse ? `/admin/curriculum?courseId=${selectedCourse}` : '/admin/curriculum'} className="btn btn-outline btn-sm">
+          <FiFolder size={14} /> Open in Course Studio
+        </Link>
       </div>
 
-      <div className="card-glass grid-2" style={{ padding: '1.5rem', marginBottom: '2rem', gap: '2rem' }}>
+      <div className="card grid-2" style={{ padding: '1.25rem', marginBottom: '1.5rem', gap: '1.25rem' }}>
         <div className="form-group" style={{ margin: 0 }}>
           <label className="form-label">Select Course</label>
           <select className="form-select" value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
@@ -182,36 +201,42 @@ const ManageChapters = () => {
       </div>
 
       {selectedSubject && (
-        <div className="card-glass" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.2rem' }}>Chapters</h2>
-            <button onClick={() => openModal()} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Chapters ({chapters.length})</h2>
+            <button type="button" onClick={() => openModal()} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <FiPlus /> Add Chapter
             </button>
           </div>
 
           <div className="table-wrapper">
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <table>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Title</th>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Video URL</th>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Actions</th>
+                <tr>
+                  <th>Title</th>
+                  <th>Video Link</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {chapters.length === 0 ? (
-                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No chapters found for this subject. Click &ldquo;Add Chapter&rdquo; to create one.</td></tr>
+                  <tr><td colSpan="3" style={{ padding: '2.5rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No chapters found for this subject. Click &ldquo;Add Chapter&rdquo; to create one.</td></tr>
                 ) : (
                   chapters.map(chapter => {
                     const chId = chapter.id || chapter._id;
                     return (
-                      <tr key={chId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '1rem 0', fontWeight: 600 }}>{chapter.title}</td>
-                        <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{chapter.videoUrl ? 'Yes' : 'No'}</td>
-                        <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                          <button onClick={() => openModal(chapter)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Chapter"><FiEdit2 /></button>
-                          <button onClick={() => handleDelete(chId)} disabled={deletingId === chId} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Chapter"><FiTrash2 /></button>
+                      <tr key={chId}>
+                        <td style={{ fontWeight: 600 }}>{chapter.title}</td>
+                        <td>
+                          <span className={`badge ${chapter.videoUrl ? 'badge-success' : 'badge-outline'}`}>
+                            {chapter.videoUrl ? 'Attached' : 'None'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                            <button type="button" onClick={() => openModal(chapter)} className="btn btn-sm btn-outline" style={{ padding: '0.45rem' }} title="Edit Chapter"><FiEdit2 size={13} /></button>
+                            <button type="button" onClick={() => handleDelete(chapter)} disabled={deletingId === chId} className="btn btn-sm btn-danger" style={{ padding: '0.45rem' }} title="Delete Chapter"><FiTrash2 size={13} /></button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -237,7 +262,7 @@ const ManageChapters = () => {
             <label className="form-label">Content (Text/HTML)</label>
             <textarea className="form-textarea" rows="6" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})}></textarea>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
               {submitting ? 'Saving...' : 'Save'}
@@ -245,6 +270,17 @@ const ManageChapters = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant="danger"
+        loading={Boolean(deletingId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !deletingId && setConfirmState(null)}
+      />
     </div>
   );
 };

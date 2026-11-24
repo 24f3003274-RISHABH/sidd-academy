@@ -148,31 +148,21 @@ const FeaturedBanners = ({ banners = [] }) => {
           />
 
           {/* Main Content Layout: Details on Left + Full Uncropped Poster on Right */}
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 2,
-              padding: '2.5rem 3.5rem',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              alignItems: 'center',
-              gap: '2.5rem',
-            }}
-          >
+          <div className="banner-frame-grid">
             {/* Left Column: Announcement Text & CTAs */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ marginBottom: '1rem' }}>
+            <div className="banner-text-col">
+              <div style={{ marginBottom: '0.85rem' }}>
                 <span
                   style={{
                     display: 'inline-block',
                     background: 'linear-gradient(135deg, #ff4d6d 0%, #6c63ff 100%)',
                     color: '#fff',
-                    fontSize: '0.8rem',
+                    fontSize: '0.76rem',
                     fontWeight: 800,
-                    padding: '0.4rem 1rem',
+                    padding: '0.35rem 0.85rem',
                     borderRadius: '20px',
                     textTransform: 'uppercase',
-                    letterSpacing: '0.8px',
+                    letterSpacing: '0.6px',
                     boxShadow: '0 4px 12px rgba(255, 77, 109, 0.35)',
                   }}
                 >
@@ -182,11 +172,11 @@ const FeaturedBanners = ({ banners = [] }) => {
 
               <h2
                 style={{
-                  fontSize: 'clamp(1.6rem, 2.8vw, 2.35rem)',
+                  fontSize: 'clamp(1.25rem, 2.8vw, 2.25rem)',
                   fontWeight: 800,
                   color: '#ffffff',
                   lineHeight: 1.25,
-                  marginBottom: '0.9rem',
+                  marginBottom: '0.75rem',
                   textShadow: '0 2px 10px rgba(0,0,0,0.5)',
                 }}
               >
@@ -196,34 +186,20 @@ const FeaturedBanners = ({ banners = [] }) => {
               <p
                 style={{
                   color: '#e2e4f0',
-                  fontSize: 'clamp(0.95rem, 1.5vw, 1.08rem)',
+                  fontSize: 'clamp(0.88rem, 1.5vw, 1.05rem)',
                   lineHeight: 1.6,
-                  marginBottom: '1.75rem',
+                  marginBottom: '1.25rem',
                 }}
               >
                 {currentBanner.subtitle || 'Explore high-yield structured learning and practice materials.'}
               </p>
 
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.6rem',
-                  padding: '0.6rem 1rem',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(255, 183, 3, 0.14)',
-                  border: '1px solid rgba(255, 183, 3, 0.35)',
-                  color: '#ffd166',
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  marginBottom: '1.75rem',
-                  width: 'fit-content',
-                }}
-              >
-                <FiPhoneCall /> संपर्क: 8756940318, 8452895409 • गली नं. 20 के पास, गंगा नगर, राजापुर, प्रयागराज
+              <div className="banner-contact-pill">
+                <FiPhoneCall style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>संपर्क: 8756940318, 8452895409 • गली नं. 20 के पास, गंगा नगर, राजापुर, प्रयागराज</span>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="banner-cta-row">
                 <Link
                   to={currentBanner.linkUrl || '/courses'}
                   className="btn btn-primary"
@@ -231,8 +207,8 @@ const FeaturedBanners = ({ banners = [] }) => {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.5rem',
-                    padding: '0.85rem 1.85rem',
-                    fontSize: '0.98rem',
+                    padding: '0.75rem 1.45rem',
+                    fontSize: '0.94rem',
                     fontWeight: 700,
                     borderRadius: '10px',
                     boxShadow: '0 8px 20px rgba(108, 99, 255, 0.4)',
@@ -247,8 +223,8 @@ const FeaturedBanners = ({ banners = [] }) => {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.45rem',
-                    padding: '0.85rem 1.5rem',
-                    fontSize: '0.98rem',
+                    padding: '0.75rem 1.25rem',
+                    fontSize: '0.94rem',
                     fontWeight: 700,
                     borderRadius: '10px',
                     backgroundColor: 'rgba(255, 255, 255, 0.14)',
@@ -271,120 +247,80 @@ const FeaturedBanners = ({ banners = [] }) => {
             </div>
 
             {/* Right Column: Full Uncropped Poster Display */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '100%',
-              }}
-            >
+            <div className="banner-poster-col">
               <img
                 src={resolveMediaUrl(currentBanner.imageUrl)}
                 alt={currentBanner.title}
-                style={{
-                  width: 'auto',
-                  height: 'auto',
-                  maxWidth: '100%',
-                  maxHeight: '680px',
-                  objectFit: 'contain',
-                  borderRadius: '14px',
-                  border: '2px solid rgba(255, 255, 255, 0.25)',
-                  boxShadow: '0 18px 45px rgba(0, 0, 0, 0.65)',
-                  backgroundColor: '#090b12',
-                }}
+                className="banner-poster-img"
               />
             </div>
           </div>
 
-          {/* Navigation Arrows (Prev / Next) */}
+          {/* Desktop Navigation Arrows (Prev / Next) */}
           {activeBanners.length > 1 && (
             <>
               <button
+                type="button"
                 onClick={handlePrev}
                 aria-label="Previous Banner"
-                style={{
-                  position: 'absolute',
-                  left: '0.85rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  zIndex: 3,
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(20, 22, 35, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                }}
+                className="banner-nav-arrow banner-nav-prev"
               >
                 <FiChevronLeft size={22} />
               </button>
 
               <button
+                type="button"
                 onClick={handleNext}
                 aria-label="Next Banner"
-                style={{
-                  position: 'absolute',
-                  right: '0.85rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  zIndex: 3,
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(20, 22, 35, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                }}
+                className="banner-nav-arrow banner-nav-next"
               >
                 <FiChevronRight size={22} />
               </button>
             </>
           )}
 
-          {/* Slide Indicator Dots & Counter */}
+          {/* Slide Indicator Dots, Mobile Arrows & Counter */}
           {activeBanners.length > 1 && (
-            <div
-              style={{
-                position: 'relative',
-                zIndex: 3,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0 1rem 1.25rem',
-              }}
-            >
-              {activeBanners.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  aria-label={`Slide ${idx + 1}`}
-                  style={{
-                    width: idx === safeIndex ? '26px' : '9px',
-                    height: '9px',
-                    borderRadius: '5px',
-                    backgroundColor: idx === safeIndex ? '#ffb703' : 'rgba(255, 255, 255, 0.3)',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                  }}
-                />
-              ))}
-              <span style={{ fontSize: '0.8rem', color: '#e2e4f0', marginLeft: '0.4rem', fontWeight: 700 }}>
-                {safeIndex + 1}/{activeBanners.length}
-              </span>
+            <div className="banner-controls-footer">
+              <button
+                type="button"
+                onClick={handlePrev}
+                aria-label="Previous Banner"
+                className="banner-mobile-arrow"
+              >
+                <FiChevronLeft size={18} />
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                {activeBanners.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setCurrentIndex(idx)}
+                    aria-label={`Slide ${idx + 1}`}
+                    style={{
+                      width: idx === safeIndex ? '24px' : '8px',
+                      height: '8px',
+                      borderRadius: '5px',
+                      backgroundColor: idx === safeIndex ? '#ffb703' : 'rgba(255, 255, 255, 0.35)',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                    }}
+                  />
+                ))}
+                <span style={{ fontSize: '0.78rem', color: '#e2e4f0', marginLeft: '0.35rem', fontWeight: 700 }}>
+                  {safeIndex + 1}/{activeBanners.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleNext}
+                aria-label="Next Banner"
+                className="banner-mobile-arrow"
+              >
+                <FiChevronRight size={18} />
+              </button>
             </div>
           )}
         </div>

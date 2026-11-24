@@ -1,57 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { getAllBanners, createBanner, updateBanner, deleteBanner } from '../../api/adminApi';
+import { useSearchParams } from 'react-router-dom';
+import { getAllBanners, createBanner, updateBanner, deleteBanner, uploadMediaImage } from '../../api/adminApi';
+import { clearGetCache } from '../../api/axiosInstance';
 import { resolveMediaUrl } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus, FiCheck, FiX, FiZap } from 'react-icons/fi';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import { FiEdit2, FiTrash2, FiPlus, FiCheck, FiX, FiZap, FiUpload } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const PRESET_TEMPLATES = [
   {
-    name: '⚡ Crash Course Banner',
-    title: 'Class 10 & 12 Board Exam 45-Day Crash Course',
-    subtitle: 'Complete syllabus revision with high-yield formula sheets, live problem-solving, and previous 10-year question banks.',
-    badge: '⚡ CRASH COURSE 2024-25',
-    buttonText: 'Join Crash Course',
-    imageUrl: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
+    name: '🎯 Target Batch (100 Days Banner)',
+    title: 'TARGET BATCH — UP Board • CBSE Board • JEE Mains (100 Days Left)',
+    subtitle: '100 दिन की मेहनत, पूरे साल की पहचान! Physics, Chemistry, Mathematics & Biology complete target preparation.',
+    badge: '🎯 100 DAYS TARGET BATCH',
+    buttonText: 'Join Target Batch',
+    imageUrl: '/posters/target-batch-100-days-banner.jpg',
     linkUrl: '/courses',
   },
   {
-    name: '🎯 Masterclass Banner',
-    title: 'Mathematics & Physics Fast-Track Masterclass',
-    subtitle: 'Crack tough numericals and derivations with shortcut techniques by expert faculty Siddhant Pandey.',
-    badge: '🎯 SPECIAL MASTERCLASS',
-    buttonText: 'Explore Masterclass',
-    imageUrl: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&auto=format&fit=crop&q=80',
+    name: '⚡ Class 11th Special Batch',
+    title: 'CLASS 11th SPECIAL BATCH — मात्र 90 दिनों में पूरा सिलेबस',
+    subtitle: 'Physics • Chemistry • Maths • Biology | प्रतिदिन 5 घंटे की क्लास + Sunday Morning Test & Evening Class।',
+    badge: '⚡ CLASS 11th SPECIAL BATCH',
+    buttonText: 'Explore Class 11 Batch',
+    imageUrl: '/posters/class-11-special-batch-1.jpg',
     linkUrl: '/courses',
   },
   {
-    name: '📚 Notes Library Banner',
-    title: 'Modular Handwritten Notes & Formula PDFs Library',
-    subtitle: 'Subject-wise and Chapter-wise organized PDFs ready for instant download and offline revision.',
-    badge: '📚 FREE STUDY MATERIAL',
-    buttonText: 'Browse Modular Notes',
-    imageUrl: 'https://images.unsplash.com/photo-1532012164546-f432f2e3777a?w=1200&auto=format&fit=crop&q=80',
-    linkUrl: '/notes',
+    name: '📝 Weekend Chapter-wise Test',
+    title: 'Chapter-wise TEST Series — Every Saturday & Sunday (Timing 4:00 से 6:00)',
+    subtitle: 'Board Exam जैसा अनुभव! Board Pattern Based Test, Detailed Analysis & Performance Improvement.',
+    badge: '📝 WEEKEND TEST SERIES',
+    buttonText: 'Join Test Series',
+    imageUrl: '/posters/chapter-wise-weekend-test.jpg',
+    linkUrl: '/courses',
   },
   {
-    name: '🔥 Discount Offer Banner',
-    title: 'Early Bird Special: Flat 50% Off On All Annual Batches',
-    subtitle: 'Use code SIDD50 at checkout to unlock full video lectures, test series, and modular notes.',
-    badge: '🔥 LIMITED TIME OFFER',
-    buttonText: 'Claim Discount',
-    imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1200&auto=format&fit=crop&q=80',
+    name: '🔥 100 Days Intensive Poster',
+    title: 'TARGET BATCH — 100 दिन की मेहनत, पूरे साल की पहचान!',
+    subtitle: 'UP Board • CBSE Board • JEE Mains | Complete 100-Day Intensive Revision & Practice Batch.',
+    badge: '🔥 100 DAYS INTENSIVE',
+    buttonText: 'Enroll Now',
+    imageUrl: '/posters/target-batch-100-days-poster.jpg',
     linkUrl: '/courses',
   },
 ];
 
 const ManageBanners = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -80,7 +86,14 @@ const ManageBanners = () => {
     fetchBanners();
   }, []);
 
-  const openModal = (banner = null) => {
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      openModal();
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
+
+  const openModal = (banner = null, preset = null) => {
     if (banner) {
       setEditingId(banner._id || banner.id);
       setFormData({
@@ -93,14 +106,27 @@ const ManageBanners = () => {
         isActive: banner.isActive !== undefined ? banner.isActive : true,
         order: banner.order || 1,
       });
+    } else if (preset) {
+      setEditingId(null);
+      setFormData({
+        title: preset.title,
+        subtitle: preset.subtitle,
+        badge: preset.badge,
+        buttonText: preset.buttonText,
+        imageUrl: preset.imageUrl,
+        linkUrl: preset.linkUrl,
+        isActive: true,
+        order: banners.length + 1,
+      });
+      toast.success(`Loaded template: ${preset.name}`);
     } else {
       setEditingId(null);
       setFormData({
         title: '',
         subtitle: '',
-        badge: '⚡ CRASH COURSE',
-        buttonText: 'Join Crash Course',
-        imageUrl: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
+        badge: '🎯 100 DAYS TARGET BATCH',
+        buttonText: 'Join Target Batch',
+        imageUrl: '/posters/target-batch-100-days-banner.jpg',
         linkUrl: '/courses',
         isActive: true,
         order: banners.length + 1,
@@ -129,6 +155,7 @@ const ManageBanners = () => {
     try {
       const updatedStatus = !banner.isActive;
       await updateBanner(id, { ...banner, isActive: updatedStatus });
+      clearGetCache();
       toast.success(updatedStatus ? 'Banner is now visible on Home Page' : 'Banner hidden from Home Page');
       fetchBanners();
     } catch (err) {
@@ -150,6 +177,7 @@ const ManageBanners = () => {
         await createBanner(formData);
         toast.success('New banner added to Home Page carousel');
       }
+      clearGetCache();
       setIsModalOpen(false);
       fetchBanners();
     } catch (err) {
@@ -159,20 +187,29 @@ const ManageBanners = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (banner) => {
+    const id = banner._id || banner.id;
     if (busyId) return;
-    if (window.confirm('Are you sure you want to remove this banner from the home carousel?')) {
-      setBusyId(id);
-      try {
-        await deleteBanner(id);
-        toast.success('Banner removed');
-        fetchBanners();
-      } catch (err) {
-        toast.error('Error deleting banner');
-      } finally {
-        setBusyId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Home Banner?',
+      message: `Remove "${banner.title}" from the home page banner carousel?`,
+      confirmText: 'Delete Banner',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setBusyId(id);
+        try {
+          await deleteBanner(id);
+          clearGetCache();
+          toast.success('Banner removed');
+          fetchBanners();
+        } catch (err) {
+          toast.error('Error deleting banner');
+        } finally {
+          setBusyId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   if (loading) return <Loader fullPage />;
@@ -186,9 +223,19 @@ const ManageBanners = () => {
             Manage floating & sliding banners on the home page for crash courses, masterclasses, and offers.
           </p>
         </div>
-        <button onClick={() => openModal()} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FiPlus /> Add New Banner
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <span className="badge badge-success" style={{ fontSize: '0.78rem', padding: '0.32rem 0.7rem' }}>
+            {banners.filter((b) => b.isActive !== false).length} Active
+          </span>
+          {banners.some((b) => b.isActive === false) && (
+            <span className="badge badge-outline" style={{ fontSize: '0.78rem', padding: '0.32rem 0.7rem' }}>
+              {banners.filter((b) => b.isActive === false).length} Hidden
+            </span>
+          )}
+          <button type="button" onClick={() => openModal()} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <FiPlus /> Add New Banner
+          </button>
+        </div>
       </div>
 
       {/* Preset Quick Templates */}
@@ -201,10 +248,7 @@ const ManageBanners = () => {
             <button
               key={idx}
               type="button"
-              onClick={() => {
-                openModal();
-                setTimeout(() => applyPreset(preset), 50);
-              }}
+              onClick={() => openModal(null, preset)}
               className="btn btn-sm btn-outline"
               style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
@@ -299,10 +343,11 @@ const ManageBanners = () => {
                       >
                         <FiEdit2 size={13} /> Edit
                       </button>
-                      <button 
-                            onClick={() => handleDelete(id)}
-                            disabled={busyId === id}
-                        className="btn btn-sm btn-danger" 
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(banner)}
+                        disabled={busyId === id}
+                        className="btn btn-sm btn-danger"
                         title="Delete banner"
                         style={{ padding: '0.4rem 0.65rem' }}
                       >
@@ -329,7 +374,7 @@ const ManageBanners = () => {
                 required 
                 value={formData.badge} 
                 onChange={e => setFormData({...formData, badge: e.target.value})} 
-                placeholder="e.g. ⚡ CRASH COURSE 2024-25"
+                placeholder="e.g. 🎯 TARGET BATCH 2025-26"
               />
             </div>
             <div className="form-group">
@@ -369,15 +414,58 @@ const ManageBanners = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Background Image URL</label>
+            <label className="form-label">Poster / Banner Image</label>
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <label className="btn btn-sm btn-outline" style={{ cursor: uploadingImage ? 'wait' : 'pointer' }}>
+                <FiUpload size={13} /> {uploadingImage ? 'Uploading...' : 'Upload Poster Image'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  disabled={uploadingImage}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingImage(true);
+                    try {
+                      const res = await uploadMediaImage(file);
+                      const uploadedUrl = res.data?.data?.url || res.data?.url;
+                      if (uploadedUrl) {
+                        setFormData((prev) => ({ ...prev, imageUrl: uploadedUrl }));
+                        toast.success('Poster image uploaded!');
+                      }
+                    } catch (err) {
+                      toast.error(err.response?.data?.message || 'Failed to upload image');
+                    } finally {
+                      setUploadingImage(false);
+                    }
+                  }}
+                />
+              </label>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>or paste an image path / URL below</span>
+            </div>
             <input 
               type="text" 
               className="form-input" 
               required 
               value={formData.imageUrl} 
               onChange={e => setFormData({...formData, imageUrl: e.target.value})} 
-              placeholder="https://images.unsplash.com/..."
+              placeholder="/posters/target-batch-100-days-banner.jpg"
             />
+            {formData.imageUrl && (
+              <div style={{ marginTop: '0.65rem', position: 'relative', height: '140px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', backgroundColor: '#0f172a' }}>
+                <img
+                  src={resolveMediaUrl(formData.imageUrl)}
+                  alt="Live banner poster preview"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                {formData.badge && (
+                  <span style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(15, 23, 42, 0.85)', color: '#f59e0b', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '4px' }}>
+                    {formData.badge}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid-2">
@@ -421,6 +509,17 @@ const ManageBanners = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant={confirmState?.confirmVariant || 'danger'}
+        loading={Boolean(busyId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !busyId && setConfirmState(null)}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   getAllCourses,
   createCourse,
@@ -10,9 +10,12 @@ import {
   getSubjectsByCourse,
   getChaptersBySubject,
 } from '../../api/courseApi';
-import { getAllNotes, createNote, deleteNote } from '../../api/noteApi';
+import { getAllNotes, createNote, deleteNote, getSecureAccess } from '../../api/noteApi';
+import { clearGetCache } from '../../api/axiosInstance';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import PdfPreviewModal from '../../components/notes/PdfPreviewModal';
 import {
   FiEdit2,
   FiTrash2,
@@ -21,11 +24,13 @@ import {
   FiYoutube,
   FiFileText,
   FiCloud,
-  FiCheckCircle,
   FiExternalLink,
   FiArrowUp,
   FiArrowDown,
-  FiPlay,
+  FiSearch,
+  FiEye,
+  FiEyeOff,
+  FiCheckCircle,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { formatPrice, getEffectivePrice, getNoteDriveViewUrl, resolveMediaUrl } from '../../utils/helpers';
@@ -44,13 +49,22 @@ const OFFICIAL_CHANNEL_PLAYLISTS = [
 ];
 
 const ManageCourses = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [togglingPublishId, setTogglingPublishId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [pricingFilter, setPricingFilter] = useState('all'); // 'all' | 'free' | 'paid'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'published' | 'draft'
+  const [confirmState, setConfirmState] = useState(null);
+  const [previewNote, setPreviewNote] = useState(null);
 
   // YouTube Playlist Importer Modal State
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
@@ -93,12 +107,42 @@ const ManageCourses = () => {
     title: '',
     description: '',
     price: 0,
+    discountPrice: '',
     isFree: false,
+    isPublished: true,
     level: 'Class 12',
     duration: '',
     instructor: '',
     thumbnail: '',
   });
+
+  useEffect(() => {
+    if (!thumbnailFile) {
+      setThumbnailPreviewUrl('');
+      return undefined;
+    }
+    const objUrl = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreviewUrl(objUrl);
+    return () => URL.revokeObjectURL(objUrl);
+  }, [thumbnailFile]);
+
+  const filteredCourses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return courses.filter((course) => {
+      if (levelFilter && (course.level || '') !== levelFilter) return false;
+      const isPub = course.isPublished !== false;
+      if (statusFilter === 'published' && !isPub) return false;
+      if (statusFilter === 'draft' && isPub) return false;
+      const effectivePrice = getEffectivePrice(course);
+      if (pricingFilter === 'free' && effectivePrice > 0) return false;
+      if (pricingFilter === 'paid' && effectivePrice <= 0) return false;
+      if (q) {
+        const hay = `${course.title || ''} ${course.instructor || ''} ${course.level || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [courses, searchQuery, levelFilter, pricingFilter, statusFilter]);
 
   const fetchCourses = async () => {
     try {
@@ -120,6 +164,17 @@ const ManageCourses = () => {
     fetchCourses();
   }, []);
 
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'new') {
+      openModal();
+      setSearchParams({}, { replace: true });
+    } else if (action === 'playlist') {
+      openPlaylistImporter(null);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
+
   const openModal = (course = null) => {
     if (course) {
       setEditingId(course.id || course._id);
@@ -128,7 +183,9 @@ const ManageCourses = () => {
         title: course.title || '',
         description: course.description || '',
         price: course.price || 0,
+        discountPrice: course.discountPrice || '',
         isFree: Boolean(course.isFree),
+        isPublished: course.isPublished !== false,
         level: course.level || 'Class 12',
         duration: course.duration || '',
         instructor: course.instructor || '',
@@ -141,7 +198,9 @@ const ManageCourses = () => {
         title: '',
         description: '',
         price: 0,
+        discountPrice: '',
         isFree: false,
+        isPublished: true,
         level: 'Class 12',
         duration: '',
         instructor: 'Siddhant Pandey & आकाश सर',
@@ -151,13 +210,41 @@ const ManageCourses = () => {
     setIsModalOpen(true);
   };
 
+  const handleTogglePublish = async (course) => {
+    const id = course.id || course._id;
+    if (togglingPublishId) return;
+    const nextPublished = course.isPublished === false;
+    setTogglingPublishId(id);
+    try {
+      await updateCourse(id, { isPublished: nextPublished });
+      clearGetCache();
+      toast.success(nextPublished ? `"${course.title}" is now Published` : `"${course.title}" moved to Draft`);
+      fetchCourses();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update course status');
+    } finally {
+      setTogglingPublishId(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
     setSubmitting(true);
     try {
       const payload = new FormData();
-      Object.entries(formData).forEach(([key, value]) => payload.append(key, value ?? ''));
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === 'thumbnail' && thumbnailFile) return;
+        if (key === 'price' && formData.isFree) {
+          payload.append(key, '0');
+          return;
+        }
+        if (key === 'discountPrice' && (formData.isFree || value === '' || value === null)) {
+          payload.append(key, '0');
+          return;
+        }
+        payload.append(key, value ?? '');
+      });
       if (thumbnailFile) payload.append('thumbnail', thumbnailFile);
       if (editingId) {
         await updateCourse(editingId, payload);
@@ -166,6 +253,7 @@ const ManageCourses = () => {
         await createCourse(payload);
         toast.success('Course created');
       }
+      clearGetCache();
       setIsModalOpen(false);
       fetchCourses();
     } catch (err) {
@@ -175,20 +263,29 @@ const ManageCourses = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (course) => {
+    const id = course.id || course._id;
     if (deletingId) return;
-    if (window.confirm('Are you sure you want to delete this course?')) {
-      setDeletingId(id);
-      try {
-        await deleteCourse(id);
-        toast.success('Course deleted');
-        fetchCourses();
-      } catch (err) {
-        toast.error('Error deleting course');
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Course?',
+      message: `Are you sure you want to permanently delete "${course.title}"? Its curriculum structure will be removed from the catalog.`,
+      confirmText: 'Delete Course',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteCourse(id);
+          clearGetCache();
+          toast.success('Course deleted');
+          fetchCourses();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Error deleting course');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   // --- YouTube Playlist Importer Handlers ---
@@ -294,6 +391,7 @@ const ManageCourses = () => {
         videos: playlistVideos,
       };
       const res = await importPlaylist(payload);
+      clearGetCache();
       const importedCount = res.data?.data?.importedCount || playlistVideos.length;
       toast.success(
         targetExistingCourse
@@ -410,7 +508,7 @@ const ManageCourses = () => {
       }
 
       toast.success(
-        `Uploaded ${uploadedCount} PDF study material(s) to Google Drive for ${
+        `Uploaded ${uploadedCount} PDF study material(s) for ${
           noteScope === 'chapter' ? 'selected chapter' : 'course'
         }!`
       );
@@ -425,114 +523,221 @@ const ManageCourses = () => {
     }
   };
 
-  const handleDeleteCourseNote = async (noteId) => {
+  const handleDeleteCourseNote = (noteObj) => {
     if (!notesModalCourse) return;
+    const noteId = noteObj.id || noteObj._id;
     const courseId = notesModalCourse.id || notesModalCourse._id;
+    setConfirmState({
+      title: 'Delete Study Material?',
+      message: `Remove "${noteObj.title}" from this course? Students will no longer be able to view or download this PDF.`,
+      confirmText: 'Remove PDF',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(noteId);
+        try {
+          await deleteNote(noteId);
+          toast.success('Study material removed');
+          const refreshed = await getAllNotes({ courseId, limit: 100 });
+          setCourseNotesList(refreshed.data?.data?.notes || refreshed.data?.notes || []);
+        } catch {
+          toast.error('Failed to delete study material');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
+  };
+
+  const handlePreviewCourseNote = async (noteObj) => {
     try {
-      await deleteNote(noteId);
-      toast.success('Study material removed');
-      const refreshed = await getAllNotes({ courseId, limit: 100 });
-      setCourseNotesList(refreshed.data?.data?.notes || refreshed.data?.notes || []);
+      const res = await getSecureAccess(noteObj.id || noteObj._id);
+      setPreviewNote(res.data?.data || res.data || noteObj);
     } catch {
-      toast.error('Failed to delete study material');
+      toast.error('Could not load PDF preview');
     }
   };
 
   if (loading) return <Loader fullPage />;
 
   return (
-    <div>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
+          alignItems: 'flex-end',
+          marginBottom: '1.5rem',
           flexWrap: 'wrap',
           gap: '1rem',
         }}
       >
         <div>
-          <h1 style={{ margin: '0 0 0.35rem 0' }}>Manage Courses & YouTube Playlists</h1>
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-            Create courses manually, import an entire YouTube playlist directly as a course in exact video order, or upload Course & Chapter PDFs to Google Drive.
+          <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.75rem', fontWeight: 800 }}>Manage Courses &amp; YouTube Playlists</h1>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+            Create courses manually, import YouTube playlists in exact lecture order, or attach Course &amp; Chapter PDFs.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
           <button
+            type="button"
             onClick={() => openPlaylistImporter(null)}
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             style={{
               backgroundColor: '#dc2626',
               borderColor: '#dc2626',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
+              gap: '0.45rem',
               fontWeight: 700,
             }}
           >
-            <FiYoutube size={18} /> Import YouTube Playlist as Course
+            <FiYoutube size={16} /> Import YouTube Playlist
           </button>
           <button
+            type="button"
             onClick={() => openModal()}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            className="btn btn-primary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}
           >
-            <FiPlus /> Add Course Manually
+            <FiPlus /> Add Course
           </button>
         </div>
       </div>
 
-      <div className="card-glass" style={{ padding: '1.5rem' }}>
+      {/* Search & Filter Toolbar */}
+      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: '400px' }}>
+          <FiSearch style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingLeft: '2.35rem' }}
+            placeholder="Search courses by title or instructor..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="form-select"
+            style={{ width: 'auto', minWidth: '140px' }}
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+          >
+            <option value="">All Levels</option>
+            <option value="Class 9">Class 9</option>
+            <option value="Class 10">Class 10</option>
+            <option value="Class 11">Class 11</option>
+            <option value="Class 12">Class 12</option>
+            <option value="Foundation">Foundation</option>
+            <option value="All Levels">All Levels</option>
+          </select>
+          <select
+            className="form-select"
+            style={{ width: 'auto', minWidth: '130px' }}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+          <div style={{ display: 'flex', gap: '0.3rem' }}>
+            {['all', 'free', 'paid'].map((pf) => (
+              <button
+                key={pf}
+                type="button"
+                onClick={() => setPricingFilter(pf)}
+                className={`btn btn-sm ${pricingFilter === pf ? 'btn-primary' : 'btn-outline'}`}
+                style={{ borderRadius: '999px', padding: '0.32rem 0.75rem', fontSize: '0.78rem', textTransform: 'capitalize' }}
+              >
+                {pf}
+              </button>
+            ))}
+          </div>
+          {(searchQuery || levelFilter || pricingFilter !== 'all' || statusFilter !== 'all') && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => { setSearchQuery(''); setLevelFilter(''); setPricingFilter('all'); setStatusFilter('all'); }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: '1.25rem' }}>
         <div className="table-wrapper">
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Course</th>
-                <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Instructor</th>
-                <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Level</th>
-                <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Price</th>
-                <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Quick Upload & Actions</th>
+                <th style={{ padding: '0.85rem 0.5rem', color: 'var(--text-muted)' }}>Course ({filteredCourses.length})</th>
+                <th style={{ padding: '0.85rem 0.5rem', color: 'var(--text-muted)' }}>Level</th>
+                <th style={{ padding: '0.85rem 0.5rem', color: 'var(--text-muted)' }}>Status</th>
+                <th style={{ padding: '0.85rem 0.5rem', color: 'var(--text-muted)' }}>Price</th>
+                <th style={{ padding: '0.85rem 0.5rem', color: 'var(--text-muted)' }}>Quick Actions</th>
               </tr>
             </thead>
             <tbody>
-              {courses.length === 0 ? (
+              {filteredCourses.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No courses found. Click &ldquo;Import YouTube Playlist as Course&rdquo; or &ldquo;Add Course Manually&rdquo; above.
+                  <td colSpan="5" style={{ padding: '2.5rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {courses.length === 0
+                      ? 'No courses found. Click "Import YouTube Playlist" or "Add Course" above.'
+                      : 'No courses match your current search or filter.'}
                   </td>
                 </tr>
               ) : (
-                courses.map((course) => {
+                filteredCourses.map((course) => {
                   const cId = course.id || course._id;
+                  const isPub = course.isPublished !== false;
                   return (
                     <tr key={cId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '1rem 0.5rem', fontWeight: 600 }}>
+                      <td style={{ padding: '0.9rem 0.5rem', fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                           {course.thumbnail && (
                             <img
                               src={resolveMediaUrl(course.thumbnail)}
                               alt={course.title}
-                              style={{ width: '56px', height: '36px', objectFit: 'cover', borderRadius: '6px' }}
+                              style={{ width: '58px', height: '38px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border)', flexShrink: 0 }}
                             />
                           )}
                           <div>
                             <div>{course.title}</div>
                             <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                              {course.duration || `${course.totalLessons || 0} Lectures`}
+                              {course.instructor || 'SIDD Academy Faculty'} · {course.duration || `${course.totalLessons || 0} Lectures`}
                             </small>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '1rem 0.5rem' }}>{course.instructor || 'SIDD Academy Faculty'}</td>
-                      <td style={{ padding: '1rem 0.5rem' }}>
+                      <td style={{ padding: '0.9rem 0.5rem' }}>
                         <span className="badge badge-primary">{course.level || 'Class 12'}</span>
                       </td>
-                      <td style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>
-                        {formatPrice(getEffectivePrice(course))}
+                      <td style={{ padding: '0.9rem 0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublish(course)}
+                          disabled={togglingPublishId === cId}
+                          className={`badge ${isPub ? 'badge-success' : 'badge-outline'}`}
+                          style={{ cursor: 'pointer', border: isPub ? 'none' : '1px solid var(--border)' }}
+                          title={isPub ? 'Click to move to Draft (hide from students)' : 'Click to Publish (make visible to students)'}
+                        >
+                          {isPub ? <FiCheckCircle size={11} /> : <FiEyeOff size={11} />}
+                          {togglingPublishId === cId ? 'Saving...' : isPub ? 'Published' : 'Draft'}
+                        </button>
                       </td>
-                      <td style={{ padding: '1rem 0.5rem' }}>
-                        <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <td style={{ padding: '0.9rem 0.5rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {formatPrice(getEffectivePrice(course))}
+                        {Number(course.discountPrice) > 0 && Number(course.discountPrice) < Number(course.price) && (
+                          <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textDecoration: 'line-through', fontWeight: 400 }}>
+                            {formatPrice(course.price)}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.9rem 0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <Link
                             to={`/admin/curriculum?courseId=${cId}`}
                             className="btn btn-sm btn-primary"
@@ -545,7 +750,7 @@ const ManageCourses = () => {
                             }}
                             title="Manage Syllabus, Chapters, Bulk Videos & Notes"
                           >
-                            <FiLayers /> Curriculum
+                            <FiLayers /> Studio
                           </Link>
                           <button
                             type="button"
@@ -575,11 +780,12 @@ const ManageCourses = () => {
                               gap: '0.3rem',
                               fontSize: '0.78rem',
                             }}
-                            title="Upload Course or Chapter PDF Study Notes to Google Drive"
+                            title="Upload Course or Chapter PDF Study Notes"
                           >
-                            <FiFileText /> + Notes PDF
+                            <FiFileText /> + PDF
                           </button>
                           <button
+                            type="button"
                             onClick={() => openModal(course)}
                             className="btn btn-sm btn-outline"
                             style={{ padding: '0.4rem' }}
@@ -588,7 +794,8 @@ const ManageCourses = () => {
                             <FiEdit2 />
                           </button>
                           <button
-                            onClick={() => handleDelete(cId)}
+                            type="button"
+                            onClick={() => handleDelete(course)}
                             disabled={deletingId === cId}
                             className="btn btn-sm btn-danger"
                             style={{ padding: '0.4rem' }}
@@ -684,17 +891,50 @@ const ManageCourses = () => {
                 }
               />
             </div>
-            <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.isFree}
-                  onChange={(e) => setFormData({ ...formData, isFree: e.target.checked })}
-                  style={{ width: '20px', height: '20px' }}
-                />
-                <span>Is Free Course</span>
-              </label>
+            <div className="form-group">
+              <label className="form-label">Offer / Discount Price (₹ Optional)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                className="form-input"
+                placeholder="Leave blank if no discount"
+                disabled={formData.isFree}
+                value={formData.discountPrice}
+                onChange={(e) =>
+                  setFormData({ ...formData, discountPrice: e.target.value === '' ? '' : Number(e.target.value) })
+                }
+              />
             </div>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 0, display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={formData.isFree}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setFormData({
+                    ...formData,
+                    isFree: checked,
+                    ...(checked ? { price: 0, discountPrice: '' } : {}),
+                  });
+                }}
+                style={{ width: '18px', height: '18px' }}
+              />
+              <span>100% Free Course (No payment required)</span>
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={formData.isPublished}
+                onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+                style={{ width: '18px', height: '18px' }}
+              />
+              <span>Published (Visible to students)</span>
+            </label>
           </div>
 
           <div className="grid-2">
@@ -703,13 +943,13 @@ const ManageCourses = () => {
               <input
                 type="text"
                 className="form-input"
-                placeholder="e.g. 55 Hours"
+                placeholder="e.g. 55 Hours or 6 Months"
                 value={formData.duration}
                 onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Course thumbnail</label>
+              <label className="form-label">Course Thumbnail</label>
               <input
                 type="file"
                 className="form-input"
@@ -718,13 +958,27 @@ const ManageCourses = () => {
               />
               <small style={{ color: 'var(--text-muted)' }}>
                 {thumbnailFile
-                  ? thumbnailFile.name
+                  ? `Selected: ${thumbnailFile.name}`
                   : editingId && formData.thumbnail
                   ? 'Current thumbnail will be kept unless replaced.'
-                  : 'JPG, PNG, or WebP up to 5 MB.'}
+                  : 'JPG, PNG, or WebP up to 5 MB (saved in cloud database).'}
               </small>
             </div>
           </div>
+
+          {(thumbnailPreviewUrl || formData.thumbnail) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', padding: '0.75rem', borderRadius: '10px', backgroundColor: 'var(--bg-muted)', border: '1px solid var(--border)' }}>
+              <img
+                src={thumbnailPreviewUrl || resolveMediaUrl(formData.thumbnail)}
+                alt="Course thumbnail preview"
+                style={{ width: '120px', height: '68px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border)' }}
+              />
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                <strong style={{ display: 'block', color: 'var(--text-primary)' }}>Thumbnail Preview</strong>
+                <span>{thumbnailPreviewUrl ? 'New image ready to upload' : 'Current saved course thumbnail'}</span>
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
             <button
@@ -1213,8 +1467,8 @@ const ManageCourses = () => {
                 >
                   <FiCloud />
                   {uploadingNote
-                    ? 'Uploading to Google Drive...'
-                    : `Upload ${noteFiles.length > 1 ? `${noteFiles.length} PDFs` : 'PDF'} to Google Drive`}
+                    ? 'Uploading PDF...'
+                    : `Upload ${noteFiles.length > 1 ? `${noteFiles.length} PDFs` : 'PDF'}`}
                 </button>
               </div>
             </form>
@@ -1222,11 +1476,11 @@ const ManageCourses = () => {
             {/* Existing Notes for this Course */}
             <div>
               <h4 style={{ margin: '0 0 0.65rem 0', fontSize: '0.95rem' }}>
-                Attached Google Drive Study Notes ({courseNotesList.length})
+                Attached Study Notes ({courseNotesList.length})
               </h4>
               {courseNotesList.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
-                  No PDFs attached to this course yet. Upload one above to save it to Google Drive.
+                  No PDFs attached to this course yet. Upload one above to make it available in the student portal.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto' }}>
@@ -1255,6 +1509,15 @@ const ManageCourses = () => {
                           </small>
                         </div>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewCourseNote(n)}
+                            className="btn btn-sm btn-outline"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}
+                            title="Preview PDF"
+                          >
+                            <FiEye size={12} /> Preview
+                          </button>
                           {driveUrl && (
                             <a
                               href={driveUrl}
@@ -1263,14 +1526,16 @@ const ManageCourses = () => {
                               className="btn btn-sm btn-outline"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}
                             >
-                              <FiExternalLink size={12} /> GDrive
+                              <FiExternalLink size={12} /> Drive
                             </a>
                           )}
                           <button
                             type="button"
-                            onClick={() => handleDeleteCourseNote(nId)}
+                            onClick={() => handleDeleteCourseNote(n)}
+                            disabled={deletingId === nId}
                             className="btn btn-sm btn-danger"
                             style={{ padding: '0.3rem 0.5rem' }}
+                            title="Delete PDF"
                           >
                             <FiTrash2 size={12} />
                           </button>
@@ -1284,6 +1549,24 @@ const ManageCourses = () => {
           </div>
         )}
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant={confirmState?.confirmVariant || 'danger'}
+        loading={Boolean(deletingId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !deletingId && setConfirmState(null)}
+      />
+
+      {previewNote && (
+        <PdfPreviewModal
+          note={previewNote}
+          onClose={() => setPreviewNote(null)}
+        />
+      )}
     </div>
   );
 };

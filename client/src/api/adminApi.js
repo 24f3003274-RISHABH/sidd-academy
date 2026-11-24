@@ -1,16 +1,22 @@
 import axiosInstance from './axiosInstance';
 
-export const getDashboardStats = () => axiosInstance.get('/admin/dashboard');
-export const getAllUsers = (params) => axiosInstance.get('/admin/users', { params });
+export const getDashboardStats = () => axiosInstance.get('/admin/dashboard', { cache: false });
+export const getAllUsers = (params) => axiosInstance.get('/admin/users', { params, cache: false });
 export const updateUserRole = (id, role) => axiosInstance.put(`/admin/users/${id}/role`, { role });
 export const toggleUserStatus = (id) => axiosInstance.put(`/admin/users/${id}/status`);
-export const getAllOrders = (params) => axiosInstance.get('/admin/orders', { params });
+export const getAllOrders = (params) => axiosInstance.get('/admin/orders', { params, cache: false });
 
-export const getAllBanners = () => axiosInstance.get('/banners');
+export const getAllBanners = () => axiosInstance.get('/banners', { cache: false });
 export const getActiveBanners = () => axiosInstance.get('/banners/active');
 export const createBanner = (data) => axiosInstance.post('/banners', data);
 export const updateBanner = (id, data) => axiosInstance.put(`/banners/${id}`, data);
 export const deleteBanner = (id) => axiosInstance.delete(`/banners/${id}`);
+
+export const uploadMediaImage = (file) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return axiosInstance.post('/media/upload', formData, { timeout: 90000 });
+};
 
 export const createSubject = (data) => axiosInstance.post('/subjects', data);
 export const updateSubject = (id, data) => axiosInstance.put(`/subjects/${id}`, data);

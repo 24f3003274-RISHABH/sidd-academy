@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { FiFolder, FiFileText, FiDownload, FiEye, FiCheckCircle, FiSearch, FiLayers, FiBookOpen } from 'react-icons/fi';
-import { formatFileSize, formatPrice, getNoteStreamUrl } from '../../utils/helpers';
+import { formatFileSize, formatPrice } from '../../utils/helpers';
+import PdfPreviewModal from './PdfPreviewModal';
 import toast from 'react-hot-toast';
 
 const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAuthenticated, user, isPurchasing, purchasingNoteId }) => {
@@ -289,67 +290,10 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
 
       {/* PDF Modal Previewer */}
       {activePdfPreview && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-          onClick={() => setActivePdfPreview(null)}
-        >
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '900px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{activePdfPreview.title}</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Modular Study PDF Preview</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button 
-                  onClick={() => onDownload && onDownload(activePdfPreview.id || activePdfPreview._id, activePdfPreview.title)}
-                  className="btn btn-sm btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <FiDownload size={14} /> Download PDF
-                </button>
-                <button 
-                  onClick={() => setActivePdfPreview(null)}
-                  className="btn btn-sm btn-outline"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={getNoteStreamUrl(activePdfPreview)}
-                title={activePdfPreview.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={activePdfPreview}
+          onClose={() => setActivePdfPreview(null)}
+        />
       )}
     </div>
   );

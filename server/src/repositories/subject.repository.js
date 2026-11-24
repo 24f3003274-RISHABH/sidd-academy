@@ -20,7 +20,7 @@ export class SubjectRepository {
       try {
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId);
         const sql = `
-          SELECT id, course_id, title, title as name, order_num as order_index, created_at, updated_at
+          SELECT id, course_id, title, COALESCE(name, title) as name, description, order_num as order_index, created_at, updated_at
           FROM subjects
           WHERE ${isUUID ? 'course_id = $1' : 'course_id IN (SELECT id FROM courses WHERE slug = $1)'}
           ORDER BY order_num ASC, created_at ASC
@@ -66,18 +66,19 @@ export class SubjectRepository {
   /**
    * Create subject
    */
-  async create({ courseId, name, title, order = 0 }) {
+  async create({ courseId, name, title, description = '', order = 0 }) {
     const id = uuidv4();
     const subjectName = (name || title || '').trim();
+    const cleanDesc = String(description || '').trim();
 
     if (ENV.DATABASE_URL && isUuid(courseId)) {
       try {
         const sql = `
-          INSERT INTO subjects (id, course_id, title, name, order_num, order_index, created_at, updated_at)
-          VALUES ($1, $2, $3, $3, $4, $4, NOW(), NOW())
+          INSERT INTO subjects (id, course_id, title, name, description, order_num, order_index, created_at, updated_at)
+          VALUES ($1, $2, $3, $3, $4, $5, $5, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, courseId, subjectName, Number(order) || 0]);
+        const res = await query(sql, [id, courseId, subjectName, cleanDesc, Number(order) || 0]);
         return this.normalizeSubject(res.rows[0]);
       } catch (err) {
         console.warn('SubjectRepository create fallback to mockStore:', err.message);
@@ -92,6 +93,7 @@ export class SubjectRepository {
       courseId,
       name: subjectName,
       title: subjectName,
+      description: cleanDesc,
       order: Number(order) || 0,
       chapters: [],
       createdAt: new Date().toISOString(),
@@ -122,6 +124,10 @@ export class SubjectRepository {
           fields.push(`name = $${pIndex++}`);
           values.push(subjectName.trim());
         }
+        if (updates.description !== undefined) {
+          fields.push(`description = $${pIndex++}`);
+          values.push(String(updates.description || '').trim());
+        }
         const orderVal = updates.order !== undefined ? updates.order : (updates.order_index !== undefined ? updates.order_index : updates.orderNum);
         if (orderVal !== undefined) {
           fields.push(`order_num = $${pIndex}`);
@@ -146,6 +152,9 @@ export class SubjectRepository {
     if (updates.name !== undefined || updates.title !== undefined) {
       s.name = (updates.name || updates.title).trim();
       s.title = s.name;
+    }
+    if (updates.description !== undefined) {
+      s.description = String(updates.description || '').trim();
     }
     if (updates.order !== undefined || updates.order_index !== undefined) {
       s.order = Number(updates.order !== undefined ? updates.order : updates.order_index);
@@ -200,6 +209,7 @@ export class SubjectRepository {
       course: courseId,
       title: s.title || s.name,
       name: s.name || s.title,
+      description: s.description || '',
       order: s.order_num !== undefined ? Number(s.order_num) : (s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0)),
       order_index: s.order_num !== undefined ? Number(s.order_num) : (s.order_index !== undefined ? Number(s.order_index) : (s.order !== undefined ? Number(s.order) : 0)),
       createdAt: s.created_at || s.createdAt,

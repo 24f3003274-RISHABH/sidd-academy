@@ -25,6 +25,7 @@ import orderRoutes from './routes/order.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 import studentRoutes from './routes/student.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 
 // Setup __dirname in ES module scope
 const __filename = fileURLToPath(import.meta.url);
@@ -137,6 +138,7 @@ const uploadsDir = path.join(__dirname, '../uploads');
 const legacyRootUploadsDir = path.join(__dirname, '../../uploads');
 app.use('/uploads', express.static(uploadsDir));
 app.use('/uploads', express.static(legacyRootUploadsDir));
+app.use('/posters', express.static(path.join(legacyRootUploadsDir, 'images')));
 
 // Root API Status Endpoint
 app.get('/', (req, res) => {
@@ -153,7 +155,7 @@ app.use('/api/', apiLimiter);
 
 // API Routes
 app.use('/api/v1/health', healthRoutes);
-app.use('/api/v1/auth', authLimiter, authRoutes);
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/courses', courseRoutes);
 app.use('/api/v1/subjects', subjectRoutes);
 app.use('/api/v1/chapters', chapterRoutes);
@@ -167,6 +169,7 @@ app.use('/api/v1/payments', paymentLimiter, paymentRoutes);
 app.use('/api/v1/student', studentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/banners', bannerRoutes);
+app.use('/api/v1/media', mediaRoutes);
 
 // Fallback 404 handler for unmatched /api routes
 app.use('/api/*', (req, res) => {

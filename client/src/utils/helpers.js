@@ -61,11 +61,26 @@ export const getBackendOrigin = () => {
 
 export const resolveMediaUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
   }
+  // Frontend public static assets (served directly from Vercel/Vite public/ directory)
+  if (
+    trimmed.startsWith('/posters/') ||
+    trimmed.startsWith('/images/') ||
+    trimmed.startsWith('/assets/')
+  ) {
+    return trimmed;
+  }
+  // Backend-hosted uploads and durable media routes (/api/v1/media/..., /uploads/...)
   const origin = getBackendOrigin();
-  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${origin}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };
 
 export const extractDriveFileId = (input) => {

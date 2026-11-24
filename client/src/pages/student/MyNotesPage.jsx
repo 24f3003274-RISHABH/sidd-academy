@@ -4,8 +4,8 @@ import { getStudentNotes } from '../../api/studentApi';
 import { getSecureAccess } from '../../api/noteApi';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonCard } from '../../components/common/SkeletonLoader';
+import PdfPreviewModal, { triggerNoteDownload } from '../../components/notes/PdfPreviewModal';
 import toast from 'react-hot-toast';
-import { getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
 import {
   FiFileText,
   FiDownload,
@@ -79,12 +79,9 @@ const MyNotesPage = () => {
       setDownloadingId(id);
       const res = await getSecureAccess(id);
       const accessData = res.data?.data || res.data || note;
-      const fileUrl = getNoteDownloadUrl(accessData) || getNoteDriveViewUrl(accessData) || accessData.fileUrl;
-
-      toast.success(`Opening study material from Google Drive: ${note.title}`);
-      window.open(fileUrl, '_blank');
+      await triggerNoteDownload({ ...note, ...accessData });
     } catch (err) {
-      toast.error('Failed to generate secure note download link');
+      toast.error(err.response?.data?.message || 'Failed to download note');
     } finally {
       setDownloadingId(null);
     }
@@ -154,7 +151,7 @@ const MyNotesPage = () => {
 
       {/* Loading Skeleton */}
       {loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
           <SkeletonCard height="200px" count={3} />
         </div>
       )}
@@ -219,7 +216,7 @@ const MyNotesPage = () => {
 
       {/* Notes Grid */}
       {!loading && !error && filteredNotes.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))', gap: '1.25rem' }}>
           {filteredNotes.map((note) => (
             <div
               key={note.id || note._id}
@@ -294,76 +291,12 @@ const MyNotesPage = () => {
         </div>
       )}
 
-      {/* PDF Modal Viewer */}
+      {/* Unified PDF Modal Viewer */}
       {previewNote && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
-          }}
-          onClick={() => setPreviewNote(null)}
-        >
-          <div
-            className="card-glass"
-            style={{
-              width: '100%',
-              maxWidth: '960px',
-              height: '88vh',
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{previewNote.title}</h3>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {getNoteDriveViewUrl(previewNote) && (
-                  <a
-                    href={getNoteDriveViewUrl(previewNote)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <FiExternalLink /> Open in Google Drive
-                  </a>
-                )}
-                <button
-                  onClick={() => handleDownload(previewNote)}
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <FiDownload /> Download PDF
-                </button>
-                <button onClick={() => setPreviewNote(null)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={getNoteStreamUrl(previewNote)}
-                title={previewNote.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={previewNote}
+          onClose={() => setPreviewNote(null)}
+        />
       )}
     </StudentLayout>
   );

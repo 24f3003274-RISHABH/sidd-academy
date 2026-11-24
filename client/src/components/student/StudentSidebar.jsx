@@ -40,7 +40,9 @@ const StudentSidebar = () => {
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
-          gap: '1.25rem',
+          gap: '1rem',
+          position: 'sticky',
+          top: '90px',
         }}
       >
         {/* Student Mini Profile Header Card */}

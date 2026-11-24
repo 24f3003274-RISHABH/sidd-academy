@@ -6,9 +6,21 @@ import { googleDriveService } from '../services/googleDrive.service.js';
 
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
+// In-memory binary store for uploaded PDFs when operating without DATABASE_URL
+const memoryPdfBinaries = new Map();
+
+const NOTE_SELECT_COLUMNS = `
+  n.id, n.title, n.description, n.course_id, n.subject_id, n.chapter_id, n.lesson_id,
+  n.file_url, n.file_name, n.file_size, n.thumbnail, n.price, n.is_free, n.is_published,
+  n.page_count, n.download_count, n.created_at, n.updated_at,
+  n.drive_file_id, n.drive_folder_id, n.drive_view_url, n.drive_preview_url,
+  n.local_file_url, n.storage_provider, n.file_mime,
+  (n.file_data IS NOT NULL) AS has_file_data
+`;
+
 /**
  * Note Repository - PostgreSQL Data Access Layer with MockStore Resilient Fallback
- * and Google Drive Study Material Metadata Support
+ * and Durable Database / Google Drive Study Material Metadata Support
  */
 export class NoteRepository {
   constructor() {
@@ -89,8 +101,14 @@ export class NoteRepository {
       driveViewUrl: row.drive_view_url || row.driveViewUrl || driveUrls.driveViewUrl || null,
       drivePreviewUrl: row.drive_preview_url || row.drivePreviewUrl || driveUrls.drivePreviewUrl || null,
       driveDownloadUrl: row.driveDownloadUrl || driveUrls.driveDownloadUrl || null,
-      storageProvider: driveFileId ? 'gdrive' : (row.storage_provider || row.storageProvider || 'local'),
-      thumbnail: row.thumbnail || row.thumbnail_url || 'https://images.unsplash.com/photo-1532012164546-f432f2e3777a?w=600&auto=format&fit=crop&q=80',
+      hasFileData: Boolean(row.has_file_data || row.hasFileData || memoryPdfBinaries.has(row.id || row._id)),
+      storageProvider:
+        row.has_file_data || row.hasFileData || memoryPdfBinaries.has(row.id || row._id)
+          ? (driveFileId ? 'database+gdrive' : 'database')
+          : driveFileId
+          ? 'gdrive'
+          : row.storage_provider || row.storageProvider || 'local',
+      thumbnail: row.thumbnail || row.thumbnail_url || '/posters/target-batch-100-days-banner.jpg',
       price: typeof row.price === 'string' ? parseFloat(row.price) : (row.price ?? 0),
       isFree: Boolean(row.is_free ?? row.isFree),
       isPublished: Boolean(row.is_published ?? row.isPublished ?? true),
@@ -111,7 +129,7 @@ export class NoteRepository {
     if (ENV.DATABASE_URL) {
       try {
         let sql = `
-          SELECT n.*,
+          SELECT ${NOTE_SELECT_COLUMNS},
                  c.title as course_title,
                  COALESCE(s.name, s.title) as subject_title,
                  ch.title as chapter_title
@@ -224,7 +242,7 @@ export class NoteRepository {
     if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
-          SELECT n.*,
+          SELECT ${NOTE_SELECT_COLUMNS},
                  c.title as course_title,
                  COALESCE(s.name, s.title) as subject_title,
                  ch.title as chapter_title
@@ -263,14 +281,31 @@ export class NoteRepository {
     const driveUrls = googleDriveService.buildDriveUrls(driveFileId);
     const effectiveFileUrl = data.fileUrl || driveUrls.driveViewUrl || data.localFileUrl || '';
 
+    const fileBuffer = Buffer.isBuffer(data.fileData) ? data.fileData : null;
+    const fileMime = data.fileMime || 'application/pdf';
+    const effectiveStorageProvider = fileBuffer
+      ? (driveFileId ? 'database+gdrive' : 'database')
+      : (driveFileId ? 'gdrive' : (data.storageProvider || 'local'));
+
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
           INSERT INTO notes (
             id, title, description, course_id, subject_id, chapter_id, lesson_id,
-            file_url, file_name, file_size, thumbnail, price, is_free, is_published, page_count, download_count
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0)
-          RETURNING *
+            file_url, file_name, file_size, thumbnail, price, is_free, is_published, page_count, download_count,
+            drive_file_id, drive_folder_id, drive_view_url, drive_preview_url, local_file_url, storage_provider,
+            file_data, file_mime
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            $8, $9, $10, $11, $12, $13, $14, $15, 0,
+            $16, $17, $18, $19, $20, $21,
+            $22, $23
+          )
+          RETURNING
+            id, title, description, course_id, subject_id, chapter_id, lesson_id,
+            file_url, file_name, file_size, thumbnail, price, is_free, is_published, page_count, download_count,
+            drive_file_id, drive_folder_id, drive_view_url, drive_preview_url, local_file_url, storage_provider,
+            file_mime, (file_data IS NOT NULL) AS has_file_data, created_at, updated_at
         `;
         const params = [
           id,
@@ -280,7 +315,7 @@ export class NoteRepository {
           isUuid(hierarchy.subjectId) ? hierarchy.subjectId : null,
           isUuid(hierarchy.chapterId) ? hierarchy.chapterId : null,
           isUuid(hierarchy.lessonId) ? hierarchy.lessonId : null,
-          effectiveFileUrl,
+          effectiveFileUrl || `/api/v1/notes/${id}/stream`,
           data.fileName || 'note.pdf',
           data.fileSize || '2.5 MB',
           data.thumbnail || '',
@@ -288,22 +323,29 @@ export class NoteRepository {
           isFree,
           isPublished,
           Number(data.pageCount || 1),
+          driveFileId || null,
+          data.driveFolderId || ENV.GOOGLE_DRIVE_FOLDER_ID || null,
+          data.driveViewUrl || driveUrls.driveViewUrl || null,
+          data.drivePreviewUrl || driveUrls.drivePreviewUrl || null,
+          data.localFileUrl || '',
+          effectiveStorageProvider,
+          fileBuffer,
+          fileMime,
         ];
 
         const res = await query(sql, params);
-        const row = {
-          ...res.rows[0],
-          driveFileId,
-          driveFolderId: data.driveFolderId || ENV.GOOGLE_DRIVE_FOLDER_ID,
-          driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl,
-          drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl,
-          localFileUrl: data.localFileUrl || '',
-          storageProvider: driveFileId ? 'gdrive' : (data.storageProvider || 'local'),
-        };
-        return this.normalizeNote(row);
+        return this.normalizeNote(res.rows[0]);
       } catch (err) {
         console.warn('NoteRepository create fallback to mockStore:', err.message);
       }
+    }
+
+    if (fileBuffer) {
+      memoryPdfBinaries.set(id, {
+        buffer: fileBuffer,
+        mimeType: fileMime,
+        fileName: data.fileName || 'note.pdf',
+      });
     }
 
     const mockNote = {
@@ -318,17 +360,18 @@ export class NoteRepository {
       courseTitle: hierarchy.courseTitle,
       subjectTitle: hierarchy.subjectTitle,
       chapterTitle: hierarchy.chapterTitle,
-      fileUrl: effectiveFileUrl,
+      fileUrl: effectiveFileUrl || `/api/v1/notes/${id}/stream`,
       localFileUrl: data.localFileUrl || (effectiveFileUrl.startsWith('/uploads/') ? effectiveFileUrl : ''),
       fileName: data.fileName || 'note.pdf',
       fileSize: data.fileSize || '2.5 MB',
+      hasFileData: Boolean(fileBuffer),
       driveFileId: driveFileId || null,
       driveFolderId: data.driveFolderId || ENV.GOOGLE_DRIVE_FOLDER_ID || '1axziJZcQmDY1Ptbkm8s3c1ZJYStrL7Rf',
       driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl || null,
       drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl || null,
       driveDownloadUrl: driveUrls.driveDownloadUrl || null,
-      storageProvider: driveFileId ? 'gdrive' : (data.storageProvider || 'local'),
-      thumbnail: data.thumbnail || 'https://images.unsplash.com/photo-1532012164546-f432f2e3777a?w=600&auto=format&fit=crop&q=80',
+      storageProvider: effectiveStorageProvider,
+      thumbnail: data.thumbnail || '/posters/target-batch-100-days-banner.jpg',
       price,
       isFree,
       isPublished,
@@ -349,6 +392,8 @@ export class NoteRepository {
   async update(id, data) {
     if (!id) return null;
 
+    const fileBuffer = Buffer.isBuffer(data.fileData) ? data.fileData : null;
+
     if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
@@ -362,6 +407,7 @@ export class NoteRepository {
         if (data.chapterId !== undefined) { fields.push(`chapter_id = $${pIndex++}`); params.push(isUuid(data.chapterId) ? data.chapterId : null); }
         if (data.lessonId !== undefined) { fields.push(`lesson_id = $${pIndex++}`); params.push(isUuid(data.lessonId) ? data.lessonId : null); }
         if (data.fileUrl !== undefined) { fields.push(`file_url = $${pIndex++}`); params.push(data.fileUrl); }
+        if (data.localFileUrl !== undefined) { fields.push(`local_file_url = $${pIndex++}`); params.push(data.localFileUrl); }
         if (data.fileName !== undefined) { fields.push(`file_name = $${pIndex++}`); params.push(data.fileName); }
         if (data.fileSize !== undefined) { fields.push(`file_size = $${pIndex++}`); params.push(data.fileSize); }
         if (data.thumbnail !== undefined) { fields.push(`thumbnail = $${pIndex++}`); params.push(data.thumbnail); }
@@ -369,6 +415,21 @@ export class NoteRepository {
         if (data.isFree !== undefined) { fields.push(`is_free = $${pIndex++}`); params.push(data.isFree === true || data.isFree === 'true'); }
         if (data.isPublished !== undefined) { fields.push(`is_published = $${pIndex++}`); params.push(data.isPublished === true || data.isPublished === 'true'); }
         if (data.pageCount !== undefined) { fields.push(`page_count = $${pIndex++}`); params.push(Number(data.pageCount)); }
+        if (data.driveFileId !== undefined) { fields.push(`drive_file_id = $${pIndex++}`); params.push(data.driveFileId || null); }
+        if (data.driveFolderId !== undefined) { fields.push(`drive_folder_id = $${pIndex++}`); params.push(data.driveFolderId || null); }
+        if (data.driveViewUrl !== undefined) { fields.push(`drive_view_url = $${pIndex++}`); params.push(data.driveViewUrl || null); }
+        if (data.drivePreviewUrl !== undefined) { fields.push(`drive_preview_url = $${pIndex++}`); params.push(data.drivePreviewUrl || null); }
+        if (data.storageProvider !== undefined) { fields.push(`storage_provider = $${pIndex++}`); params.push(data.storageProvider); }
+        if (fileBuffer) {
+          fields.push(`file_data = $${pIndex++}`);
+          params.push(fileBuffer);
+          fields.push(`file_mime = $${pIndex++}`);
+          params.push(data.fileMime || 'application/pdf');
+          if (data.storageProvider === undefined) {
+            fields.push(`storage_provider = $${pIndex++}`);
+            params.push(data.driveFileId ? 'database+gdrive' : 'database');
+          }
+        }
 
         fields.push(`updated_at = CURRENT_TIMESTAMP`);
 
@@ -377,22 +438,39 @@ export class NoteRepository {
         }
 
         params.push(id);
-        const sql = `UPDATE notes SET ${fields.join(', ')} WHERE id = $${pIndex} RETURNING *`;
+        const sql = `
+          UPDATE notes SET ${fields.join(', ')} WHERE id = $${pIndex}
+          RETURNING
+            id, title, description, course_id, subject_id, chapter_id, lesson_id,
+            file_url, file_name, file_size, thumbnail, price, is_free, is_published, page_count, download_count,
+            drive_file_id, drive_folder_id, drive_view_url, drive_preview_url, local_file_url, storage_provider,
+            file_mime, (file_data IS NOT NULL) AS has_file_data, created_at, updated_at
+        `;
         const res = await query(sql, params);
         if (res.rows.length > 0) {
-          return this.normalizeNote({ ...res.rows[0], ...data });
+          return this.normalizeNote(res.rows[0]);
         }
       } catch (err) {
         console.warn('NoteRepository update fallback to mockStore:', err.message);
       }
     }
 
+    if (fileBuffer) {
+      memoryPdfBinaries.set(id, {
+        buffer: fileBuffer,
+        mimeType: data.fileMime || 'application/pdf',
+        fileName: data.fileName || 'note.pdf',
+      });
+    }
+
     const idx = (mockData.notes || []).findIndex(n => n._id === id || n.id === id);
     if (idx === -1) return null;
 
+    const { fileData: _ignoredBuffer, ...restData } = data;
     const merged = {
       ...mockData.notes[idx],
-      ...data,
+      ...restData,
+      ...(fileBuffer ? { hasFileData: true, storageProvider: data.driveFileId ? 'database+gdrive' : 'database' } : {}),
       price: data.price !== undefined ? Number(data.price) : mockData.notes[idx].price,
       isFree: data.isFree !== undefined ? (data.isFree === true || data.isFree === 'true') : mockData.notes[idx].isFree,
       isPublished: data.isPublished !== undefined ? (data.isPublished === true || data.isPublished === 'true') : (mockData.notes[idx].isPublished ?? true),
@@ -440,10 +518,44 @@ export class NoteRepository {
   }
 
   /**
+   * Retrieve stored PDF binary buffer from PostgreSQL (or in-memory store in dev)
+   */
+  async getFileBinary(id) {
+    if (!id) return null;
+
+    if (ENV.DATABASE_URL && isUuid(id)) {
+      try {
+        const res = await query(
+          `SELECT file_data, file_mime, file_name FROM notes WHERE id = $1 AND file_data IS NOT NULL LIMIT 1`,
+          [id]
+        );
+        if (res.rows.length > 0 && res.rows[0].file_data) {
+          const row = res.rows[0];
+          const buffer = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+          return {
+            buffer,
+            mimeType: row.file_mime || 'application/pdf',
+            fileName: row.file_name || 'study-material.pdf',
+          };
+        }
+      } catch (err) {
+        console.warn('NoteRepository getFileBinary fallback:', err.message);
+      }
+    }
+
+    const mem = memoryPdfBinaries.get(id);
+    if (mem && mem.buffer) {
+      return mem;
+    }
+    return null;
+  }
+
+  /**
    * Delete a note
    */
   async delete(id) {
     if (!id) return false;
+    memoryPdfBinaries.delete(id);
 
     if (ENV.DATABASE_URL && isUuid(id)) {
       try {

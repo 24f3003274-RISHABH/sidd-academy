@@ -57,7 +57,8 @@ export const getUserById = async (req, res, next) => {
  */
 export const updateUserRole = async (req, res, next) => {
   try {
-    const user = await adminService.updateUserRole(req.params.id, req.body.role);
+    const actorId = req.user?.id || req.user?._id;
+    const user = await adminService.updateUserRole(req.params.id, req.body.role, actorId);
     return sendSuccess(res, 200, 'User role updated', { user });
   } catch (error) {
     next(error);
@@ -70,7 +71,8 @@ export const updateUserRole = async (req, res, next) => {
  */
 export const toggleUserStatus = async (req, res, next) => {
   try {
-    const user = await adminService.toggleUserStatus(req.params.id);
+    const actorId = req.user?.id || req.user?._id;
+    const user = await adminService.toggleUserStatus(req.params.id, actorId);
     return sendSuccess(res, 200, 'User status toggled', { user });
   } catch (error) {
     next(error);

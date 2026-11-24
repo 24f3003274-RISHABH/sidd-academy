@@ -47,6 +47,10 @@ export const validateCreateVideo = [
     .isIn(['720p', '1080p', '4K'])
     .withMessage('Quality must be 720p, 1080p, or 4K'),
 
+  body('isFree')
+    .optional()
+    .isBoolean().withMessage('isFree must be a boolean'),
+
   body('isPublished')
     .optional()
     .isBoolean().withMessage('isPublished must be a boolean'),
@@ -73,6 +77,10 @@ export const validateUpdateVideo = [
     .optional({ checkFalsy: true })
     .trim()
     .isURL().withMessage('Playlist URL must be a valid URL format'),
+
+  body('isFree')
+    .optional()
+    .isBoolean().withMessage('isFree must be a boolean'),
 
   body('isPublished')
     .optional()

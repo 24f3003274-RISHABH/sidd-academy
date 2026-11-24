@@ -109,8 +109,9 @@ export class CourseService {
       throw new AppError('Course title and description are required', HTTP_STATUS.BAD_REQUEST);
     }
 
-    const price = Number(data.price) || 0;
-    const discountPrice = Number(data.discountPrice) || 0;
+    const isFree = data.isFree === true || data.isFree === 'true';
+    const price = isFree ? 0 : (Number(data.price) || 0);
+    const discountPrice = isFree ? 0 : (Number(data.discountPrice) || 0);
 
     if (price < 0 || discountPrice < 0) {
       throw new AppError('Price and discount price must be non-negative numbers', HTTP_STATUS.BAD_REQUEST);
@@ -128,7 +129,7 @@ export class CourseService {
       slug,
       price,
       discountPrice,
-      isFree: data.isFree === true || data.isFree === 'true' || price === 0,
+      isFree: isFree || price === 0,
     });
   }
 
@@ -145,14 +146,32 @@ export class CourseService {
     if (updates.isFree !== undefined) {
       updates.isFree = updates.isFree === true || updates.isFree === 'true';
     }
+    if (updates.isPublished !== undefined) {
+      updates.isPublished = updates.isPublished === true || updates.isPublished === 'true';
+    }
 
     if (updates.title && updates.title !== existing.title) {
       const baseSlug = this.generateSlug(updates.title);
       updates.slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
     }
 
-    if (updates.price !== undefined && Number(updates.price) < 0) {
-      throw new AppError('Price must be a non-negative number', HTTP_STATUS.BAD_REQUEST);
+    if (updates.isFree === true) {
+      updates.price = 0;
+      updates.discountPrice = 0;
+    } else if (updates.price !== undefined || updates.discountPrice !== undefined) {
+      const nextPrice = updates.price !== undefined ? Number(updates.price) : Number(existing.price || 0);
+      const nextDiscount = updates.discountPrice !== undefined ? Number(updates.discountPrice) : Number(existing.discountPrice || 0);
+      if (Number.isNaN(nextPrice) || nextPrice < 0 || Number.isNaN(nextDiscount) || nextDiscount < 0) {
+        throw new AppError('Price and discount price must be non-negative numbers', HTTP_STATUS.BAD_REQUEST);
+      }
+      if (nextPrice > 0 && nextDiscount > nextPrice) {
+        throw new AppError('Discount price cannot exceed the original price', HTTP_STATUS.BAD_REQUEST);
+      }
+      updates.price = nextPrice;
+      updates.discountPrice = nextPrice === 0 ? 0 : nextDiscount;
+      if (updates.isFree === undefined) {
+        updates.isFree = nextPrice === 0;
+      }
     }
 
     const updated = await courseRepository.update(id, updates);
@@ -321,6 +340,7 @@ export class CourseService {
         playlistUrl,
         thumbnailUrl,
         videoProvider: 'youtube',
+        skipVideoInsert: true,
       });
 
       const lessonId = lesson.id || lesson._id;
@@ -336,6 +356,7 @@ export class CourseService {
         thumbnailUrl,
         durationSeconds: item.durationSeconds || videoService.parseDurationToSeconds(item.duration || '30:00'),
         order: orderNum,
+        isFree: lessonIsFree,
       });
 
       createdLessons.push(lesson);

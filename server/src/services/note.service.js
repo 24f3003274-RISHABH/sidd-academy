@@ -123,7 +123,8 @@ export class NoteService {
       driveViewUrl: note.driveViewUrl || null,
       drivePreviewUrl: note.drivePreviewUrl || null,
       driveDownloadUrl: note.driveDownloadUrl || null,
-      storageProvider: note.storageProvider || (note.driveFileId ? 'gdrive' : 'local'),
+      hasFileData: Boolean(note.hasFileData),
+      storageProvider: note.storageProvider || (note.hasFileData ? 'database' : note.driveFileId ? 'gdrive' : 'local'),
       fileSize: note.fileSize,
       isFree: note.isFree,
     };
@@ -144,6 +145,7 @@ export class NoteService {
       data.driveFileId ||
       googleDriveService.extractDriveFileId(data.driveViewUrl || data.driveUrl || data.fileUrl);
     const driveUrls = googleDriveService.buildDriveUrls(extractedDriveId);
+    const hasBuffer = Buffer.isBuffer(data.fileData);
 
     const note = await noteRepository.create({
       ...data,
@@ -154,12 +156,14 @@ export class NoteService {
       driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl || null,
       drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl || null,
       driveDownloadUrl: data.driveDownloadUrl || driveUrls.driveDownloadUrl || null,
-      storageProvider: extractedDriveId ? 'gdrive' : (data.storageProvider || 'local'),
+      storageProvider: hasBuffer
+        ? (extractedDriveId ? 'database+gdrive' : 'database')
+        : (extractedDriveId ? 'gdrive' : (data.storageProvider || 'local')),
       fileUrl:
         data.fileUrl ||
         driveUrls.driveViewUrl ||
         data.localFileUrl ||
-        '/uploads/notes/Class_12_Chemistry_Chemical_Kinetics_Notes.pdf',
+        '',
       fileName: data.fileName || `${String(data.title).trim().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
       fileSize: data.fileSize || '2.5 MB',
       pageCount: Number(data.pageCount || 1),
@@ -191,6 +195,7 @@ export class NoteService {
       existing.driveFileId;
     const driveUrls = googleDriveService.buildDriveUrls(extractedDriveId);
 
+    const hasBinary = Boolean(Buffer.isBuffer(data.fileData) || existing.hasFileData);
     const updated = await noteRepository.update(id, {
       ...data,
       isFree,
@@ -201,8 +206,10 @@ export class NoteService {
             driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl,
             drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl,
             driveDownloadUrl: data.driveDownloadUrl || driveUrls.driveDownloadUrl,
-            storageProvider: 'gdrive',
+            storageProvider: hasBinary ? 'database+gdrive' : 'gdrive',
           }
+        : hasBinary
+        ? { storageProvider: 'database' }
         : {}),
     });
 

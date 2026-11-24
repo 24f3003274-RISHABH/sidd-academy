@@ -1,24 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllNotes, getSecureAccess, downloadNote } from '../../api/noteApi';
-import { createOrder, verifyPayment, cancelOrder, failOrder, getPaymentKey } from '../../api/orderApi';
+import { getAllNotes, getSecureAccess } from '../../api/noteApi';
+import { createOrder, retryOrder } from '../../api/orderApi';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
 import NoteCard from '../../components/notes/NoteCard';
 import ModularNoteViewer from '../../components/notes/ModularNoteViewer';
+import PdfPreviewModal, { triggerNoteDownload } from '../../components/notes/PdfPreviewModal';
+import PaymentStatusBanner from '../../components/common/PaymentStatusBanner';
+import launchRazorpayCheckout from '../../utils/razorpayCheckout';
 import toast from 'react-hot-toast';
 import {
   FiLayers,
   FiGrid,
   FiBookOpen,
   FiSearch,
-  FiLock,
-  FiCheckCircle,
-  FiDownload,
-  FiExternalLink,
-  FiFilter,
 } from 'react-icons/fi';
-import { formatPrice, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
 import { clearGetCache } from '../../api/axiosInstance';
 
 const NotesPage = () => {
@@ -28,7 +25,7 @@ const NotesPage = () => {
   const { isAuthenticated, user, refreshUser } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [purchasingNoteId, setPurchasingNoteId] = useState(null);
-  const [checkoutMessage, setCheckoutMessage] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState(null);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'modular'
   const [filterType, setFilterType] = useState('all'); // 'all' | 'free' | 'paid'
   const [selectedSubject, setSelectedSubject] = useState('all');
@@ -96,17 +93,11 @@ const NotesPage = () => {
       return;
     }
     try {
-      toast.loading('Verifying secure PDF access...', { id: 'download' });
+      toast.loading('Preparing PDF download...', { id: 'download' });
       const accessRes = await getSecureAccess(id);
       const accessData = accessRes.data?.data || accessRes.data;
-      const targetUrl = getNoteDriveViewUrl(accessData) || getNoteDownloadUrl(accessData) || accessData.fileUrl;
-
-      if (targetUrl) {
-        window.open(targetUrl, '_blank');
-        toast.success('Opening study material from Google Drive', { id: 'download' });
-      } else {
-        toast.error('Could not locate verified download stream', { id: 'download' });
-      }
+      toast.dismiss('download');
+      await triggerNoteDownload({ ...accessData, id, title: accessData?.title || title });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Access restricted. Please purchase note to unlock.', { id: 'download' });
     }
@@ -123,34 +114,13 @@ const NotesPage = () => {
       const res = await getSecureAccess(note.id || note._id);
       const accessData = res.data?.data || res.data;
       setActivePdfPreview(accessData);
-      toast.success('PDF stream authorized', { id: 'preview' });
+      toast.dismiss('preview');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Locked study note. Please purchase to view.', { id: 'preview' });
     }
   };
 
-  const loadRazorpayScript = () => {
-    if (window.Razorpay) return Promise.resolve(true);
-    const existingScript = document.querySelector('script[data-razorpay-checkout]');
-    if (existingScript) {
-      return new Promise((resolve) => {
-        existingScript.addEventListener('load', () => resolve(true), { once: true });
-        existingScript.addEventListener('error', () => resolve(false), { once: true });
-      });
-    }
-
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.dataset.razorpayCheckout = 'true';
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
-  const handlePurchase = async (note) => {
+  const handlePurchase = async (note, retryOrderId = null) => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: '/notes' } });
       return;
@@ -158,12 +128,14 @@ const NotesPage = () => {
     const noteId = note.id || note._id;
     setPaymentLoading(true);
     setPurchasingNoteId(noteId);
-    setCheckoutMessage('');
+    setPaymentStatus(null);
     let checkoutOpened = false;
     try {
-      const orderRes = await createOrder({
-        items: [{ itemId: noteId, itemType: 'note' }],
-      });
+      const orderRes = retryOrderId
+        ? await retryOrder(retryOrderId).catch(() =>
+            createOrder({ items: [{ itemId: noteId, itemType: 'note' }] })
+          )
+        : await createOrder({ items: [{ itemId: noteId, itemType: 'note' }] });
       const orderData = orderRes.data?.data || orderRes.data;
 
       // If free note or 0 INR, unlocked immediately
@@ -177,103 +149,74 @@ const NotesPage = () => {
         return;
       }
 
-      const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
-
-      let resolvedKey = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
-      if (!resolvedKey) {
-        try {
-          const keyRes = await getPaymentKey();
-          resolvedKey = (keyRes.data?.data?.key || keyRes.data?.key || '').trim();
-        } catch {
-          resolvedKey = '';
-        }
-      }
-
-      if (isMock || !razorpayOrderId || razorpayOrderId.startsWith('order_mock_') || !resolvedKey) {
-        if (orderId) {
-          cancelOrder(orderId).catch(() => {});
-        }
-        throw new Error(
-          'Razorpay payment gateway keys are not configured yet. Please add your live RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env to accept payments.'
-        );
-      }
-
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
-        throw new Error('Razorpay checkout could not be loaded. Please check your connection and try again.');
-      }
-
-      const options = {
-        key: resolvedKey,
-        amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
-        currency: currency || 'INR',
-        name: 'Sidd Academy',
+      await launchRazorpayCheckout({
+        orderData,
+        fallbackOrderId: retryOrderId,
         description: `Digital Note: ${note.title}`,
-        order_id: razorpayOrderId,
-        handler: async (response) => {
-          try {
-            await verifyPayment({
-              orderId,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            clearGetCache();
-            if (refreshUser) await refreshUser();
-            toast.success('Payment verified! Digital note unlocked.');
-            setPaymentLoading(false);
-            setPurchasingNoteId(null);
-            fetchNotes();
-          } catch (err) {
-            setPaymentLoading(false);
-            setPurchasingNoteId(null);
-            toast.error(err.response?.data?.message || 'Payment verification failed');
+        user,
+        refreshUser,
+        onVerifying: ({ orderId, razorpayPaymentId }) => {
+          setPaymentStatus({
+            status: 'verifying',
+            title: `Verifying payment for "${note.title}"…`,
+            message: 'Please hold on while we unlock your PDF note.',
+            orderId,
+            paymentId: razorpayPaymentId,
+            note,
+          });
+        },
+        onSuccess: ({ orderId }) => {
+          setPaymentStatus({
+            status: 'success',
+            title: 'Note Unlocked!',
+            message: `"${note.title}" is now unlocked in your Notes Library and ready to read or download.`,
+            orderId,
+            note,
+          });
+          toast.success('Payment verified! Digital note unlocked.');
+          fetchNotes();
+        },
+        onFailed: ({ orderId, description, paymentId, modalClosed }) => {
+          setPaymentStatus({
+            status: 'failed',
+            title: `Payment Failed — ${note.title}`,
+            message: description || 'Your payment was declined or could not be completed. You can retry anytime.',
+            orderId,
+            paymentId,
+            note,
+          });
+          if (!modalClosed) {
+            toast.error(`Payment failed: ${description || 'Transaction declined'}`);
           }
         },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || '',
-        },
-        theme: { color: '#2563eb' },
-        modal: {
-          escape: true,
-          backdropclose: false,
-        },
-      };
-
-      const paymentObject = new window.Razorpay(options);
-      const finishCheckout = () => {
-        setPaymentLoading(false);
-        setPurchasingNoteId(null);
-      };
-
-      paymentObject.on('payment.failed', function (resp) {
-        finishCheckout();
-        failOrder(orderId).catch(() => {});
-        setCheckoutMessage('Payment was declined or failed. You can try again.');
-        toast.error(`Payment failed: ${resp.error?.description || 'Transaction declined'}`);
-      });
-
-      paymentObject.on('modal.ondismiss', async () => {
-        finishCheckout();
-        try {
-          await cancelOrder(orderId);
-          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
-          toast('Checkout cancelled. No payment was recorded.', { icon: 'ℹ️' });
+        onCancelled: ({ orderId, message }) => {
+          setPaymentStatus({
+            status: 'cancelled',
+            title: `Checkout Cancelled — ${note.title}`,
+            message: message || 'Checkout was closed before payment. No amount was deducted.',
+            orderId,
+            note,
+          });
+          toast('Checkout cancelled. No payment was charged.', { icon: 'ℹ️' });
           fetchNotes();
-        } catch (err) {
-          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
-        }
+        },
+        onVerificationError: ({ orderId, razorpayPaymentId, message }) => {
+          setPaymentStatus({
+            status: 'verification_error',
+            title: 'Payment Verification Issue',
+            message,
+            orderId,
+            paymentId: razorpayPaymentId,
+            note,
+          });
+          toast.error(message);
+        },
+        onDone: () => {
+          setPaymentLoading(false);
+          setPurchasingNoteId(null);
+        },
       });
-
-      paymentObject.open();
       checkoutOpened = true;
-
-      // Safety timeout guard so UI never stays stuck on Processing...
-      window.setTimeout(() => {
-        finishCheckout();
-      }, 60000);
     } catch (err) {
       setPaymentLoading(false);
       setPurchasingNoteId(null);
@@ -286,7 +229,14 @@ const NotesPage = () => {
         toast.success('You already have access to this note!');
         fetchNotes();
       } else {
-        toast.error(serverMsg || err.message || 'Failed to initiate purchase order');
+        const msg = serverMsg || err.message || 'Failed to initiate purchase order';
+        setPaymentStatus({
+          status: 'failed',
+          title: 'Could Not Start Checkout',
+          message: msg,
+          note,
+        });
+        toast.error(msg);
       }
     } finally {
       if (!checkoutOpened) {
@@ -297,29 +247,30 @@ const NotesPage = () => {
   };
 
   return (
-    <div className="container" style={{ padding: '3.5rem 0' }}>
+    <div className="container" style={{ padding: 'clamp(1.75rem, 4vw, 3.5rem) 0' }}>
       {/* Header Banner */}
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: '0.4rem',
-            color: '#939aff',
-            backgroundColor: 'rgba(108, 99, 255, 0.15)',
+            color: 'var(--primary-dark)',
+            backgroundColor: 'var(--primary-subtle)',
+            border: '1px solid var(--primary-border)',
             padding: '0.35rem 0.9rem',
             borderRadius: '20px',
-            fontSize: '0.85rem',
+            fontSize: '0.82rem',
             fontWeight: 600,
             marginBottom: '0.75rem',
           }}
         >
-          <FiBookOpen /> Sidd Academy Digital Notes & Study PDFs
+          <FiBookOpen /> Sidd Academy Digital Notes &amp; Study PDFs
         </div>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '0.75rem', fontWeight: 800 }}>
-          Digital Notes & Study Materials
+        <h1 style={{ fontSize: 'clamp(1.65rem, 4.5vw, 2.5rem)', marginBottom: '0.65rem', fontWeight: 800 }}>
+          Digital Notes &amp; Study Materials
         </h1>
-        <p style={{ color: 'var(--text-muted)', maxWidth: '650px', margin: '0 auto', fontSize: '1rem', lineHeight: 1.6 }}>
+        <p style={{ color: 'var(--text-muted)', maxWidth: '650px', margin: '0 auto', fontSize: '0.96rem', lineHeight: 1.6 }}>
           Access curated handwritten topper notes, formula cheat-sheets, solved board questions, and chapter revisions with instant access verification.
         </p>
       </div>
@@ -328,31 +279,31 @@ const NotesPage = () => {
       <div
         className="card-glass"
         style={{
-          padding: '1.25rem 1.5rem',
+          padding: '1rem 1.15rem',
           borderRadius: '12px',
           display: 'flex',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '0.85rem',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '2rem',
+          marginBottom: '1.75rem',
         }}
       >
         {/* Search Input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 280px', position: 'relative' }}>
-          <FiSearch style={{ position: 'absolute', left: '1rem', color: 'var(--text-muted)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 220px', position: 'relative', minWidth: 0 }}>
+          <FiSearch style={{ position: 'absolute', left: '0.9rem', color: 'var(--text-muted)' }} />
           <input
             type="text"
             className="form-input"
-            style={{ paddingLeft: '2.5rem' }}
-            placeholder="Search notes, chapters, formulas, or topics..."
+            style={{ paddingLeft: '2.4rem' }}
+            placeholder="Search notes, chapters, formulas..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
         {/* Access Type Badges: All / Free / Paid */}
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => setFilterType('all')}
             className={`btn btn-sm ${filterType === 'all' ? 'btn-primary' : 'btn-outline'}`}
@@ -376,8 +327,28 @@ const NotesPage = () => {
           </button>
         </div>
 
+        {/* Subject Filter Dropdown */}
+        {subjectsList.length > 2 && (
+          <select
+            className="form-select"
+            style={{ width: 'auto', minWidth: '175px' }}
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            aria-label="Filter notes by subject"
+          >
+            <option value="all">All Subjects</option>
+            {subjectsList
+              .filter((s) => s !== 'all')
+              .map((subj) => (
+                <option key={subj} value={subj}>
+                  {subj}
+                </option>
+              ))}
+          </select>
+        )}
+
         {/* View Mode Toggle */}
-        <div style={{ display: 'flex', gap: '0.4rem', borderLeft: '1px solid var(--border)', paddingLeft: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
           <button
             onClick={() => setViewMode('grid')}
             className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline'}`}
@@ -397,11 +368,25 @@ const NotesPage = () => {
         </div>
       </div>
 
-        {checkoutMessage && (
-          <div role="status" className="admin-inline-error" style={{ marginTop: '1rem', borderColor: 'var(--border)', background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
-            {checkoutMessage}
-          </div>
-        )}
+      {paymentStatus && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <PaymentStatusBanner
+            status={paymentStatus.status}
+            title={paymentStatus.title}
+            message={paymentStatus.message}
+            orderId={paymentStatus.orderId}
+            paymentId={paymentStatus.paymentId}
+            retrying={paymentLoading}
+            onRetry={
+              paymentStatus.note && (paymentStatus.status === 'failed' || paymentStatus.status === 'cancelled')
+                ? () => handlePurchase(paymentStatus.note, paymentStatus.orderId || null)
+                : undefined
+            }
+            retryLabel={paymentStatus.status === 'failed' ? 'Retry Payment' : 'Resume Checkout'}
+            onDismiss={() => setPaymentStatus(null)}
+          />
+        </div>
+      )}
 
       {/* Main Content Area */}
       {loading ? (
@@ -426,7 +411,7 @@ const NotesPage = () => {
               <p style={{ marginTop: '0.5rem' }}>Try adjusting your filters or search keywords.</p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '1.25rem' }}>
               {filteredNotes.map((note) => (
                 <NoteCard
                   key={note.id || note._id}
@@ -445,90 +430,12 @@ const NotesPage = () => {
         </div>
       )}
 
-      {/* PDF Modal Reader */}
+      {/* Unified Authenticated PDF Modal Reader */}
       {activePdfPreview && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-          onClick={() => setActivePdfPreview(null)}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '900px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: '1rem 1.5rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--border)',
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{activePdfPreview.title}</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {activePdfPreview.fileName} • {activePdfPreview.fileSize || '2.5 MB'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                {getNoteDriveViewUrl(activePdfPreview) && (
-                  <a
-                    href={getNoteDriveViewUrl(activePdfPreview)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                  >
-                    <FiExternalLink size={14} /> Open in Google Drive
-                  </a>
-                )}
-                <a
-                  href={getNoteDownloadUrl(activePdfPreview)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <FiDownload size={14} /> Download PDF
-                </a>
-                <button onClick={() => setActivePdfPreview(null)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={getNoteStreamUrl(activePdfPreview)}
-                title={activePdfPreview.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={activePdfPreview}
+          onClose={() => setActivePdfPreview(null)}
+        />
       )}
     </div>
   );

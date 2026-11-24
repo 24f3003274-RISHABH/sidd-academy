@@ -9,10 +9,74 @@ import FeaturedBanners from '../../components/home/FeaturedBanners';
 import CourseCard from '../../components/course/CourseCard';
 import YouTubeVideoCard from '../../components/video/YouTubeVideoCard';
 
+const OFFICIAL_POSTER_BANNERS = [
+  {
+    id: 'official_poster_1',
+    title: 'TARGET BATCH — UP Board • CBSE Board • JEE Mains (100 Days Left)',
+    subtitle: '100 दिन की मेहनत, पूरे साल की पहचान! आज की तैयारी • कल की सफलता — Physics, Chemistry, Mathematics & Biology complete target preparation.',
+    badge: '🎯 100 DAYS TARGET BATCH',
+    buttonText: 'Join Target Batch',
+    imageUrl: '/posters/target-batch-100-days-banner.jpg',
+    linkUrl: '/courses',
+    isActive: true,
+    order: 1,
+  },
+  {
+    id: 'official_poster_2',
+    title: 'CLASS 11th SPECIAL BATCH — मात्र 90 दिनों में पूरा सिलेबस',
+    subtitle: 'Physics • Chemistry • Maths • Biology | प्रतिदिन 5 घंटे की क्लास + Sunday Morning Test & Evening Class शहजाद सर और SIDDHANT BHAIYAA के कुशल नेतृत्व में।',
+    badge: '⚡ CLASS 11th SPECIAL BATCH',
+    buttonText: 'Explore Class 11 Batch',
+    imageUrl: '/posters/class-11-special-batch-1.jpg',
+    linkUrl: '/courses',
+    isActive: true,
+    order: 2,
+  },
+  {
+    id: 'official_poster_3',
+    title: 'Chapter-wise TEST Series — Every Saturday & Sunday (Timing 4:00 से 6:00)',
+    subtitle: 'Board Exam जैसा अनुभव! Board Pattern Based Test, Detailed Analysis & Performance Improvement at Gali No. 20, Ganga Nagar, Rajapur, Prayagraj.',
+    badge: '📝 WEEKEND CHAPTER-WISE TEST',
+    buttonText: 'Join Test Series',
+    imageUrl: '/posters/chapter-wise-weekend-test.jpg',
+    linkUrl: '/courses',
+    isActive: true,
+    order: 3,
+  },
+  {
+    id: 'official_poster_4',
+    title: 'TARGET BATCH — 100 दिन की मेहनत, पूरे साल की पहचान!',
+    subtitle: 'UP Board • CBSE Board • JEE Mains | आज की तैयारी • कल की सफलता — Complete 100-Day Intensive Revision & Practice Batch.',
+    badge: '🔥 100 DAYS INTENSIVE',
+    buttonText: 'Enroll in Target Batch',
+    imageUrl: '/posters/target-batch-100-days-poster.jpg',
+    linkUrl: '/courses',
+    isActive: true,
+    order: 4,
+  },
+  {
+    id: 'official_poster_5',
+    title: 'SID ACADEMY PRAYAGRAJ — Class 11th Special Batch (90 Days Full Syllabus)',
+    subtitle: 'कमजोर छात्रों पर विशेष ध्यान | प्रतिदिन 5 घंटे की क्लास + Sunday Morning Test | पता: गली नं. 20 के पास, गंगा नगर, राजापुर, प्रयागराज।',
+    badge: '📚 CLASS 11th 90-DAY BATCH',
+    buttonText: 'Explore Class 11 Courses',
+    imageUrl: '/posters/class-11-special-batch-2.jpg',
+    linkUrl: '/courses',
+    isActive: true,
+    order: 5,
+  },
+];
+
+const isLegacyPlaceholderBanner = (b) =>
+  !b ||
+  /Crack Top Tech Interviews/i.test(b.title || '') ||
+  /Data Structures, Web Development, and DBMS/i.test(b.subtitle || '') ||
+  /Download 100\+ Free Hand-Written Lecture Notes/i.test(b.title || '');
+
 const HomePage = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
-  const [banners, setBanners] = useState([]);
+  const [banners, setBanners] = useState(OFFICIAL_POSTER_BANNERS);
 
   const purchasedIdsKey = (user?.purchasedCourses || []).join(',');
   const purchasedSet = useMemo(() => new Set(user?.purchasedCourses || []), [purchasedIdsKey]);
@@ -30,8 +94,14 @@ const HomePage = () => {
           setCourses(coursesList);
         }
         if (bannerRes.status === 'fulfilled') {
-          const bannersList = bannerRes.value.data?.data?.banners || bannerRes.value.data?.banners || [];
-          setBanners(bannersList);
+          const bannersList = (bannerRes.value.data?.data?.banners || bannerRes.value.data?.banners || []).filter(
+            (b) => !isLegacyPlaceholderBanner(b)
+          );
+          if (bannersList.length > 0) {
+            setBanners(bannersList);
+          } else {
+            setBanners(OFFICIAL_POSTER_BANNERS);
+          }
         }
       } catch (err) {
         console.error('Error loading home data', err);
@@ -160,7 +230,7 @@ const HomePage = () => {
           </div>
 
           <div className="grid-3">
-            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--primary)' }}>
+            <Link to="/courses?level=Class%2010" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--primary)' }}>
               <div style={{ display: 'inline-block', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
                 Class 10th High School
               </div>
@@ -173,7 +243,7 @@ const HomePage = () => {
               </span>
             </Link>
 
-            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--secondary)' }}>
+            <Link to="/courses?level=Class%2011" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--secondary)' }}>
               <div style={{ display: 'inline-block', backgroundColor: 'var(--secondary-subtle)', color: 'var(--secondary-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
                 Class 11th Foundation
               </div>
@@ -186,7 +256,7 @@ const HomePage = () => {
               </span>
             </Link>
 
-            <Link to="/courses" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--accent)' }}>
+            <Link to="/courses?level=Class%2012" className="card" style={{ padding: '1.75rem', textAlign: 'left', textDecoration: 'none', borderLeft: '4px solid var(--accent)' }}>
               <div style={{ display: 'inline-block', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent-dark)', padding: '0.3rem 0.75rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem' }}>
                 Class 12th Board Target
               </div>
@@ -210,7 +280,7 @@ const HomePage = () => {
               प्रमुख पाठ्यक्रम (Featured Academic Courses)
             </h2>
             <p style={{ color: 'var(--text-muted)', margin: '0.35rem 0 0 0', fontSize: '0.95rem' }}>
-              सत्र 2024-2025 के लिए नवीनतम पाठयक्रम अनुसार तैयार
+              नवीनतम बोर्ड एवं NCERT पाठयक्रम अनुसार तैयार
             </p>
           </div>
           <Link to="/courses" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -344,8 +414,8 @@ const HomePage = () => {
 
       {/* Modular Study Material Banner */}
       <section className="section container" style={{ textAlign: 'center' }}>
-        <div style={{ padding: '3.5rem 2rem', borderRadius: '16px', backgroundColor: 'var(--primary-subtle)', border: '1px solid var(--primary-border)' }}>
-          <h2 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--primary-dark)', marginBottom: '1rem' }}>
+        <div style={{ padding: 'clamp(1.75rem, 5vw, 3.5rem) clamp(1.1rem, 4vw, 2rem)', borderRadius: '16px', backgroundColor: 'var(--primary-subtle)', border: '1px solid var(--primary-border)' }}>
+          <h2 style={{ fontSize: 'clamp(1.45rem, 4.2vw, 2.25rem)', fontWeight: 800, color: 'var(--primary-dark)', marginBottom: '0.85rem' }}>
             हस्तलिखित नोट्स एवं फॉर्मूला PDFs (Modular Notes)
           </h2>
           <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', marginBottom: '2rem', maxWidth: '650px', margin: '0 auto 2rem auto', lineHeight: 1.7 }}>

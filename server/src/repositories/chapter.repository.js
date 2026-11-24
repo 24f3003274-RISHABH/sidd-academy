@@ -19,7 +19,7 @@ export class ChapterRepository {
     if (ENV.DATABASE_URL && isUuid(subjectId)) {
       try {
         const sql = `
-          SELECT id, subject_id, title, order_num as order_index, created_at, updated_at
+          SELECT id, subject_id, title, description, order_num as order_index, created_at, updated_at
           FROM chapters
           WHERE subject_id = $1
           ORDER BY order_num ASC, created_at ASC
@@ -62,17 +62,18 @@ export class ChapterRepository {
   /**
    * Create chapter
    */
-  async create({ subjectId, title, order = 0 }) {
+  async create({ subjectId, title, description = '', content = '', videoUrl = '', order = 0 }) {
     const id = uuidv4();
+    const cleanDesc = String(description || content || '').trim();
 
     if (ENV.DATABASE_URL && isUuid(subjectId)) {
       try {
         const sql = `
-          INSERT INTO chapters (id, subject_id, title, order_num, order_index, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $4, NOW(), NOW())
+          INSERT INTO chapters (id, subject_id, title, description, order_num, order_index, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $5, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, subjectId, title.trim(), Number(order) || 0]);
+        const res = await query(sql, [id, subjectId, title.trim(), cleanDesc, Number(order) || 0]);
         return this.normalizeChapter(res.rows[0]);
       } catch (err) {
         console.warn('ChapterRepository create fallback to mockStore:', err.message);
@@ -88,6 +89,9 @@ export class ChapterRepository {
       subjectId,
       courseId: parentSubject?.courseId || parentSubject?.course || null,
       title: title.trim(),
+      description: cleanDesc,
+      content: cleanDesc,
+      videoUrl: videoUrl ? String(videoUrl).trim() : '',
       order: Number(order) || 0,
       dailyClasses: [],
       createdAt: new Date().toISOString(),
@@ -115,6 +119,10 @@ export class ChapterRepository {
           fields.push(`title = $${pIndex++}`);
           values.push(updates.title.trim());
         }
+        if (updates.description !== undefined || updates.content !== undefined) {
+          fields.push(`description = $${pIndex++}`);
+          values.push(String(updates.description ?? updates.content ?? '').trim());
+        }
         if (updates.order !== undefined || updates.order_index !== undefined || updates.orderNum !== undefined) {
           const ord = Number(updates.order ?? updates.order_index ?? updates.orderNum);
           fields.push(`order_num = $${pIndex++}`);
@@ -138,6 +146,12 @@ export class ChapterRepository {
     if (!ch) return null;
 
     if (updates.title !== undefined) ch.title = updates.title.trim();
+    if (updates.description !== undefined || updates.content !== undefined) {
+      const desc = String(updates.description ?? updates.content ?? '').trim();
+      ch.description = desc;
+      ch.content = desc;
+    }
+    if (updates.videoUrl !== undefined) ch.videoUrl = String(updates.videoUrl || '').trim();
     if (updates.order !== undefined) ch.order = Number(updates.order);
     ch.updatedAt = new Date().toISOString();
 
@@ -186,6 +200,9 @@ export class ChapterRepository {
       subjectId,
       subject: subjectId,
       title: ch.title,
+      description: ch.description || ch.content || '',
+      content: ch.description || ch.content || '',
+      videoUrl: ch.videoUrl || ch.video_url || '',
       order: ch.order_index !== undefined ? Number(ch.order_index) : (ch.order !== undefined ? Number(ch.order) : 0),
       order_index: ch.order_index !== undefined ? Number(ch.order_index) : (ch.order !== undefined ? Number(ch.order) : 0),
       createdAt: ch.created_at || ch.createdAt,

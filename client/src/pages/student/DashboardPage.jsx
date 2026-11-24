@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getStudentDashboard } from '../../api/studentApi';
 import { getSecureAccess } from '../../api/noteApi';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonDashboard } from '../../components/common/SkeletonLoader';
+import PdfPreviewModal, { triggerNoteDownload } from '../../components/notes/PdfPreviewModal';
 import toast from 'react-hot-toast';
-import { formatPrice, getEffectivePrice, resolveMediaUrl, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice, resolveMediaUrl } from '../../utils/helpers';
 import {
   FiBook,
   FiFileText,
@@ -16,25 +17,20 @@ import {
   FiClock,
   FiDownload,
   FiEye,
-  FiLayers,
   FiStar,
   FiUser,
   FiActivity,
   FiAlertCircle,
   FiCompass,
   FiAward,
-  FiExternalLink,
 } from 'react-icons/fi';
 
 const DashboardPage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // PDF Preview modal states for quick note viewing
   const [previewNote, setPreviewNote] = useState(null);
   const [downloadingNoteId, setDownloadingNoteId] = useState(null);
 
@@ -50,7 +46,7 @@ const DashboardPage = () => {
       }
     } catch (err) {
       console.error('Failed to load student dashboard:', err);
-      setError('Unable to load your student dashboard. Please check your connection and try again.');
+      setError(err.response?.data?.message || err.message || 'Unable to load your student dashboard. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -62,15 +58,13 @@ const DashboardPage = () => {
 
   const handleDownloadNote = async (note) => {
     try {
-      setDownloadingNoteId(note.id || note._id);
-      const res = await getSecureAccess(note.id || note._id);
+      const id = note.id || note._id;
+      setDownloadingNoteId(id);
+      const res = await getSecureAccess(id);
       const accessData = res.data?.data || res.data || note;
-      const fileUrl = getNoteDownloadUrl(accessData) || getNoteDriveViewUrl(accessData) || accessData.fileUrl;
-
-      toast.success(`Opening study material from Google Drive: ${note.title}`);
-      window.open(fileUrl, '_blank');
+      await triggerNoteDownload({ ...note, ...accessData });
     } catch (err) {
-      toast.error('Failed to initiate secure note download');
+      toast.error(err.response?.data?.message || 'Failed to download note');
     } finally {
       setDownloadingNoteId(null);
     }
@@ -93,12 +87,12 @@ const DashboardPage = () => {
             padding: '3rem 2rem',
             textAlign: 'center',
             borderRadius: '16px',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
           }}
         >
-          <FiAlertCircle size={48} color="#ef4444" style={{ marginBottom: '1rem' }} />
-          <h2 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>Failed to Load Dashboard</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', maxWidth: '500px', margin: '0 auto 1.5rem auto' }}>
+          <FiAlertCircle size={44} color="#ef4444" style={{ marginBottom: '1rem' }} />
+          <h2 style={{ fontSize: '1.35rem', marginBottom: '0.5rem' }}>Unable to Load Dashboard</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
             {error}
           </p>
           <button onClick={fetchDashboard} className="btn btn-primary">
@@ -120,611 +114,596 @@ const DashboardPage = () => {
     recentActivities = [],
   } = dashboardData || {};
 
+  const kpiItems = [
+    {
+      label: 'Enrolled Courses',
+      value: stats.enrolledCourses ?? enrolledCourses.length,
+      icon: <FiBook size={20} />,
+      bg: 'var(--primary-subtle)',
+      color: 'var(--primary-dark)',
+    },
+    {
+      label: 'Unlocked Notes',
+      value: stats.purchasedNotes ?? purchasedNotes.length,
+      icon: <FiFileText size={20} />,
+      bg: 'var(--accent-subtle)',
+      color: 'var(--accent-dark)',
+    },
+    {
+      label: 'Completed Lessons',
+      value: stats.totalLessonsCompleted || 0,
+      icon: <FiCheckCircle size={20} />,
+      bg: 'var(--secondary-subtle)',
+      color: 'var(--secondary-dark)',
+    },
+    {
+      label: 'Average Progress',
+      value: `${stats.overallProgress || 0}%`,
+      icon: <FiActivity size={20} />,
+      bg: '#fdf2f8',
+      color: '#be185d',
+    },
+  ];
+
   return (
     <StudentLayout>
-      {/* 1. WELCOME SECTION & MOTIVATION HERO */}
-      <div
-        className="student-dashboard-hero card"
-        style={{
-          padding: '2rem',
-          marginBottom: '2rem',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '20px', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary-dark)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-              <FiAward /> Student Learning Space
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+        {/* 1. Welcome Banner */}
+        <section
+          className="student-dashboard-hero"
+          style={{
+            padding: '1.75rem 2rem',
+            borderRadius: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1.25rem',
+            boxShadow: 'var(--shadow-xs)',
+          }}
+        >
+          <div style={{ maxWidth: '580px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.28rem 0.75rem',
+                borderRadius: '999px',
+                backgroundColor: '#ffffff',
+                border: '1px solid var(--primary-border)',
+                color: 'var(--primary-dark)',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                marginBottom: '0.75rem',
+              }}
+            >
+              <FiAward size={13} /> Student Learning Space
             </div>
-            <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' }}>
-              Welcome back, {profile?.name || user?.name || 'Student'}! 👋
+            <h1 style={{ fontSize: 'clamp(1.5rem, 2.5vw, 1.95rem)', fontWeight: 800, margin: '0 0 0.4rem 0', letterSpacing: '-0.02em' }}>
+              Welcome back, {profile?.name || user?.name || 'Student'}
             </h1>
-            <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.95rem', maxWidth: '600px', lineHeight: 1.5 }}>
-              Continuously track your syllabus completion, watch scheduled classroom lectures, and review your handwritten master notes.
+            <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.94rem', lineHeight: 1.55 }}>
+              Track your syllabus progress, resume classroom lectures, and read your handwritten notes in one place.
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <Link to="/courses" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FiCompass /> Browse Catalog
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <Link to="/courses" className="btn btn-outline">
+              <FiCompass size={16} /> Browse Catalog
             </Link>
             {continueLearning && (
-              <Link to={`/courses/${continueLearning.id || continueLearning._id}/watch`} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <FiPlayCircle /> Resume Learning
+              <Link
+                to={`/courses/${continueLearning.id || continueLearning._id}/watch`}
+                className="btn btn-primary"
+              >
+                <FiPlayCircle size={16} /> Resume Learning
               </Link>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Quick Learning Stats Strip */}
-        <div
+        {/* 2. Four Elevated KPI Cards */}
+        <section
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))',
             gap: '1rem',
-            marginTop: '2rem',
-            paddingTop: '1.5rem',
-            borderTop: '1px solid var(--border)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
-              <FiBook />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{stats.enrolledCourses || enrolledCourses.length}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 500 }}>Enrolled Courses</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
-              <FiFileText />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{stats.purchasedNotes || purchasedNotes.length}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 500 }}>Purchased Notes</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
-              <FiCheckCircle />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{stats.totalLessonsCompleted || 0}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 500 }}>Completed Lessons</div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'rgba(236, 72, 153, 0.2)', color: '#ec4899', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
-              <FiActivity />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{stats.overallProgress || 0}%</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 500 }}>Average Progress</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. CONTINUE LEARNING BANNER (If Enrolled) */}
-      {continueLearning && (
-        <div
-          className="card-glass"
-          style={{
-            padding: '1.5rem',
-            borderRadius: '16px',
-            border: '1px solid var(--border)',
-            marginBottom: '2.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '1.25rem',
-            background: 'var(--bg-card)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            <img
-              src={resolveMediaUrl(continueLearning.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400'}
-              alt={continueLearning.title}
-              style={{ width: '100px', height: '65px', borderRadius: '10px', objectFit: 'cover' }}
-            />
-            <div>
-              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: 700, letterSpacing: '0.05em' }}>
-                Continue Where You Left Off
-              </div>
-              <h3 style={{ fontSize: '1.1rem', margin: '0.2rem 0', fontWeight: 700 }}>
-                {continueLearning.title}
-              </h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <span>By {continueLearning.instructor}</span>
-                <span>•</span>
-                <span>{continueLearning.progressPercentage || 0}% Completed</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '220px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-muted)', borderRadius: '4px', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${continueLearning.progressPercentage || 0}%`,
-                    height: '100%',
-                    backgroundColor: 'var(--primary)',
-                    borderRadius: '4px',
-                    transition: 'width 0.4s ease',
-                  }}
-                />
-              </div>
-            </div>
-            <Link
-              to={`/courses/${continueLearning.id || continueLearning._id}/watch`}
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
-            >
-              Resume <FiArrowRight />
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* 3. TWO-COLUMN MAIN CONTENT: ENROLLED COURSES & PURCHASED NOTES */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem', marginBottom: '2.5rem' }}>
-        {/* Enrolled Courses */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiBook style={{ color: 'var(--primary)' }} /> Enrolled Courses
-            </h2>
-            <Link to="/student/my-courses" style={{ color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
-              View All ({enrolledCourses.length})
-            </Link>
-          </div>
-
-          {enrolledCourses.length === 0 ? (
+          {kpiItems.map((item) => (
             <div
-              className="card-glass"
+              key={item.label}
+              className="stat-card"
               style={{
-                padding: '2.5rem 1.5rem',
-                textAlign: 'center',
-                borderRadius: '16px',
-                border: '1px dashed var(--border)',
+                padding: '1.2rem 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.9rem',
+                borderRadius: '14px',
               }}
             >
-              <FiBook size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
-              <h3 style={{ fontSize: '1.05rem', marginBottom: '0.4rem' }}>No Courses Enrolled Yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Explore our full syllabus courses for Class 10 & 12 Science, Chemistry, Biology & English.
-              </p>
-              <Link to="/courses" className="btn btn-sm btn-primary">
-                Browse Courses
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '11px',
+                  backgroundColor: item.bg,
+                  color: item.color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {item.icon}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, lineHeight: 1.15, color: 'var(--text-primary)' }}>
+                  {item.value}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, marginTop: '0.15rem' }}>
+                  {item.label}
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* 3. Continue Learning Spotlight */}
+        {continueLearning && (
+          <section
+            className="card-glass"
+            style={{
+              padding: '1.35rem 1.5rem',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '1.25rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem', flex: '1 1 300px', minWidth: 0 }}>
+              <img
+                src={resolveMediaUrl(continueLearning.thumbnail) || '/posters/target-batch-100-days-banner.jpg'}
+                alt={continueLearning.title}
+                style={{
+                  width: '108px',
+                  height: '68px',
+                  borderRadius: '10px',
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                  border: '1px solid var(--border)',
+                }}
+              />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: 700, letterSpacing: '0.06em' }}>
+                  Continue Where You Left Off
+                </div>
+                <h3 style={{ fontSize: '1.05rem', margin: '0.2rem 0 0.25rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {continueLearning.title}
+                </h3>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  By {continueLearning.instructor} • {continueLearning.progressPercentage || 0}% Completed
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: '0 1 280px', minWidth: '220px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                  <span>Progress</span>
+                  <span>{continueLearning.progressPercentage || 0}%</span>
+                </div>
+                <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-muted)', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${Math.min(100, continueLearning.progressPercentage || 0)}%`,
+                      height: '100%',
+                      backgroundColor: 'var(--primary)',
+                      borderRadius: '999px',
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
+              </div>
+              <Link
+                to={`/courses/${continueLearning.id || continueLearning._id}/watch`}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '0.55rem 1rem' }}
+              >
+                Resume <FiArrowRight size={14} />
               </Link>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {enrolledCourses.slice(0, 3).map((course) => (
-                <div
-                  key={course.id || course._id}
-                  className="card-glass hover-scale"
-                  style={{
-                    padding: '1.25rem',
-                    borderRadius: '14px',
-                    border: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <img
-                      src={resolveMediaUrl(course.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300'}
-                      alt={course.title}
-                      style={{ width: '80px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
-                    />
-                    <div style={{ overflow: 'hidden', flex: 1 }}>
-                      <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.95rem', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                        {course.title}
-                      </h4>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                        Instructor: {course.instructor}
+          </section>
+        )}
+
+        {/* 4. Two-Column Main Workspace: Enrolled Courses & Unlocked Notes */}
+        <section
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+            gap: '1.5rem',
+            alignItems: 'start',
+          }}
+        >
+          {/* Enrolled Courses Column */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiBook style={{ color: 'var(--primary)' }} /> Enrolled Courses
+              </h2>
+              <Link to="/student/my-courses" style={{ color: 'var(--primary)', fontSize: '0.84rem', fontWeight: 600 }}>
+                View All ({enrolledCourses.length})
+              </Link>
+            </div>
+
+            {enrolledCourses.length === 0 ? (
+              <div
+                className="card-glass"
+                style={{
+                  padding: '2.25rem 1.5rem',
+                  textAlign: 'center',
+                  borderRadius: '14px',
+                  border: '1px dashed var(--border)',
+                }}
+              >
+                <FiBook size={32} style={{ color: 'var(--text-muted)', marginBottom: '0.65rem' }} />
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.35rem' }}>No Courses Enrolled Yet</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.15rem' }}>
+                  Explore structured courses for Class 10–12 Physics, Chemistry, Biology &amp; English.
+                </p>
+                <Link to="/courses" className="btn btn-sm btn-primary">
+                  Browse Courses
+                </Link>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                {enrolledCourses.slice(0, 3).map((course) => (
+                  <div
+                    key={course.id || course._id}
+                    className="card-glass"
+                    style={{
+                      padding: '1.15rem',
+                      borderRadius: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '0.9rem', alignItems: 'center' }}>
+                      <img
+                        src={resolveMediaUrl(course.thumbnail) || '/posters/target-batch-100-days-banner.jpg'}
+                        alt={course.title}
+                        style={{
+                          width: '76px',
+                          height: '52px',
+                          borderRadius: '8px',
+                          objectFit: 'cover',
+                          flexShrink: 0,
+                          border: '1px solid var(--border)',
+                        }}
+                      />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <h4 style={{ margin: '0 0 0.2rem 0', fontSize: '0.95rem', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          {course.title}
+                        </h4>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                          {course.instructor}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <span>Progress: {course.progressPercentage || 0}%</span>
-                    <span>{course.completedLessons || 0}/{course.totalLessons || 12} Lessons</span>
-                  </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                        <span>Progress: {course.progressPercentage || 0}%</span>
+                        <span>{course.completedLessons || 0}/{course.totalLessons || 1} Lessons</span>
+                      </div>
+                      <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-muted)', borderRadius: '999px', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${Math.min(100, course.progressPercentage || 0)}%`,
+                            height: '100%',
+                            backgroundColor: course.progressPercentage === 100 ? 'var(--accent)' : 'var(--primary)',
+                            borderRadius: '999px',
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                  <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-muted)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        width: `${course.progressPercentage || 0}%`,
-                        height: '100%',
-                        backgroundColor: course.progressPercentage === 100 ? '#10b981' : 'var(--primary)',
-                        borderRadius: '3px',
-                      }}
-                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.15rem' }}>
+                      <Link
+                        to={`/courses/${course.id || course._id}/watch`}
+                        className="btn btn-sm btn-primary"
+                      >
+                        <FiPlayCircle size={14} /> Open Course
+                      </Link>
+                    </div>
                   </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <Link
-                      to={`/courses/${course.id || course._id}/watch`}
-                      className="btn btn-sm btn-primary"
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
-                    >
-                      <FiPlayCircle /> Open Course
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Purchased Notes */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiFileText style={{ color: '#10b981' }} /> Purchased Notes
-            </h2>
-            <Link to="/student/notes" style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
-              View All ({purchasedNotes.length})
-            </Link>
+                ))}
+              </div>
+            )}
           </div>
 
-          {purchasedNotes.length === 0 ? (
-            <div
-              className="card-glass"
-              style={{
-                padding: '2.5rem 1.5rem',
-                textAlign: 'center',
-                borderRadius: '16px',
-                border: '1px dashed var(--border)',
-              }}
-            >
-              <FiFileText size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
-              <h3 style={{ fontSize: '1.05rem', marginBottom: '0.4rem' }}>No Digital Notes Yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Access verified handwritten topper notes, formula cheat sheets, and board revision sets.
-              </p>
-              <Link to="/notes" className="btn btn-sm btn-outline">
-                Browse Notes
+          {/* Unlocked Notes Column */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiFileText style={{ color: 'var(--accent-dark)' }} /> Purchased Notes
+              </h2>
+              <Link to="/student/notes" style={{ color: 'var(--accent-dark)', fontSize: '0.84rem', fontWeight: 600 }}>
+                View All ({purchasedNotes.length})
               </Link>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {purchasedNotes.slice(0, 3).map((note) => (
-                <div
-                  key={note.id || note._id}
-                  className="card-glass hover-scale"
-                  style={{
-                    padding: '1.25rem',
-                    borderRadius: '14px',
-                    border: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.75rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ overflow: 'hidden' }}>
+
+            {purchasedNotes.length === 0 ? (
+              <div
+                className="card-glass"
+                style={{
+                  padding: '2.25rem 1.5rem',
+                  textAlign: 'center',
+                  borderRadius: '14px',
+                  border: '1px dashed var(--border)',
+                }}
+              >
+                <FiFileText size={32} style={{ color: 'var(--text-muted)', marginBottom: '0.65rem' }} />
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.35rem' }}>No Digital Notes Yet</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.15rem' }}>
+                  Unlock handwritten topper notes, formula cheat sheets, and board revision sets.
+                </p>
+                <Link to="/notes" className="btn btn-sm btn-outline">
+                  Browse Notes
+                </Link>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                {purchasedNotes.slice(0, 3).map((note) => (
+                  <div
+                    key={note.id || note._id}
+                    className="card-glass"
+                    style={{
+                      padding: '1.15rem',
+                      borderRadius: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div>
                       <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '4px',
-                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                          color: '#10b981',
-                          display: 'inline-block',
-                          marginBottom: '0.35rem',
-                        }}
+                        className="badge badge-success"
+                        style={{ fontSize: '0.72rem', marginBottom: '0.45rem' }}
                       >
                         {note.subjectName || 'Study Material'}
                       </span>
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.3 }}>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.35 }}>
                         {note.title}
                       </h4>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                        File Size: {note.fileSize || '2.5 MB'} • PDF Document
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.25rem' }}>
+                        {note.fileSize || 'PDF'} • PDF Document
                       </div>
                     </div>
-                  </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <button
-                      onClick={() => setPreviewNote(note)}
-                      className="btn btn-sm btn-outline"
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
-                    >
-                      <FiEye /> Read Online
-                    </button>
-                    <button
-                      onClick={() => handleDownloadNote(note)}
-                      disabled={downloadingNoteId === (note.id || note._id)}
-                      className="btn btn-sm btn-primary"
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
-                    >
-                      <FiDownload /> {downloadingNoteId === (note.id || note._id) ? 'Downloading...' : 'Download'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 4. RECENT DAILY CLASSES SECTION */}
-      {recentClasses && recentClasses.length > 0 && (
-        <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiClock style={{ color: '#f59e0b' }} /> Recent & Scheduled Classes
-            </h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-            {recentClasses.map((cls) => (
-              <div
-                key={cls.id || cls._id}
-                className="card-glass hover-scale"
-                style={{
-                  padding: '1.25rem',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.75rem',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-                    {cls.subjectName}
-                  </span>
-                  {cls.isCompleted ? (
-                    <span style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
-                      <FiCheckCircle size={12} /> Watched
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{cls.duration}</span>
-                  )}
-                </div>
-
-                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}>
-                  {cls.title}
-                </h4>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                  Chapter: {cls.chapterTitle}
-                </p>
-
-                <Link
-                  to={`/courses/${cls.courseId}/watch?lessonId=${cls.id || cls._id}`}
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginTop: '0.5rem' }}
-                >
-                  <FiPlayCircle /> Watch Class
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 5. AVAILABLE COURSES CATALOG PREVIEW */}
-      {availableCourses && availableCourses.length > 0 && (
-        <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiCompass style={{ color: 'var(--primary)' }} /> Explore Available Courses
-            </h2>
-            <Link to="/courses" style={{ color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
-              Browse Full Catalog
-            </Link>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
-            {availableCourses.map((c) => (
-              <div
-                key={c.id || c._id}
-                className="card-glass hover-scale"
-                style={{
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <img
-                  src={resolveMediaUrl(c.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400'}
-                  alt={c.title}
-                  style={{ width: '100%', height: '130px', objectFit: 'cover' }}
-                />
-                <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{c.level}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', color: '#f59e0b' }}>
-                      <FiStar size={12} fill="#f59e0b" /> {c.rating || '4.9'}
-                    </span>
-                  </div>
-
-                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 700, lineHeight: 1.3, minHeight: '2.4em' }}>
-                    {c.title}
-                  </h4>
-
-                  <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      {c.isFree ? (
-                        <span style={{ fontWeight: 800, color: 'var(--accent-dark)' }}>FREE</span>
-                      ) : (
-                        <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{formatPrice(getEffectivePrice(c))}</span>
-                      )}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.15rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewNote(note)}
+                        className="btn btn-sm btn-outline"
+                      >
+                        <FiEye size={14} /> Read Online
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadNote(note)}
+                        disabled={downloadingNoteId === (note.id || note._id)}
+                        className="btn btn-sm btn-primary"
+                      >
+                        <FiDownload size={14} /> {downloadingNoteId === (note.id || note._id) ? 'Downloading...' : 'Download'}
+                      </button>
                     </div>
-                    <Link to={`/courses/${c.id || c._id}`} className="btn btn-sm btn-primary">
-                      View Details
-                    </Link>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* 6. RECENT ACTIVITY & PROFILE SUMMARY FOOTER */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-        {/* Activity Feed */}
-        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FiActivity style={{ color: 'var(--primary)' }} /> Recent Activity
-          </h3>
-          {recentActivities.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No recent activity logged.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {recentActivities.map((act) => (
-                <div key={act.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', fontSize: '0.85rem' }}>
-                  <div
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      backgroundColor: act.badge === 'Course' ? 'var(--primary-subtle)' : 'var(--accent-subtle)',
-                      color: act.badge === 'Course' ? 'var(--primary)' : 'var(--accent-dark)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      marginTop: '2px',
-                    }}
-                  >
-                    {act.badge === 'Course' ? <FiBook size={14} /> : <FiFileText size={14} />}
+        {/* 5. Recent & Scheduled Classes */}
+        {recentClasses && recentClasses.length > 0 && (
+          <section>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiClock style={{ color: 'var(--secondary)' }} /> Recent &amp; Scheduled Classes
+              </h2>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+              {recentClasses.map((cls) => (
+                <div
+                  key={cls.id || cls._id}
+                  className="card-glass"
+                  style={{
+                    padding: '1.15rem',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.55rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>
+                      {cls.subjectName}
+                    </span>
+                    {cls.isCompleted ? (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-dark)', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+                        <FiCheckCircle size={12} /> Watched
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{cls.duration}</span>
+                    )}
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{act.title}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{act.description}</div>
+
+                  <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, lineHeight: 1.4 }}>
+                    {cls.title}
+                  </h4>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    Chapter: {cls.chapterTitle}
+                  </p>
+
+                  <Link
+                    to={`/courses/${cls.courseId}/watch?lessonId=${cls.id || cls._id}`}
+                    className="btn btn-sm btn-outline"
+                    style={{ marginTop: 'auto', paddingTop: '0.45rem', paddingBottom: '0.45rem' }}
+                  >
+                    <FiPlayCircle size={14} /> Watch Class
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 6. Recommended Available Courses */}
+        {availableCourses && availableCourses.length > 0 && (
+          <section>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiCompass style={{ color: 'var(--primary)' }} /> Explore Available Courses
+              </h2>
+              <Link to="/courses" style={{ color: 'var(--primary)', fontSize: '0.84rem', fontWeight: 600 }}>
+                Browse Full Catalog
+              </Link>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.1rem' }}>
+              {availableCourses.map((c) => (
+                <div
+                  key={c.id || c._id}
+                  className="card"
+                  style={{
+                    borderRadius: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <img
+                    src={resolveMediaUrl(c.thumbnail) || '/posters/target-batch-100-days-banner.jpg'}
+                    alt={c.title}
+                    style={{ width: '100%', height: '132px', objectFit: 'cover' }}
+                  />
+                  <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{c.level}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
+                        <FiStar size={12} fill="#f59e0b" /> {c.rating || '4.9'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ margin: '0 0 0.65rem 0', fontSize: '0.92rem', fontWeight: 700, lineHeight: 1.35, minHeight: '2.5em' }}>
+                      {c.title}
+                    </h4>
+
+                    <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: c.isFree ? 'var(--accent-dark)' : 'var(--text-primary)' }}>
+                        {c.isFree ? 'FREE' : formatPrice(getEffectivePrice(c))}
+                      </span>
+                      <Link to={`/courses/${c.id || c._id}`} className="btn btn-sm btn-primary">
+                        View Details
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </section>
+        )}
 
-        {/* Profile Card */}
-        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FiUser style={{ color: 'var(--primary)' }} /> Student Profile
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div
-              style={{
-                width: '52px',
-                height: '52px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--primary-subtle)',
-                color: 'var(--primary-dark)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '1.25rem',
-              }}
-            >
-              {(profile?.name || user?.name || 'S').charAt(0).toUpperCase()}
-            </div>
+        {/* 7. Activity Feed & Account Summary */}
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
+          <div className="card-glass" style={{ padding: '1.35rem 1.5rem', borderRadius: '14px' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FiActivity style={{ color: 'var(--primary)' }} /> Recent Activity
+            </h3>
+            {recentActivities.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>No recent activity logged yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {recentActivities.slice(0, 5).map((act) => (
+                  <div key={act.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', fontSize: '0.85rem' }}>
+                    <div
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        backgroundColor: act.badge === 'Course' ? 'var(--primary-subtle)' : 'var(--accent-subtle)',
+                        color: act.badge === 'Course' ? 'var(--primary)' : 'var(--accent-dark)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '2px',
+                      }}
+                    >
+                      {act.badge === 'Course' ? <FiBook size={13} /> : <FiFileText size={13} />}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{act.title}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{act.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card-glass" style={{ padding: '1.35rem 1.5rem', borderRadius: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{profile?.name || user?.name}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{profile?.email || user?.email}</div>
-              {profile?.phone && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{profile.phone}</div>}
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FiUser style={{ color: 'var(--primary)' }} /> Student Profile
+              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', marginBottom: '1.25rem' }}>
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--primary-subtle)',
+                    color: 'var(--primary-dark)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: '1.2rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  {(profile?.name || user?.name || 'S').charAt(0).toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{profile?.name || user?.name}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile?.email || user?.email}</div>
+                  {profile?.phone && <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{profile.phone}</div>}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="badge badge-success">Active Student</span>
+              <Link to="/student/profile" className="btn btn-sm btn-outline">
+                Edit Profile
+              </Link>
             </div>
           </div>
-
-          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status: Active Student</span>
-            <Link to="/student/profile" className="btn btn-sm btn-outline">
-              Edit Profile
-            </Link>
-          </div>
-        </div>
+        </section>
       </div>
 
-      {/* PDF Quick Preview Modal */}
+      {/* Unified PDF Quick Preview Modal */}
       {previewNote && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
-          }}
-          onClick={() => setPreviewNote(null)}
-        >
-          <div
-            className="card-glass"
-            style={{
-              width: '100%',
-              maxWidth: '900px',
-              height: '85vh',
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{previewNote.title}</h3>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {getNoteDriveViewUrl(previewNote) && (
-                  <a
-                    href={getNoteDriveViewUrl(previewNote)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <FiExternalLink /> Open in Google Drive
-                  </a>
-                )}
-                <button
-                  onClick={() => handleDownloadNote(previewNote)}
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <FiDownload /> Download PDF
-                </button>
-                <button onClick={() => setPreviewNote(null)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={getNoteStreamUrl(previewNote)}
-                title={previewNote.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={previewNote}
+          onClose={() => setPreviewNote(null)}
+        />
       )}
     </StudentLayout>
   );

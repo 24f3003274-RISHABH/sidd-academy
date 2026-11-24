@@ -1,5 +1,16 @@
 import { courseService } from '../services/course.service.js';
+import { mediaRepository } from '../repositories/media.repository.js';
 import { sendSuccess } from '../utils/apiResponse.js';
+
+const saveUploadedThumbnail = async (file) => {
+  if (!file || !file.buffer) return null;
+  const saved = await mediaRepository.save({
+    filename: file.originalname,
+    mimeType: file.mimetype,
+    buffer: file.buffer,
+  });
+  return saved.url;
+};
 
 /**
  * GET /api/v1/courses
@@ -51,7 +62,9 @@ export const getCourseContent = async (req, res, next) => {
 export const createCourse = async (req, res, next) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    if (req.file) {
+      data.thumbnail = (await saveUploadedThumbnail(req.file)) || data.thumbnail;
+    }
     const course = await courseService.createCourse(data);
     return sendSuccess(res, 201, 'Course created successfully', { course });
   } catch (error) {
@@ -66,7 +79,9 @@ export const createCourse = async (req, res, next) => {
 export const updateCourse = async (req, res, next) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    if (req.file) {
+      data.thumbnail = (await saveUploadedThumbnail(req.file)) || data.thumbnail;
+    }
     const course = await courseService.updateCourse(req.params.id, data);
     return sendSuccess(res, 200, 'Course updated successfully', { course });
   } catch (error) {
@@ -108,7 +123,9 @@ export const previewPlaylist = async (req, res, next) => {
 export const importPlaylist = async (req, res, next) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    if (req.file) {
+      data.thumbnail = (await saveUploadedThumbnail(req.file)) || data.thumbnail;
+    }
     const result = await courseService.importPlaylistAsCourse(data);
     return sendSuccess(
       res,

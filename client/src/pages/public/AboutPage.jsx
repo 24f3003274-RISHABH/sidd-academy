@@ -24,7 +24,7 @@ const AboutPage = () => {
           <div>
             <h2 style={{ fontSize: '2rem', marginBottom: '1.25rem', fontWeight: 800 }}>Our Mission & Pedagogy</h2>
             <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8', marginBottom: '1rem' }}>
-              At <strong>Sidd Academy Prayagraj</strong>, we believe that high-quality board and competitive foundation education should be accessible to every Hindi-medium and English-medium student. Our mission is to bridge the gap between classroom rigor and digital convenience through structured courses, live doubt resolution, and Google Drive study materials.
+              At <strong>Sidd Academy Prayagraj</strong>, we believe that high-quality board and competitive foundation education should be accessible to every Hindi-medium and English-medium student. Our mission is to bridge the gap between classroom rigor and digital convenience through structured courses, live doubt resolution, and cloud-hosted PDF study materials.
             </p>
             <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8', marginBottom: '1.5rem' }}>
               Every subject is organized chapter-by-chapter with high-definition video lectures, formula cheat-sheets, and previous 10-year board exam solutions so students can study systematically and score 95%+ in their board examinations.
@@ -58,7 +58,7 @@ const AboutPage = () => {
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                 <FiCheckCircle style={{ color: 'var(--accent-dark)', flexShrink: 0 }} size={20} />
-                <span><strong>Modular PDF Study Notes:</strong> Subject &rarr; Chapter &rarr; Handwritten PDFs synced via Google Drive.</span>
+                <span><strong>Modular PDF Study Notes:</strong> Subject &rarr; Chapter &rarr; Handwritten PDFs accessible anytime in the Student Portal.</span>
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                 <FiCheckCircle style={{ color: 'var(--primary-dark)', flexShrink: 0 }} size={20} />

@@ -26,13 +26,7 @@ export class CourseRepository {
           ORDER BY created_at DESC
         `;
         const res = await query(sql);
-        const dbCourses = res.rows.map(this.normalizeCourse);
-        const seenSlugs = new Set(dbCourses.map(c => c.slug).filter(Boolean));
-        const seenIds = new Set(dbCourses.map(c => c.id || c._id).filter(Boolean));
-        const mockExtras = mockData.courses
-          .map(this.normalizeCourse)
-          .filter(c => !seenSlugs.has(c.slug) && !seenIds.has(c.id || c._id));
-        allCourses = [...dbCourses, ...mockExtras];
+        allCourses = res.rows.map(this.normalizeCourse);
       } catch (err) {
         console.warn('CourseRepository findAll fallback to mockStore:', err.message);
       }
@@ -78,9 +72,7 @@ export class CourseRepository {
           : `SELECT *, total_students as enrolled_students FROM courses WHERE slug = $1 LIMIT 1`;
 
         const res = await query(sql, [id]);
-        if (res.rows.length > 0) {
-          return this.normalizeCourse(res.rows[0]);
-        }
+        return res.rows.length > 0 ? this.normalizeCourse(res.rows[0]) : null;
       } catch (err) {
         console.warn('CourseRepository findById fallback to mockStore:', err.message);
       }
@@ -139,7 +131,12 @@ export class CourseRepository {
               )
             : Promise.resolve({ rows: [] }),
           query(
-            `SELECT * FROM notes
+            `SELECT id, title, description, course_id, subject_id, chapter_id, lesson_id,
+                    file_url, file_name, file_size, thumbnail, price, is_free, is_published,
+                    page_count, download_count, drive_file_id, drive_folder_id, drive_view_url,
+                    drive_preview_url, local_file_url, storage_provider, file_mime,
+                    (file_data IS NOT NULL) AS has_file_data, created_at, updated_at
+             FROM notes
              WHERE is_published = true
                AND (
                  course_id = $1
@@ -470,9 +467,7 @@ export class CourseRepository {
           RETURNING *
         `;
         const res = await query(sql, values);
-        if (res.rows.length > 0) {
-          return this.normalizeCourse(res.rows[0]);
-        }
+        return res.rows.length > 0 ? this.normalizeCourse(res.rows[0]) : null;
       } catch (err) {
         console.warn('CourseRepository update fallback to mockStore:', err.message);
       }

@@ -133,7 +133,7 @@ const MyCoursesPage = () => {
 
       {/* Loading Skeleton */}
       {loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: '1.5rem' }}>
           <SkeletonCard height="280px" count={3} />
         </div>
       )}
@@ -219,7 +219,7 @@ const MyCoursesPage = () => {
 
       {/* Course Grid */}
       {!loading && !error && filteredCourses.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))', gap: '1.25rem' }}>
           {filteredCourses.map((course) => {
             const isCompleted = (course.progressPercentage || 0) >= 100;
 

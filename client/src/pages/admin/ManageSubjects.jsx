@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
 import { getSubjectsByCourse, createSubject, updateSubject, deleteSubject } from '../../api/adminApi';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import { FiEdit2, FiTrash2, FiPlus, FiFolder } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const ManageSubjects = () => {
@@ -13,6 +15,7 @@ const ManageSubjects = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -22,7 +25,7 @@ const ManageSubjects = () => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
-        const res = await getAllCourses();
+        const res = await getAllCourses({ limit: 100 });
         const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setCourses(list);
         if (list.length > 0 && !selectedCourse) {
@@ -102,32 +105,48 @@ const ManageSubjects = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (subject) => {
+    const id = subject.id || subject._id;
     if (deletingId) return;
-    if (window.confirm('Are you sure you want to delete this subject?')) {
-      setDeletingId(id);
-      try {
-        await deleteSubject(id);
-        toast.success('Subject deleted');
-        fetchSubjects(selectedCourse);
-      } catch (err) {
-        toast.error(err.response?.data?.message || 'Error deleting subject');
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Subject?',
+      message: `Permanently delete "${subject.name || subject.title}" and its nested chapters?`,
+      confirmText: 'Delete Subject',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteSubject(id);
+          toast.success('Subject deleted');
+          fetchSubjects(selectedCourse);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Error deleting subject');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   if (loading && courses.length === 0) return <Loader fullPage />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>Manage Subjects</h1>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800 }}>Manage Subjects</h1>
+          <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+            Organize course subjects or jump into Course Studio to manage subjects, chapters, videos, and PDFs together.
+          </p>
+        </div>
+        <Link to={selectedCourse ? `/admin/curriculum?courseId=${selectedCourse}` : '/admin/curriculum'} className="btn btn-outline btn-sm">
+          <FiFolder size={14} /> Open in Course Studio
+        </Link>
       </div>
 
-      <div className="card-glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-        <div className="form-group" style={{ maxWidth: '450px', margin: 0 }}>
+      <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+        <div className="form-group" style={{ maxWidth: '460px', margin: 0 }}>
           <label className="form-label">Select Course</label>
           <select className="form-select" value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
             <option value="">-- Select a Course --</option>
@@ -142,36 +161,38 @@ const ManageSubjects = () => {
       </div>
 
       {selectedCourse && (
-        <div className="card-glass" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.2rem' }}>Subjects for selected course</h2>
-            <button onClick={() => openModal()} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Subjects ({subjects.length})</h2>
+            <button type="button" onClick={() => openModal()} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <FiPlus /> Add Subject
             </button>
           </div>
 
           <div className="table-wrapper">
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <table>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Name</th>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Description</th>
-                  <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Actions</th>
+                <tr>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {subjects.length === 0 ? (
-                  <tr><td colSpan="3" style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No subjects found for this course. Click &ldquo;Add Subject&rdquo; to create one.</td></tr>
+                  <tr><td colSpan="3" style={{ padding: '2.5rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>No subjects found for this course. Click &ldquo;Add Subject&rdquo; to create one.</td></tr>
                 ) : (
                   subjects.map(subject => {
                     const sId = subject.id || subject._id;
                     return (
-                      <tr key={sId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '1rem 0', fontWeight: 600 }}>{subject.name || subject.title}</td>
-                        <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{subject.description ? `${subject.description.substring(0, 60)}...` : '—'}</td>
-                        <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
-                          <button onClick={() => openModal(subject)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Subject"><FiEdit2 /></button>
-                          <button onClick={() => handleDelete(sId)} disabled={deletingId === sId} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Subject"><FiTrash2 /></button>
+                      <tr key={sId}>
+                        <td style={{ fontWeight: 600 }}>{subject.name || subject.title}</td>
+                        <td style={{ color: 'var(--text-muted)' }}>{subject.description ? (subject.description.length > 80 ? `${subject.description.substring(0, 80)}…` : subject.description) : '—'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                            <button type="button" onClick={() => openModal(subject)} className="btn btn-sm btn-outline" style={{ padding: '0.45rem' }} title="Edit Subject"><FiEdit2 size={13} /></button>
+                            <button type="button" onClick={() => handleDelete(subject)} disabled={deletingId === sId} className="btn btn-sm btn-danger" style={{ padding: '0.45rem' }} title="Delete Subject"><FiTrash2 size={13} /></button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -193,7 +214,7 @@ const ManageSubjects = () => {
             <label className="form-label">Description</label>
             <textarea className="form-textarea" rows="3" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
               {submitting ? 'Saving...' : 'Save'}
@@ -201,6 +222,17 @@ const ManageSubjects = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant="danger"
+        loading={Boolean(deletingId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !deletingId && setConfirmState(null)}
+      />
     </div>
   );
 };

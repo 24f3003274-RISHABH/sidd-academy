@@ -32,7 +32,7 @@ export const SkeletonDashboard = () => {
         ))}
       </div>
       {/* 2 column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
         <div style={{ height: '320px', backgroundColor: 'var(--bg-muted)', borderRadius: '16px' }} />
         <div style={{ height: '320px', backgroundColor: 'var(--bg-muted)', borderRadius: '16px' }} />
       </div>

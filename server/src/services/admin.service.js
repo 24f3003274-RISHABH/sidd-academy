@@ -2,6 +2,7 @@ import { userRepository } from '../repositories/user.repository.js';
 import { courseRepository } from '../repositories/course.repository.js';
 import { noteRepository } from '../repositories/note.repository.js';
 import { orderRepository } from '../repositories/order.repository.js';
+import { bannerRepository } from '../repositories/banner.repository.js';
 import { AppError } from '../utils/apiResponse.js';
 
 /**
@@ -14,25 +15,59 @@ export class AdminService {
    * Aggregate high-level platform statistics for the administrative dashboard
    */
   async getDashboardStats() {
-    const [totalUsers, totalCourses, totalNotes, totalOrders, totalRevenue, recentOrders] = await Promise.all([
+    const [
+      totalUsers,
+      totalStudents,
+      totalCourses,
+      publishedCourses,
+      totalNotes,
+      publishedNotes,
+      activeBanners,
+      totalBanners,
+      totalOrders,
+      totalRevenue,
+      orderBreakdown,
+      recentOrders,
+      recentUsers,
+    ] = await Promise.all([
       userRepository.countUsers({ excludeRole: null }),
+      userRepository.countUsers({ excludeRole: 'admin' }),
       courseRepository.count(),
+      courseRepository.count({ isPublished: true }),
       noteRepository.count(),
+      noteRepository.count({ isPublished: true }),
+      bannerRepository.count({ activeOnly: true }),
+      bannerRepository.count(),
       orderRepository.countPaid(),
       orderRepository.getTotalRevenue(),
-      orderRepository.getRecentOrders(5),
+      orderRepository.getOrderStatusBreakdown(),
+      orderRepository.getRecentOrders(6),
+      userRepository.getRecentUsers(5),
     ]);
 
     return {
       totalUsers,
+      totalStudents,
       totalCourses,
+      publishedCourses,
+      draftCourses: Math.max(0, totalCourses - publishedCourses),
       totalNotes,
+      publishedNotes,
+      draftNotes: Math.max(0, totalNotes - publishedNotes),
+      activeBanners,
+      totalBanners,
       totalOrders,
       totalRevenue,
+      orderBreakdown,
       recentOrders: (recentOrders || []).map(o => ({
         ...o,
         id: o.id || o._id,
         _id: o.id || o._id,
+      })),
+      recentUsers: (recentUsers || []).map(u => ({
+        ...u,
+        id: u.id || u._id,
+        _id: u.id || u._id,
       })),
     };
   }
@@ -57,10 +92,13 @@ export class AdminService {
   /**
    * Update role for a user
    */
-  async updateUserRole(id, role) {
+  async updateUserRole(id, role, actorId = null) {
     if (!id) throw new AppError('User ID is required', 400);
     if (!role) throw new AppError('Role is required', 400);
-    
+    if (actorId && String(id) === String(actorId)) {
+      throw new AppError('You cannot change your own admin role.', 400);
+    }
+
     const validRoles = ['student', 'user', 'admin', 'instructor'];
     if (!validRoles.includes(role.toLowerCase())) {
       throw new AppError(`Invalid role "${role}". Allowed roles: ${validRoles.join(', ')}`, 400);
@@ -74,8 +112,11 @@ export class AdminService {
   /**
    * Toggle active/suspended status for a user
    */
-  async toggleUserStatus(id) {
+  async toggleUserStatus(id, actorId = null) {
     if (!id) throw new AppError('User ID is required', 400);
+    if (actorId && String(id) === String(actorId)) {
+      throw new AppError('You cannot suspend or deactivate your own admin account.', 400);
+    }
     const updated = await userRepository.toggleStatus(id);
     if (!updated) throw new AppError('User not found', 404);
     return updated;

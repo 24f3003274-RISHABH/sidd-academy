@@ -8,11 +8,11 @@ export const validateCreateNote = [
     .isLength({ max: 200 }).withMessage('Title cannot exceed 200 characters'),
 
   body('price')
-    .optional()
+    .optional({ checkFalsy: true })
     .isFloat({ min: 0 }).withMessage('Price must be a non-negative number'),
 
   body('isFree')
-    .optional()
+    .optional({ checkFalsy: true })
     .isBoolean().withMessage('isFree must be a boolean value'),
 
   body('courseId')
@@ -25,7 +25,7 @@ export const validateCreateNote = [
     .optional({ nullable: true }),
 
   body('pageCount')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 1 }).withMessage('Page count must be at least 1'),
 
   validateRequest,
@@ -42,11 +42,11 @@ export const validateUpdateNote = [
     .isLength({ max: 200 }).withMessage('Title cannot exceed 200 characters'),
 
   body('price')
-    .optional()
+    .optional({ checkFalsy: true })
     .isFloat({ min: 0 }).withMessage('Price must be a non-negative number'),
 
   body('isFree')
-    .optional()
+    .optional({ checkFalsy: true })
     .isBoolean().withMessage('isFree must be a boolean value'),
 
   body('lessonId')

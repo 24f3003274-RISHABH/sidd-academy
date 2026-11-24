@@ -15,10 +15,13 @@ import {
   updateClass,
   deleteClass,
 } from '../../api/adminApi';
-import { getAllNotes, createNote, updateNote, deleteNote } from '../../api/noteApi';
+import { getAllNotes, createNote, updateNote, deleteNote, getSecureAccess } from '../../api/noteApi';
+import { clearGetCache } from '../../api/axiosInstance';
 import { getNoteDriveViewUrl } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import PdfPreviewModal from '../../components/notes/PdfPreviewModal';
 import {
   FiBook,
   FiFolder,
@@ -32,7 +35,7 @@ import {
   FiCloud,
   FiExternalLink,
   FiYoutube,
-  FiFileText,
+  FiEye,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -100,6 +103,8 @@ const CurriculumPage = () => {
   const [newPdfIsFree, setNewPdfIsFree] = useState(true);
   const [newPdfPrice, setNewPdfPrice] = useState(0);
   const [uploadingToDrive, setUploadingToDrive] = useState(false);
+  const [previewNote, setPreviewNote] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
 
   // Bulk YouTube Playlist / Multi-Video Import State
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
@@ -251,18 +256,37 @@ const CurriculumPage = () => {
     }
   };
 
-  const handleRemoveNote = async (noteId) => {
-    if (resourceSaving) return;
-    setResourceSaving(true);
+  const handlePreviewNote = async (note) => {
     try {
-      await deleteNote(noteId);
-      toast.success('Study material deleted');
-      await loadNotes();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not remove study material');
-    } finally {
-      setResourceSaving(false);
+      const res = await getSecureAccess(getId(note));
+      setPreviewNote(res.data?.data || res.data || note);
+    } catch {
+      toast.error('Could not load PDF preview');
     }
+  };
+
+  const handleRemoveNote = (note) => {
+    if (resourceSaving) return;
+    const noteId = getId(note);
+    setConfirmState({
+      title: 'Delete Study Material?',
+      message: `Remove "${note.title}" from this ${noteTab}? Students will no longer be able to view or download this PDF.`,
+      confirmText: 'Remove PDF',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setResourceSaving(true);
+        try {
+          await deleteNote(noteId);
+          toast.success('Study material deleted');
+          await loadNotes();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Could not remove study material');
+        } finally {
+          setResourceSaving(false);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   const uploadNotesToDrive = async (e) => {
@@ -307,12 +331,13 @@ const CurriculumPage = () => {
         count++;
       }
 
-      toast.success(`Uploaded ${count} PDF(s) to Google Drive & linked to ${noteTab}!`);
+      toast.success(`Uploaded ${count} PDF(s) & linked to ${noteTab}!`);
+      clearGetCache();
       setNewPdfFiles([]);
       setNewPdfTitle('');
       await loadNotes();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to upload study material to Google Drive');
+      toast.error(err.response?.data?.message || 'Failed to upload PDF study material');
     } finally {
       setUploadingToDrive(false);
     }
@@ -354,6 +379,7 @@ const CurriculumPage = () => {
         videos: previewVideos.length > 0 ? previewVideos : undefined,
       });
       const result = res.data?.data || res.data;
+      clearGetCache();
       toast.success(`Imported ${result.importedCount || previewVideos.length} videos in exact playlist order!`);
       setPlaylistModalOpen(false);
       setPlaylistUrlInput('');
@@ -385,26 +411,36 @@ const CurriculumPage = () => {
     setModal(type);
   };
 
-  const handleDeleteEntity = async (type, id) => {
+  const handleDeleteEntity = (type, id) => {
     if (!id || deletingId) return;
     const label = type === 'subject' ? 'subject and its chapters' : 'chapter and its lessons';
-    if (!window.confirm(`Are you sure you want to delete this ${label}?`)) return;
-    setDeletingId(id);
-    try {
-      if (type === 'subject') {
-        await deleteSubject(id);
-        toast.success('Subject deleted');
-        await loadSubjects(selectedCourse);
-      } else {
-        await deleteChapter(id);
-        toast.success('Chapter deleted');
-        await loadChapters(selectedSubject);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || `Could not delete ${type}`);
-    } finally {
-      setDeletingId(null);
-    }
+    setConfirmState({
+      title: type === 'subject' ? 'Delete Subject?' : 'Delete Chapter?',
+      message: `Are you sure you want to permanently delete this ${label}? This action cannot be undone.`,
+      confirmText: type === 'subject' ? 'Delete Subject' : 'Delete Chapter',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          if (type === 'subject') {
+            await deleteSubject(id);
+            clearGetCache();
+            toast.success('Subject deleted');
+            await loadSubjects(selectedCourse);
+          } else {
+            await deleteChapter(id);
+            clearGetCache();
+            toast.success('Chapter deleted');
+            await loadChapters(selectedSubject);
+          }
+        } catch (err) {
+          toast.error(err.response?.data?.message || `Could not delete ${type}`);
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   const submitCreate = async (event) => {
@@ -448,6 +484,7 @@ const CurriculumPage = () => {
           toast.success('Chapter created');
         }
       }
+      clearGetCache();
       setModal(null);
       setEditingEntity(null);
     } catch (err) {
@@ -463,16 +500,23 @@ const CurriculumPage = () => {
     setLessonSaving(true);
     try {
       const payload = {
-        ...lessonForm,
         chapterId: selectedChapter,
+        title: lessonForm.title.trim(),
+        description: lessonForm.description || '',
+        classDate: lessonForm.classDate || undefined,
         duration: lessonForm.duration || '30:00',
         order: Number(lessonForm.order) || 1,
         classNumber: Number(lessonForm.classNumber) || 1,
+        videoUrl: lessonForm.videoUrl || '',
+        videoProvider: lessonForm.videoProvider || 'youtube',
+        isFree: Boolean(lessonForm.isFree),
+        isProtected: Boolean(lessonForm.isProtected),
       };
       const response = selectedLesson
         ? await updateClass(selectedLesson, payload)
         : await createClass(payload);
       const saved = response.data?.data?.lesson || response.data?.data?.dailyClass;
+      clearGetCache();
       toast.success(selectedLesson ? 'Lesson updated' : 'Lesson created');
       await loadLessons(selectedChapter, getId(saved));
       await loadNotes();
@@ -483,18 +527,28 @@ const CurriculumPage = () => {
     }
   };
 
-  const removeLesson = async () => {
+  const removeLesson = () => {
     if (!selectedLesson || deletingId) return;
-    setDeletingId(selectedLesson);
-    try {
-      await deleteClass(selectedLesson);
-      toast.success('Lesson deleted');
-      await loadLessons(selectedChapter);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not delete lesson');
-    } finally {
-      setDeletingId(null);
-    }
+    setConfirmState({
+      title: 'Delete Lesson?',
+      message: `Permanently delete "${lessonForm.title || 'this lesson'}" from the chapter?`,
+      confirmText: 'Delete Lesson',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(selectedLesson);
+        try {
+          await deleteClass(selectedLesson);
+          clearGetCache();
+          toast.success('Lesson deleted');
+          await loadLessons(selectedChapter);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Could not delete lesson');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   if (loading) return <Loader fullPage label="Loading Course Studio" />;
@@ -507,15 +561,15 @@ const CurriculumPage = () => {
 
   return (
     <div className="admin-curriculum-page">
-      <div className="admin-page-heading">
+      <div className="admin-page-heading" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end' }}>
         <div>
           <span className="admin-kicker">Teacher workspace</span>
-          <h1>Course Studio & Playlist Importer</h1>
+          <h1>Course Studio &amp; Playlist Importer</h1>
           <p>
-            Build the course students will see: import entire YouTube playlists in order, manage chapters & videos, and upload Course or Chapter PDFs directly to Google Drive.
+            Build the course students see: import YouTube playlists in order, organize subjects &amp; chapters, and attach PDF study notes.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             disabled={!selectedCourse}
@@ -534,10 +588,15 @@ const CurriculumPage = () => {
               fontWeight: 700,
             }}
           >
-            <FiYoutube /> Import YouTube Playlist / Bulk Videos
+            <FiYoutube /> Import Playlist
           </button>
+          {selectedCourse && (
+            <Link to={`/courses/${selectedCourse}`} className="btn btn-outline btn-sm">
+              <FiExternalLink size={13} /> Student View
+            </Link>
+          )}
           <Link to="/admin/courses" className="btn btn-outline btn-sm">
-            <FiBook /> Manage Courses
+            <FiBook /> All Courses
           </Link>
         </div>
       </div>
@@ -766,8 +825,8 @@ const CurriculumPage = () => {
             <div className="card" style={{ marginTop: '1.25rem' }}>
               <div className="studio-panel-heading" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
-                  <span className="admin-kicker">Google Drive Study Materials</span>
-                  <h2>Upload & Manage PDF Notes (Course / Chapter / Lesson)</h2>
+                  <span className="admin-kicker">Cloud PDF Storage</span>
+                  <h2>Upload &amp; Manage PDF Notes (Course / Chapter / Lesson)</h2>
                 </div>
                 <div style={{ display: 'flex', gap: '0.4rem', backgroundColor: 'var(--bg-muted)', padding: '0.25rem', borderRadius: '8px' }}>
                   <button
@@ -874,12 +933,12 @@ const CurriculumPage = () => {
                 >
                   <FiCloud />{' '}
                   {uploadingToDrive
-                    ? 'Uploading to GDrive...'
-                    : `Upload ${newPdfFiles.length > 1 ? `${newPdfFiles.length} PDFs` : 'PDF'} to Google Drive`}
+                    ? 'Uploading PDF...'
+                    : `Upload ${newPdfFiles.length > 1 ? `${newPdfFiles.length} PDFs` : 'PDF'}`}
                 </button>
               </form>
 
-              {/* Attach Existing Google Drive PDF */}
+              {/* Attach Existing Study PDF */}
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
                 <select
                   className="form-select"
@@ -887,7 +946,7 @@ const CurriculumPage = () => {
                   value={selectedNoteId}
                   onChange={(e) => setSelectedNoteId(e.target.value)}
                 >
-                  <option value="">Or link an existing Google Drive PDF to this {noteTab}</option>
+                  <option value="">Or link an existing Study PDF to this {noteTab}</option>
                   {notes.map((note) => (
                     <option key={getId(note)} value={getId(note)}>
                       {note.title} {note.isFree ? '(Free)' : `(₹${note.price || 0})`}
@@ -907,7 +966,7 @@ const CurriculumPage = () => {
 
               {activeNotesList.length === 0 ? (
                 <p className="studio-muted" style={{ margin: 0, padding: '0.5rem 0' }}>
-                  No study materials attached to this {noteTab} yet. Upload one or more PDFs above to save directly to Google Drive.
+                  No study materials attached to this {noteTab} yet. Upload one or more PDFs above to save them to Cloud Storage.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -934,11 +993,19 @@ const CurriculumPage = () => {
                             <strong>{note.title}</strong>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
                               {note.isFree ? 'Free access' : `₹${note.price || 0}`} •{' '}
-                              {note.chapterTitle ? `Chapter: ${note.chapterTitle}` : 'Course PDF'} • Saved in Google Drive
+                              {note.chapterTitle ? `Chapter: ${note.chapterTitle}` : 'Course PDF'}
                             </span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewNote(note)}
+                            className="btn btn-outline btn-sm"
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          >
+                            <FiEye size={13} /> Preview
+                          </button>
                           {driveUrl && (
                             <a
                               href={driveUrl}
@@ -947,7 +1014,7 @@ const CurriculumPage = () => {
                               className="btn btn-outline btn-sm"
                               style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                             >
-                              <FiExternalLink /> Open in GDrive
+                              <FiExternalLink size={13} /> Drive
                             </a>
                           )}
                           <button
@@ -961,10 +1028,10 @@ const CurriculumPage = () => {
                               gap: '0.3rem',
                             }}
                             disabled={resourceSaving}
-                            onClick={() => handleRemoveNote(getId(note))}
+                            onClick={() => handleRemoveNote(note)}
                             title="Delete note"
                           >
-                            <FiTrash2 /> Remove
+                            <FiTrash2 size={13} /> Remove
                           </button>
                         </div>
                       </div>
@@ -975,8 +1042,8 @@ const CurriculumPage = () => {
             </div>
           )}
 
-          {/* 3. Single Lesson Editor */}
-          {selectedChapter && (selectedLesson || !lessons.length) && (
+          {/* 3. Single Lesson Editor (always visible when a chapter is selected so "+ New lesson" works even with existing lessons!) */}
+          {selectedChapter && (
             <form className="lesson-editor card" onSubmit={saveLesson} style={{ marginTop: '1.25rem' }}>
               <div className="studio-panel-heading">
                 <div>
@@ -1279,6 +1346,24 @@ const CurriculumPage = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant={confirmState?.confirmVariant || 'danger'}
+        loading={Boolean(deletingId) || resourceSaving}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !(deletingId || resourceSaving) && setConfirmState(null)}
+      />
+
+      {previewNote && (
+        <PdfPreviewModal
+          note={previewNote}
+          onClose={() => setPreviewNote(null)}
+        />
+      )}
     </div>
   );
 };

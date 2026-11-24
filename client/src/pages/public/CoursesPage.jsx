@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatPrice, getEffectivePrice, resolveMediaUrl } from '../../utils/helpers';
@@ -8,13 +8,27 @@ import { FiSearch, FiClock, FiBook, FiStar, FiFilter, FiArrowRight, FiCheckCircl
 
 const CoursesPage = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [level, setLevel] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [level, setLevel] = useState(searchParams.get('level') || '');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  useEffect(() => {
+    const paramLevel = searchParams.get('level') || '';
+    const paramSearch = searchParams.get('search') || '';
+    if (paramLevel !== level) {
+      setLevel(paramLevel);
+      setPage(1);
+    }
+    if (paramSearch !== search) {
+      setSearch(paramSearch);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const purchasedIdsKey = (user?.purchasedCourses || []).join(',');
   const purchasedSet = useMemo(() => new Set(user?.purchasedCourses || []), [purchasedIdsKey]);
@@ -54,32 +68,42 @@ const CoursesPage = () => {
     [courses, purchasedSet]
   );
 
+  const syncSearchParams = (nextSearch, nextLevel) => {
+    const next = {};
+    if (nextSearch) next.search = nextSearch;
+    if (nextLevel) next.level = nextLevel;
+    setSearchParams(next, { replace: true });
+  };
+
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearch(val);
     setPage(1);
+    syncSearchParams(val, level);
   };
 
   const handleLevelChange = (e) => {
     const val = e.target.value;
     setLevel(val);
     setPage(1);
+    syncSearchParams(search, val);
   };
 
   const clearFilters = () => {
     setSearch('');
     setLevel('');
     setPage(1);
+    setSearchParams({}, { replace: true });
   };
 
   return (
-    <div className="container" style={{ padding: '3.5rem 0 5rem 0' }}>
+    <div className="container" style={{ padding: 'clamp(1.75rem, 4vw, 3.5rem) 0 clamp(2.5rem, 5vw, 5rem) 0' }}>
       {/* Page Header */}
-      <div style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-          <FiBook /> ACADEMIC PROGRAMS & COURSES
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontWeight: 600, fontSize: '0.86rem', marginBottom: '0.5rem' }}>
+          <FiBook /> ACADEMIC PROGRAMS &amp; COURSES
         </div>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '0.75rem' }}>Explore All Courses</h1>
+        <h1 style={{ fontSize: 'clamp(1.7rem, 4.5vw, 2.5rem)', fontWeight: 800, marginBottom: '0.65rem' }}>Explore All Courses</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', maxWidth: '650px' }}>
           Comprehensive curricula designed by top educators for Classes 9 through 12, Board examination preparation, and competitive foundation.
         </p>
