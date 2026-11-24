@@ -6,6 +6,7 @@ import { getSecureAccess } from '../../api/noteApi';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonDashboard } from '../../components/common/SkeletonLoader';
 import toast from 'react-hot-toast';
+import { formatPrice, getEffectivePrice, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
 import {
   FiBook,
   FiFileText,
@@ -63,17 +64,11 @@ const DashboardPage = () => {
     try {
       setDownloadingNoteId(note.id || note._id);
       const res = await getSecureAccess(note.id || note._id);
-      const token = res.data?.data?.accessToken || res.data?.accessToken;
-      const fileUrl = res.data?.data?.fileUrl || res.data?.fileUrl || note.fileUrl;
+      const accessData = res.data?.data || res.data || note;
+      const fileUrl = getNoteDownloadUrl(accessData) || getNoteDriveViewUrl(accessData) || accessData.fileUrl;
 
-      toast.success(`Preparing secure download for: ${note.title}`);
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.target = '_blank';
-      link.download = `${note.title.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      toast.success(`Opening study material from Google Drive: ${note.title}`);
+      window.open(fileUrl, '_blank');
     } catch (err) {
       toast.error('Failed to initiate secure note download');
     } finally {
@@ -129,12 +124,9 @@ const DashboardPage = () => {
     <StudentLayout>
       {/* 1. WELCOME SECTION & MOTIVATION HERO */}
       <div
-        className="card-glass"
+        className="student-dashboard-hero card"
         style={{
           padding: '2rem',
-          borderRadius: '20px',
-          background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.15) 0%, rgba(19, 23, 40, 0.8) 100%)',
-          border: '1px solid rgba(108, 99, 255, 0.25)',
           marginBottom: '2rem',
           position: 'relative',
           overflow: 'hidden',
@@ -142,7 +134,7 @@ const DashboardPage = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
           <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '20px', backgroundColor: 'rgba(108, 99, 255, 0.2)', color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.75rem', borderRadius: '20px', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary-dark)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.75rem' }}>
               <FiAward /> Student Learning Space
             </div>
             <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' }}>
@@ -173,11 +165,11 @@ const DashboardPage = () => {
             gap: '1rem',
             marginTop: '2rem',
             paddingTop: '1.5rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid var(--border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'rgba(108, 99, 255, 0.2)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'var(--primary-subtle)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
               <FiBook />
             </div>
             <div>
@@ -187,7 +179,7 @@ const DashboardPage = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
               <FiFileText />
             </div>
             <div>
@@ -572,7 +564,7 @@ const DashboardPage = () => {
                       {c.isFree ? (
                         <span style={{ fontWeight: 800, color: '#10b981' }}>FREE</span>
                       ) : (
-                        <span style={{ fontWeight: 800, color: '#fff' }}>₹{c.discountPrice || c.price}</span>
+                        <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{formatPrice(getEffectivePrice(c))}</span>
                       )}
                     </div>
                     <Link to={`/courses/${c.id || c._id}`} className="btn btn-sm btn-primary">
@@ -700,9 +692,20 @@ const DashboardPage = () => {
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {getNoteDriveViewUrl(previewNote) && (
+                  <a
+                    href={getNoteDriveViewUrl(previewNote)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <FiExternalLink /> Open in Google Drive
+                  </a>
+                )}
                 <button
                   onClick={() => handleDownloadNote(previewNote)}
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-outline"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   <FiDownload /> Download PDF
@@ -714,7 +717,7 @@ const DashboardPage = () => {
             </div>
             <div style={{ flex: 1, backgroundColor: '#0b0e17' }}>
               <iframe
-                src={`${previewNote.fileUrl}#toolbar=1`}
+                src={getNoteStreamUrl(previewNote)}
                 title={previewNote.title}
                 style={{ width: '100%', height: '100%', border: 'none' }}
               />

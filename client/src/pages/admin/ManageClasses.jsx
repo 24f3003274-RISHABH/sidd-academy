@@ -20,6 +20,8 @@ const ManageClasses = () => {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [classesLoading, setClassesLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -166,10 +168,12 @@ const ManageClasses = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (!selectedChapter) {
       toast.error('Please select a chapter');
       return;
     }
+    setSubmitting(true);
     try {
       const payload = { ...formData, chapterId: selectedChapter, chapter: selectedChapter };
       if (editingId) {
@@ -183,17 +187,23 @@ const ManageClasses = () => {
       fetchClasses(selectedChapter);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error saving video lecture');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (window.confirm('Are you sure you want to remove this video lecture?')) {
+      setDeletingId(id);
       try {
         await deleteClass(id);
         toast.success('Video lecture removed');
         fetchClasses(selectedChapter);
       } catch (err) {
         toast.error(err.response?.data?.message || 'Error deleting video lecture');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -382,7 +392,8 @@ const ManageClasses = () => {
                       <FiEdit2 /> Edit
                     </button>
                     <button 
-                      onClick={() => handleDelete(clsId)} 
+                              onClick={() => handleDelete(clsId)}
+                              disabled={deletingId === clsId}
                       className="btn btn-sm btn-danger"
                       title="Delete lecture"
                     >
@@ -400,6 +411,7 @@ const ManageClasses = () => {
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
+        closeDisabled={submitting}
         title={editingId ? 'Edit Video Lecture' : 'Add Video Lecture to Chapter'}
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -486,9 +498,9 @@ const ManageClasses = () => {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
-            <button type="submit" className="btn btn-primary">
-              {editingId ? 'Save Changes' : 'Add Video Lecture'}
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving...' : (editingId ? 'Save Changes' : 'Add Video Lecture')}
             </button>
           </div>
         </form>

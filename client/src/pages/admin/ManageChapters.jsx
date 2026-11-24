@@ -15,6 +15,8 @@ const ManageChapters = () => {
   
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -109,6 +111,8 @@ const ManageChapters = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       if (editingId) {
         await updateChapter(editingId, formData);
@@ -121,17 +125,23 @@ const ManageChapters = () => {
       fetchChapters(selectedSubject);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error saving chapter');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (window.confirm('Are you sure you want to delete this chapter?')) {
+      setDeletingId(id);
       try {
         await deleteChapter(id);
         toast.success('Chapter deleted');
         fetchChapters(selectedSubject);
       } catch (err) {
         toast.error(err.response?.data?.message || 'Error deleting chapter');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -201,7 +211,7 @@ const ManageChapters = () => {
                         <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{chapter.videoUrl ? 'Yes' : 'No'}</td>
                         <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
                           <button onClick={() => openModal(chapter)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Chapter"><FiEdit2 /></button>
-                          <button onClick={() => handleDelete(chId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Chapter"><FiTrash2 /></button>
+                          <button onClick={() => handleDelete(chId)} disabled={deletingId === chId} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Chapter"><FiTrash2 /></button>
                         </td>
                       </tr>
                     );
@@ -213,7 +223,7 @@ const ManageChapters = () => {
         </div>
       )}
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Chapter' : 'Add Chapter'} size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} closeDisabled={submitting} title={editingId ? 'Edit Chapter' : 'Add Chapter'} size="lg">
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="form-group">
             <label className="form-label">Chapter Title</label>
@@ -228,8 +238,10 @@ const ManageChapters = () => {
             <textarea className="form-textarea" rows="6" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})}></textarea>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
-            <button type="submit" className="btn btn-primary">Save</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save'}
+            </button>
           </div>
         </form>
       </Modal>

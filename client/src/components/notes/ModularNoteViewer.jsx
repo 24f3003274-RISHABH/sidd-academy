@@ -158,16 +158,17 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                 {/* PDF 1, PDF 2, PDF 3 Modular Cards Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
                   {noteList.map((note, index) => {
-                    const isPurchased = isAuthenticated && user?.purchasedNotes?.includes(note._id);
-                    const canAccess = note.isFree || isPurchased;
+                    const noteId = note.id || note._id;
+                    const isPurchased = isAuthenticated && (user?.purchasedNotes?.includes(noteId) || (user?.role || '').toLowerCase() === 'admin');
+                    const canAccess = note.isFree || isPurchased || note.isLocked === false;
                     const pdfLabel = `PDF ${index + 1}`;
 
                     return (
                       <div
-                        key={note._id}
-                        id={`pdf-module-${note._id}`}
+                        key={noteId}
+                        id={`pdf-module-${noteId}`}
                         style={{
-                          backgroundColor: '#1b1c2b',
+                          backgroundColor: 'var(--bg-card)',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                           borderRadius: '10px',
                           padding: '1.2rem',
@@ -305,7 +306,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
         >
           <div 
             style={{
-              backgroundColor: '#1b1c2b',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               width: '100%',
               maxWidth: '900px',
@@ -338,7 +339,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#2d3047' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
                 title={activePdfPreview.title}

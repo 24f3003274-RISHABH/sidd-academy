@@ -81,7 +81,7 @@ export class SubjectRepository {
       }
     }
 
-    const memoryId = `subject_${Date.now()}`;
+    const memoryId = `subject_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const newSubj = {
       _id: memoryId,
       id: memoryId,
@@ -90,10 +90,16 @@ export class SubjectRepository {
       name: subjectName,
       title: subjectName,
       order: Number(order) || 0,
+      chapters: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     mockData.subjects.push(newSubj);
+    const parentCourse = mockData.courses.find(c => c.id === courseId || c._id === courseId);
+    if (parentCourse) {
+      if (!Array.isArray(parentCourse.subjects)) parentCourse.subjects = [];
+      if (!parentCourse.subjects.includes(memoryId)) parentCourse.subjects.push(memoryId);
+    }
     return this.normalizeSubject(newSubj);
   }
 

@@ -2,16 +2,16 @@ import jwt from 'jsonwebtoken';
 import ENV from '../config/env.js';
 
 export const generateAccessToken = (userId, role) => {
-  const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET || 'sidd_academy_access_secret_2024_secure_key';
+  const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET;
   return jwt.sign(
     { id: userId, role },
     secret,
-    { expiresIn: ENV.JWT_ACCESS_EXPIRES || '15m' }
+    { expiresIn: ENV.JWT_ACCESS_EXPIRES || '7d' }
   );
 };
 
 export const generateRefreshToken = (userId) => {
-  const secret = ENV.JWT_REFRESH_SECRET || ENV.JWT_SECRET || 'sidd_academy_refresh_secret_2024_secure_key';
+  const secret = ENV.JWT_REFRESH_SECRET || ENV.JWT_SECRET;
   return jwt.sign(
     { id: userId },
     secret,
@@ -19,12 +19,19 @@ export const generateRefreshToken = (userId) => {
   );
 };
 
+export const getRefreshCookieOptions = () => {
+  const isProd = (process.env.NODE_ENV || ENV.NODE_ENV) === 'production';
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+  };
+};
+
 export const setRefreshTokenCookie = (res, token) => {
   try {
     res.cookie('refreshToken', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+      ...getRefreshCookieOptions(),
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   } catch (err) {
@@ -32,3 +39,12 @@ export const setRefreshTokenCookie = (res, token) => {
   }
 };
 
+export const clearRefreshTokenCookie = (res) => {
+  try {
+    const opts = getRefreshCookieOptions();
+    res.clearCookie('refreshToken', opts);
+    res.clearCookie('token', opts);
+  } catch (err) {
+    console.error('Failed to clear cookie', err);
+  }
+};

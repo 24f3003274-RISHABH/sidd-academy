@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import Loader from '../../components/common/Loader';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -11,7 +12,8 @@ const LoginPage = () => {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
 
-  const from = location.state?.from || '/student/dashboard';
+  const queryFrom = new URLSearchParams(location.search).get('from');
+  const from = location.state?.from || queryFrom || '/student/dashboard';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -54,7 +56,7 @@ const LoginPage = () => {
             <input type="password" className="form-input" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" />
           </div>
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? <><Loader size={18} label="Logging in" /> Logging in...</> : 'Login'}
           </button>
         </form>
 

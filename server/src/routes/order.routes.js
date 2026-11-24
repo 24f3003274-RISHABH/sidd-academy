@@ -21,5 +21,6 @@ router.post('/verify', validateVerifyPayment, orderController.verifyPayment);
 router.get('/', validateOrderQueryParams, orderController.getMyOrders);
 router.get('/:id', validateOrderIdParam, orderController.getOrderById);
 router.patch('/:id/cancel', validateOrderIdParam, orderController.cancelOrder);
+router.patch('/:id/fail', validateOrderIdParam, orderController.failOrder);
 
 export default router;

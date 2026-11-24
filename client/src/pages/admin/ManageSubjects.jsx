@@ -11,6 +11,8 @@ const ManageSubjects = () => {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -81,6 +83,8 @@ const ManageSubjects = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       if (editingId) {
         await updateSubject(editingId, formData);
@@ -93,17 +97,23 @@ const ManageSubjects = () => {
       fetchSubjects(selectedCourse);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error saving subject');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (window.confirm('Are you sure you want to delete this subject?')) {
+      setDeletingId(id);
       try {
         await deleteSubject(id);
         toast.success('Subject deleted');
         fetchSubjects(selectedCourse);
       } catch (err) {
         toast.error(err.response?.data?.message || 'Error deleting subject');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -161,7 +171,7 @@ const ManageSubjects = () => {
                         <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{subject.description ? `${subject.description.substring(0, 60)}...` : '—'}</td>
                         <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>
                           <button onClick={() => openModal(subject)} className="btn btn-sm btn-outline" style={{ padding: '0.5rem' }} title="Edit Subject"><FiEdit2 /></button>
-                          <button onClick={() => handleDelete(sId)} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Subject"><FiTrash2 /></button>
+                          <button onClick={() => handleDelete(sId)} disabled={deletingId === sId} className="btn btn-sm btn-danger" style={{ padding: '0.5rem' }} title="Delete Subject"><FiTrash2 /></button>
                         </td>
                       </tr>
                     );
@@ -173,7 +183,7 @@ const ManageSubjects = () => {
         </div>
       )}
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Subject' : 'Add Subject'}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} closeDisabled={submitting} title={editingId ? 'Edit Subject' : 'Add Subject'}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="form-group">
             <label className="form-label">Subject Name</label>
@@ -184,8 +194,10 @@ const ManageSubjects = () => {
             <textarea className="form-textarea" rows="3" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
-            <button type="submit" className="btn btn-primary">Save</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save'}
+            </button>
           </div>
         </form>
       </Modal>

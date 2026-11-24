@@ -117,7 +117,9 @@ if (ENV.NODE_ENV === 'development') {
  * Exposes uploaded PDFs and assets for course previews
  */
 const uploadsDir = path.join(__dirname, '../uploads');
+const legacyRootUploadsDir = path.join(__dirname, '../../uploads');
 app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(legacyRootUploadsDir));
 
 // Root API Status Endpoint
 app.get('/', (req, res) => {

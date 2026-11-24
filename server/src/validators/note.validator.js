@@ -49,6 +49,19 @@ export const validateUpdateNote = [
     .optional()
     .isBoolean().withMessage('isFree must be a boolean value'),
 
+  body('lessonId')
+    .optional({ nullable: true })
+    .isString().withMessage('lessonId must be a valid identifier'),
+
+  body('courseId')
+    .optional({ nullable: true }),
+
+  body('subjectId')
+    .optional({ nullable: true }),
+
+  body('chapterId')
+    .optional({ nullable: true }),
+
   validateRequest,
 ];
 

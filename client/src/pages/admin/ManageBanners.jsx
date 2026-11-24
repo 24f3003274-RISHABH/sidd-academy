@@ -47,6 +47,8 @@ const PRESET_TEMPLATES = [
 const ManageBanners = () => {
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
@@ -120,19 +122,25 @@ const ManageBanners = () => {
   };
 
   const handleToggleActive = async (banner) => {
+    const id = banner._id || banner.id;
+    if (busyId) return;
+    setBusyId(id);
     try {
-      const id = banner._id || banner.id;
       const updatedStatus = !banner.isActive;
       await updateBanner(id, { ...banner, isActive: updatedStatus });
       toast.success(updatedStatus ? 'Banner is now visible on Home Page' : 'Banner hidden from Home Page');
       fetchBanners();
     } catch (err) {
       toast.error('Failed to update banner status');
+    } finally {
+      setBusyId(null);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       if (editingId) {
         await updateBanner(editingId, formData);
@@ -145,17 +153,23 @@ const ManageBanners = () => {
       fetchBanners();
     } catch (err) {
       toast.error('Error saving banner');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (busyId) return;
     if (window.confirm('Are you sure you want to remove this banner from the home carousel?')) {
+      setBusyId(id);
       try {
         await deleteBanner(id);
         toast.success('Banner removed');
         fetchBanners();
       } catch (err) {
         toast.error('Error deleting banner');
+      } finally {
+        setBusyId(null);
       }
     }
   };
@@ -267,7 +281,8 @@ const ManageBanners = () => {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                     <button 
-                      onClick={() => handleToggleActive(banner)}
+                              onClick={() => handleToggleActive(banner)}
+                              disabled={busyId === id}
                       className={`btn btn-sm ${banner.isActive ? 'btn-outline' : 'btn-primary'}`}
                       style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.75rem' }}
                     >
@@ -284,7 +299,8 @@ const ManageBanners = () => {
                         <FiEdit2 size={13} /> Edit
                       </button>
                       <button 
-                        onClick={() => handleDelete(id)} 
+                            onClick={() => handleDelete(id)}
+                            disabled={busyId === id}
                         className="btn btn-sm btn-danger" 
                         title="Delete banner"
                         style={{ padding: '0.4rem 0.65rem' }}
@@ -301,7 +317,7 @@ const ManageBanners = () => {
       </div>
 
       {/* Add / Edit Banner Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Sliding Banner' : 'Create Home Banner'}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} closeDisabled={submitting} title={editingId ? 'Edit Sliding Banner' : 'Create Home Banner'}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="grid-2">
             <div className="form-group">
@@ -397,9 +413,9 @@ const ManageBanners = () => {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline">Cancel</button>
-            <button type="submit" className="btn btn-primary">
-              {editingId ? 'Update Banner' : 'Save & Publish Banner'}
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-outline" disabled={submitting}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving...' : (editingId ? 'Update Banner' : 'Save & Publish Banner')}
             </button>
           </div>
         </form>

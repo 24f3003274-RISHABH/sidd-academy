@@ -6,7 +6,22 @@ export const notFound = (req, res, next) => {
 };
 
 export const errorHandler = (err, req, res, next) => {
-  let statusCode = err.statusCode || 500;
+  // Razorpay SDK (and other third-party SDKs) throw plain objects, not Error subclasses.
+  // They carry statusCode / status from the upstream HTTP response (e.g. Razorpay auth → 401).
+  // We must NEVER forward an upstream 4xx as our own authentication error.
+  // Anything that is not an explicitly set AppError gets capped at 500/502.
+  const isAppError = err && err.isOperational === true; // AppError sets isOperational
+  let rawStatus = err.statusCode || err.status || 500;
+
+  // Cap upstream gateway/library error codes so they never masquerade as auth failures
+  let statusCode = rawStatus;
+  if (!isAppError && rawStatus >= 400 && rawStatus < 600) {
+    statusCode = rawStatus >= 500 ? 500 : 502; // upstream 4xx → 502 Bad Gateway
+  }
+  if (statusCode < 400 || statusCode > 599) {
+    statusCode = 500; // sanity guard
+  }
+
   let message = err.message || 'Internal Server Error';
 
   if (err.name === 'CastError') {

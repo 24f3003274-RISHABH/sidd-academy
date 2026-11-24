@@ -3,6 +3,8 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 /**
  * SECURITY-SENSITIVE: Auth Repository
  * Data Access Layer for User authentication, credential retrieval, profile management, and RBAC roles.
@@ -64,7 +66,7 @@ export class AuthRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at, updated_at
@@ -259,7 +261,7 @@ export class AuthRepository {
    * Update last login timestamp.
    */
   async updateLastLogin(id) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `UPDATE users SET last_login = NOW() WHERE id = $1`;
         await query(sql, [id]);

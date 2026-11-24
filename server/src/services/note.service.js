@@ -1,9 +1,9 @@
 import { noteRepository } from '../repositories/note.repository.js';
-import { courseRepository } from '../repositories/course.repository.js';
+import { googleDriveService } from './googleDrive.service.js';
 import { AppError } from '../utils/apiResponse.js';
 
 /**
- * Note Service - Business Logic for Digital Study Materials & Access Protection
+ * Note Service - Business Logic for Digital Study Materials, Google Drive Content & Access Protection
  */
 export class NoteService {
   /**
@@ -13,7 +13,7 @@ export class NoteService {
     if (!note) return false;
     // 1. Free notes are accessible to everyone
     if (note.isFree) return true;
-    
+
     // 2. Unauthenticated users cannot access paid notes
     if (!user) return false;
 
@@ -29,23 +29,45 @@ export class NoteService {
   }
 
   /**
+   * Format note object according to entitlement (masking URLs when locked)
+   */
+  formatNoteForClient(note, hasAccess) {
+    const isLocked = !hasAccess;
+    const noteId = note.id || note._id;
+
+    if (isLocked) {
+      return {
+        ...note,
+        isLocked: true,
+        fileUrl: null,
+        localFileUrl: null,
+        streamUrl: null,
+        downloadUrl: null,
+        driveFileId: null,
+        driveViewUrl: null,
+        drivePreviewUrl: null,
+        driveDownloadUrl: null,
+      };
+    }
+
+    return {
+      ...note,
+      isLocked: false,
+      streamUrl: `/api/v1/notes/${noteId}/stream`,
+      downloadUrl: `/api/v1/notes/${noteId}/download`,
+    };
+  }
+
+  /**
    * Get all notes with entitlement-aware locking and masking
    */
   async getNotes(filters = {}, user = null) {
     const notes = await noteRepository.findAll(filters);
 
-    // Process each note for client safety
     const processed = await Promise.all(
       notes.map(async (note) => {
         const hasAccess = await this.checkUserAccess(note, user);
-        const isLocked = !hasAccess;
-
-        return {
-          ...note,
-          isLocked,
-          // Hide actual storage path/URL if user does not own this paid resource
-          fileUrl: isLocked ? null : note.fileUrl,
-        };
+        return this.formatNoteForClient(note, hasAccess);
       })
     );
 
@@ -62,17 +84,11 @@ export class NoteService {
     }
 
     const hasAccess = await this.checkUserAccess(note, user);
-    const isLocked = !hasAccess;
-
-    return {
-      ...note,
-      isLocked,
-      fileUrl: isLocked ? null : note.fileUrl,
-    };
+    return this.formatNoteForClient(note, hasAccess);
   }
 
   /**
-   * Authenticated Access Verification for Note PDF
+   * Authenticated Access Verification for Note PDF / Google Drive Content
    * Rejects unpurchased requests with HTTP 403 Forbidden
    */
   async getSecureNoteAccess(id, user = null) {
@@ -84,7 +100,7 @@ export class NoteService {
     const hasAccess = await this.checkUserAccess(note, user);
     if (!hasAccess) {
       throw new AppError(
-        'Access Denied: This is a premium study note. Please purchase this note to view or download.',
+        'Access Denied: This is a premium study note. Please purchase this note or enroll in the course to view or download.',
         403
       );
     }
@@ -92,11 +108,22 @@ export class NoteService {
     // Increment download counter
     await noteRepository.incrementDownloadCount(id);
 
+    const noteId = note.id || note._id;
     return {
-      id: note.id,
+      id: noteId,
+      _id: noteId,
       title: note.title,
       fileName: note.fileName || `${note.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
       fileUrl: note.fileUrl,
+      localFileUrl: note.localFileUrl || '',
+      streamUrl: `/api/v1/notes/${noteId}/stream`,
+      downloadUrl: `/api/v1/notes/${noteId}/download`,
+      driveFileId: note.driveFileId || null,
+      driveFolderId: note.driveFolderId || null,
+      driveViewUrl: note.driveViewUrl || null,
+      drivePreviewUrl: note.drivePreviewUrl || null,
+      driveDownloadUrl: note.driveDownloadUrl || null,
+      storageProvider: note.storageProvider || (note.driveFileId ? 'gdrive' : 'local'),
       fileSize: note.fileSize,
       isFree: note.isFree,
     };
@@ -106,22 +133,37 @@ export class NoteService {
    * Create a new note (Admin)
    */
   async createNote(data) {
-    if (!data.title) {
+    if (!data.title || !String(data.title).trim()) {
       throw new AppError('Note title is required', 400);
     }
 
     const isFree = data.isFree === true || data.isFree === 'true' || Number(data.price || 0) === 0;
     const price = isFree ? 0 : Number(data.price || 0);
 
+    const extractedDriveId =
+      data.driveFileId ||
+      googleDriveService.extractDriveFileId(data.driveViewUrl || data.driveUrl || data.fileUrl);
+    const driveUrls = googleDriveService.buildDriveUrls(extractedDriveId);
+
     const note = await noteRepository.create({
       ...data,
+      title: String(data.title).trim(),
       isFree,
       price,
-      fileUrl: data.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-      fileName: data.fileName || `${data.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+      driveFileId: extractedDriveId || null,
+      driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl || null,
+      drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl || null,
+      driveDownloadUrl: data.driveDownloadUrl || driveUrls.driveDownloadUrl || null,
+      storageProvider: extractedDriveId ? 'gdrive' : (data.storageProvider || 'local'),
+      fileUrl:
+        data.fileUrl ||
+        driveUrls.driveViewUrl ||
+        data.localFileUrl ||
+        '/uploads/notes/Class_12_Chemistry_Chemical_Kinetics_Notes.pdf',
+      fileName: data.fileName || `${String(data.title).trim().replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
       fileSize: data.fileSize || '2.5 MB',
       pageCount: Number(data.pageCount || 1),
-      isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
+      isPublished: data.isPublished !== undefined ? (data.isPublished === true || data.isPublished === 'true') : true,
     });
 
     return note;
@@ -143,10 +185,25 @@ export class NoteService {
       price = 0;
     }
 
+    const extractedDriveId =
+      data.driveFileId ||
+      googleDriveService.extractDriveFileId(data.driveViewUrl || data.driveUrl || data.fileUrl) ||
+      existing.driveFileId;
+    const driveUrls = googleDriveService.buildDriveUrls(extractedDriveId);
+
     const updated = await noteRepository.update(id, {
       ...data,
       isFree,
       price,
+      ...(extractedDriveId
+        ? {
+            driveFileId: extractedDriveId,
+            driveViewUrl: data.driveViewUrl || driveUrls.driveViewUrl,
+            drivePreviewUrl: data.drivePreviewUrl || driveUrls.drivePreviewUrl,
+            driveDownloadUrl: data.driveDownloadUrl || driveUrls.driveDownloadUrl,
+            storageProvider: 'gdrive',
+          }
+        : {}),
     });
 
     return updated;
@@ -167,3 +224,4 @@ export class NoteService {
 }
 
 export const noteService = new NoteService();
+export default noteService;

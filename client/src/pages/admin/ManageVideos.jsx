@@ -15,6 +15,7 @@ const ManageVideos = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Cascading hierarchy dropdowns
   const [courses, setCourses] = useState([]);
@@ -209,13 +210,17 @@ const ManageVideos = () => {
   };
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (window.confirm('Are you sure you want to delete this video?')) {
+      setDeletingId(id);
       try {
         await deleteVideo(id);
         toast.success('Video deleted successfully');
         fetchVideos();
       } catch (err) {
         toast.error('Failed to delete video');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -309,6 +314,7 @@ const ManageVideos = () => {
                           </button>
                           <button
                             onClick={() => handleDelete(id)}
+                            disabled={deletingId === id}
                             className="btn btn-sm btn-danger"
                             title="Delete Video"
                           >
@@ -329,6 +335,7 @@ const ManageVideos = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        closeDisabled={submitting}
         title={editingId ? 'Update Video Stream' : 'Add YouTube Video Stream'}
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 640 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(Sidd Academy - Class 10 Mathematics Master Formula Sheet) Tj
+/F1 12 Tf
+0 -24 Td
+(Faculty: Prof. R.K. Sharma & Siddhant Pandey | Board Exam Revision PDF) Tj
+0 -16 Td
+(------------------------------------------------------------------------) Tj
+0 -18 Td
+(1. Fundamental Theorem of Arithmetic: HCF\(a, b\) * LCM\(a, b\) = a * b) Tj
+0 -18 Td
+(2. Quadratic Formula: x = [-b +- sqrt\(b^2 - 4ac\)] / \(2a\), D = b^2 - 4ac) Tj
+0 -18 Td
+(3. Arithmetic Progression: a_n = a + \(n - 1\)d, S_n = \(n/2\)[2a + \(n - 1\)d]) Tj
+0 -18 Td
+(4. Trigonometric Identities: sin^2\(A\) + cos^2\(A\) = 1, 1 + tan^2\(A\) = sec^2\(A\)) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000931 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1001
+%%EOF

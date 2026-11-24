@@ -28,7 +28,7 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
     >
       <div 
         style={{
-          backgroundColor: '#181926',
+          backgroundColor: 'var(--bg-card)',
           borderRadius: '16px',
           width: '100%',
           maxWidth: '860px',
@@ -52,7 +52,7 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
                 {chapterTitle}
               </span>
             )}
-            <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#fff', fontWeight: 600 }}>{title || 'Lecture Video'}</h3>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)', fontWeight: 600 }}>{title || 'Lecture Video'}</h3>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <a 

@@ -102,7 +102,7 @@ const MyCoursesPage = () => {
         </div>
 
         {/* Status Filter Tabs */}
-        <div style={{ display: 'flex', gap: '0.4rem', backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: '0.25rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', backgroundColor: 'var(--bg-muted)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
           <button
             type="button"
             onClick={() => setStatusFilter('ALL')}
@@ -287,7 +287,7 @@ const MyCoursesPage = () => {
                       {course.title}
                     </h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      Instructor: <strong style={{ color: '#fff' }}>{course.instructor}</strong>
+                      Instructor: <strong style={{ color: 'var(--text-primary)' }}>{course.instructor}</strong>
                     </p>
                   </div>
 

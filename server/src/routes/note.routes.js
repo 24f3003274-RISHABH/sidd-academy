@@ -10,11 +10,12 @@ const router = express.Router();
 router.get('/', optionalAuth, validateNoteQuery, noteController.getAllNotes);
 router.get('/:id', optionalAuth, noteController.getNoteById);
 router.get('/:id/access', optionalAuth, noteController.getSecureAccess);
+router.get('/:id/stream', optionalAuth, noteController.streamNote);
 router.get('/:id/download', optionalAuth, noteController.downloadNote);
 
 // Admin Management Endpoints
 router.post('/', protect, authorize('ADMIN'), uploadPDF.single('file'), validateCreateNote, noteController.createNote);
-router.put('/:id', protect, authorize('ADMIN'), validateUpdateNote, noteController.updateNote);
+router.put('/:id', protect, authorize('ADMIN'), uploadPDF.single('file'), validateUpdateNote, noteController.updateNote);
 router.delete('/:id', protect, authorize('ADMIN'), noteController.deleteNote);
 
 export default router;

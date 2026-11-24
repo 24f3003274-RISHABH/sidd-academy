@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import { mockData } from '../data/mockStore.js';
+import { noteRepository } from './note.repository.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -8,69 +9,41 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export class CourseRepository {
   /**
-   * Find paginated courses with optional filters (search, level, isPublished)
+   * Find paginated courses with optional filters (search, level, isPublished, excludeCourseIds)
    */
-  async findAll({ search, level, isPublished = true, page = 1, limit = 10, isAdmin = false }) {
+  async findAll({ search, level, isPublished = true, page = 1, limit = 10, isAdmin = false, excludeCourseIds = [] }) {
     const offset = (page - 1) * limit;
+    const excludedSet = new Set((excludeCourseIds || []).filter(Boolean));
+
+    let allCourses = [...mockData.courses];
 
     if (ENV.DATABASE_URL) {
       try {
-        const conditions = [];
-        const params = [];
-        let pIndex = 1;
-
-        if (!isAdmin && isPublished !== undefined) {
-          conditions.push(`is_published = $${pIndex++}`);
-          params.push(isPublished);
-        }
-
-        if (level) {
-          conditions.push(`level = $${pIndex++}`);
-          params.push(level);
-        }
-
-        if (search) {
-          conditions.push(`(title ILIKE $${pIndex} OR description ILIKE $${pIndex})`);
-          params.push(`%${search.trim()}%`);
-          pIndex++;
-        }
-
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-        // Count total
-        const countSql = `SELECT COUNT(*) FROM courses ${whereClause}`;
-        const countRes = await query(countSql, params);
-        const total = parseInt(countRes.rows[0].count, 10);
-
-        // Fetch courses
         const sql = `
           SELECT id, title, slug, description, price, discount_price, thumbnail, duration, 
-                 level, is_published, total_students, total_students as enrolled_students, rating, rating_count, created_at, updated_at
+                 level, is_published, total_students, total_students as enrolled_students, rating, rating_count, instructor, language, is_free, order_num, created_at, updated_at
           FROM courses 
-          ${whereClause}
           ORDER BY created_at DESC
-          LIMIT $${pIndex++} OFFSET $${pIndex++}
         `;
-        const fetchParams = [...params, limit, offset];
-        const res = await query(sql, fetchParams);
-
-        const courses = res.rows.map(this.normalizeCourse);
-
-        return {
-          courses,
-          total,
-          page,
-          pages: Math.ceil(total / limit) || 1,
-        };
+        const res = await query(sql);
+        const dbCourses = res.rows.map(this.normalizeCourse);
+        const seenSlugs = new Set(dbCourses.map(c => c.slug).filter(Boolean));
+        const seenIds = new Set(dbCourses.map(c => c.id || c._id).filter(Boolean));
+        const mockExtras = mockData.courses
+          .map(this.normalizeCourse)
+          .filter(c => !seenSlugs.has(c.slug) && !seenIds.has(c.id || c._id));
+        allCourses = [...dbCourses, ...mockExtras];
       } catch (err) {
         console.warn('CourseRepository findAll fallback to mockStore:', err.message);
       }
     }
 
-    // In-memory fallback
-    let filtered = [...mockData.courses];
+    let filtered = allCourses.map(c => (c.id && c.isPublished !== undefined ? c : this.normalizeCourse(c)));
     if (!isAdmin && isPublished !== undefined) {
       filtered = filtered.filter(c => c.isPublished === isPublished || c.is_published === isPublished);
+    }
+    if (excludedSet.size > 0) {
+      filtered = filtered.filter(c => !excludedSet.has(c.id || c._id));
     }
     if (level) {
       filtered = filtered.filter(c => c.level === level);
@@ -81,7 +54,7 @@ export class CourseRepository {
     }
 
     const total = filtered.length;
-    const courses = filtered.slice(offset, offset + limit).map(this.normalizeCourse);
+    const courses = filtered.slice(offset, offset + limit);
 
     return {
       courses,
@@ -126,70 +99,135 @@ export class CourseRepository {
 
     const courseId = course.id;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)) {
       try {
-        // Fetch subjects
         const subjectsRes = await query(
-          `SELECT id, course_id, title, title as name, order_num as order_index, created_at, updated_at 
+          `SELECT id, course_id, title, COALESCE(name, title) as name, order_num as order_index, created_at, updated_at 
            FROM subjects WHERE course_id = $1 ORDER BY order_num ASC, created_at ASC`,
           [courseId]
         );
 
         const subjects = subjectsRes.rows;
+        const subjectIds = subjects.map((subject) => subject.id);
 
-        for (const subj of subjects) {
-          const chaptersRes = await query(
-            `SELECT id, subject_id, title, order_num as order_index, created_at, updated_at 
-             FROM chapters WHERE subject_id = $1 ORDER BY order_num ASC, created_at ASC`,
-            [subj.id]
-          );
+        const chaptersRes = subjectIds.length
+          ? await query(
+              `SELECT id, subject_id, title, order_num as order_index, created_at, updated_at
+               FROM chapters WHERE subject_id = ANY($1::uuid[]) ORDER BY order_num ASC, created_at ASC`,
+              [subjectIds]
+            )
+          : { rows: [] };
+        const chapters = chaptersRes.rows;
+        const chapterIds = chapters.map((chapter) => chapter.id);
 
-          subj.chapters = chaptersRes.rows;
+        const lessonsRes = chapterIds.length
+          ? await query(
+              `SELECT id, chapter_id, title, description, class_date, class_number, duration, is_free, is_protected, order_num as order_index, false as is_live, created_at, updated_at
+               FROM lessons WHERE chapter_id = ANY($1::uuid[]) ORDER BY order_num ASC, class_date ASC`,
+              [chapterIds]
+            )
+          : { rows: [] };
+        const lessons = lessonsRes.rows;
+        const lessonIds = lessons.map((lesson) => lesson.id);
 
-          for (const chap of subj.chapters) {
-            const lessonsRes = await query(
-              `SELECT id, chapter_id, title, class_date, duration, order_num as order_index, false as is_live, created_at, updated_at 
-               FROM lessons WHERE chapter_id = $1 ORDER BY order_num ASC, class_date ASC`,
-              [chap.id]
-            );
+        const [videosRes, notesRes] = await Promise.all([
+          lessonIds.length
+            ? query(
+                `SELECT id, lesson_id, title, video_url, video_provider, quality, false as is_free_preview
+                 FROM videos WHERE lesson_id = ANY($1::uuid[])`,
+                [lessonIds]
+              )
+            : Promise.resolve({ rows: [] }),
+          query(
+            `SELECT * FROM notes
+             WHERE is_published = true
+               AND (
+                 course_id = $1
+                 OR ($2::uuid[] IS NOT NULL AND subject_id = ANY($2::uuid[]))
+                 OR ($3::uuid[] IS NOT NULL AND chapter_id = ANY($3::uuid[]))
+                 OR ($4::uuid[] IS NOT NULL AND lesson_id = ANY($4::uuid[]))
+               )
+             ORDER BY created_at DESC`,
+            [
+              courseId,
+              subjectIds.length ? subjectIds : null,
+              chapterIds.length ? chapterIds : null,
+              lessonIds.length ? lessonIds : null,
+            ]
+          ),
+        ]);
 
-            chap.lessons = lessonsRes.rows;
-            chap.dailyClasses = lessonsRes.rows; // Compatibility alias
+        const normalizedNotes = notesRes.rows.map((n) => noteRepository.normalizeNote(n));
 
-            for (const lesson of chap.lessons) {
-              // Fetch attached video
-              const videoRes = await query(
-                `SELECT id, lesson_id, title, video_url, video_provider, quality, false as is_free_preview 
-                 FROM videos WHERE lesson_id = $1 LIMIT 1`,
-                [lesson.id]
-              );
-              lesson.video = videoRes.rows.length > 0 ? videoRes.rows[0] : null;
+        const chaptersBySubject = new Map();
+        const chapterById = new Map();
+        chapters.forEach((chapter) => {
+          chapter.lessons = [];
+          chapterById.set(chapter.id, chapter);
+          const subjectChapters = chaptersBySubject.get(chapter.subject_id) || [];
+          subjectChapters.push(chapter);
+          chaptersBySubject.set(chapter.subject_id, subjectChapters);
+        });
 
-              // Fetch attached notes
-              const notesRes = await query(
-                `SELECT id, title, file_url, is_free, price FROM notes WHERE lesson_id = $1`,
-                [lesson.id]
-              );
-              lesson.notes = notesRes.rows;
-            }
+        const videosByLesson = new Map(videosRes.rows.map((video) => [video.lesson_id, video]));
+        const notesByLesson = new Map();
+        const notesByChapter = new Map();
+        const notesBySubject = new Map();
+
+        normalizedNotes.forEach((note) => {
+          if (note.lessonId) {
+            const list = notesByLesson.get(note.lessonId) || [];
+            list.push(note);
+            notesByLesson.set(note.lessonId, list);
           }
-        }
+          if (note.chapterId) {
+            const list = notesByChapter.get(note.chapterId) || [];
+            list.push(note);
+            notesByChapter.set(note.chapterId, list);
+          }
+          if (note.subjectId) {
+            const list = notesBySubject.get(note.subjectId) || [];
+            list.push(note);
+            notesBySubject.set(note.subjectId, list);
+          }
+        });
 
+        lessons.forEach((lesson) => {
+          lesson.video = videosByLesson.get(lesson.id) || null;
+          lesson.videoUrl = lesson.video?.video_url || null;
+          lesson.notes = notesByLesson.get(lesson.id) || [];
+          const chapter = chapterById.get(lesson.chapter_id);
+          if (chapter) chapter.lessons.push(lesson);
+        });
+
+        course.notes = normalizedNotes;
         course.subjects = subjects.map(s => ({
           ...s,
           _id: s.id,
-          chapters: (s.chapters || []).map(ch => ({
-            ...ch,
-            _id: ch.id,
-            dailyClasses: (ch.lessons || []).map(l => ({
+          notes: notesBySubject.get(s.id) || [],
+          chapters: (chaptersBySubject.get(s.id) || []).map(ch => {
+            const normalizedLessons = (ch.lessons || []).map(l => ({
               ...l,
               _id: l.id,
-            })),
-            lessons: (ch.lessons || []).map(l => ({
-              ...l,
-              _id: l.id,
-            }))
-          }))
+              chapterId: l.chapter_id,
+              classDate: l.class_date,
+              classNumber: l.class_number,
+              order: l.order_index,
+              order_index: l.order_index,
+              isFree: Boolean(l.is_free),
+              isProtected: l.is_protected !== undefined ? Boolean(l.is_protected) : true,
+              videoUrl: l.video_url || l.videoUrl || null,
+              videoProvider: l.video_provider || l.videoProvider || 'youtube',
+              notes: l.notes || [],
+            }));
+            return {
+              ...ch,
+              _id: ch.id,
+              notes: notesByChapter.get(ch.id) || [],
+              dailyClasses: normalizedLessons,
+              lessons: normalizedLessons,
+            };
+          }),
         }));
 
         return course;
@@ -198,25 +236,70 @@ export class CourseRepository {
       }
     }
 
-    // In-memory fallback
+    // In-memory fallback with full Video & Google Drive Study Material hierarchy attachment
     const c = { ...course };
-    c.subjects = mockData.subjects
+    const allNormalizedNotes = (mockData.notes || [])
+      .map(n => noteRepository.normalizeNote(n))
+      .filter(n => n && n.isPublished !== false);
+
+    const courseNotes = [];
+
+    c.subjects = (mockData.subjects || [])
       .filter(s => s.course === courseId || s.courseId === courseId || s.course === course._id)
       .map(s => {
-        const subj = { ...s, id: s._id || s.id, _id: s._id || s.id };
-        subj.chapters = mockData.chapters
-          .filter(ch => ch.subject === s._id || ch.subject === s.id || ch.subjectId === s.id)
+        const sId = s._id || s.id;
+        const subjNotes = allNormalizedNotes.filter(n => n.subjectId === sId);
+        const subj = { ...s, id: sId, _id: sId, name: s.name || s.title, title: s.title || s.name, notes: subjNotes };
+
+        subj.chapters = (mockData.chapters || [])
+          .filter(ch => ch.subject === sId || ch.subjectId === sId)
           .map(ch => {
-            const chap = { ...ch, id: ch._id || ch.id, _id: ch._id || ch.id };
-            chap.dailyClasses = mockData.dailyClasses
-              .filter(dc => dc.chapter === ch._id || dc.chapter === ch.id || dc.chapterId === ch.id)
-              .map(dc => ({ ...dc, id: dc._id || dc.id, _id: dc._id || dc.id }));
+            const chId = ch._id || ch.id;
+            const chapNotes = allNormalizedNotes.filter(n => n.chapterId === chId);
+            const chap = { ...ch, id: chId, _id: chId, subjectId: sId, notes: chapNotes };
+
+            chap.dailyClasses = (mockData.dailyClasses || [])
+              .filter(dc => dc.chapter === chId || dc.chapterId === chId)
+              .map(dc => {
+                const lId = dc._id || dc.id;
+                const vid = (mockData.videos || []).find(v => v.lessonId === lId);
+                const lessonNotes = allNormalizedNotes.filter(
+                  n => n.lessonId === lId || (!n.lessonId && n.chapterId === chId)
+                );
+                return {
+                  ...dc,
+                  id: lId,
+                  _id: lId,
+                  chapterId: chId,
+                  video: vid || null,
+                  videoUrl: dc.videoUrl || vid?.videoUrl || null,
+                  isFree: Boolean(dc.isFree ?? dc.is_free),
+                  isProtected: dc.isProtected !== undefined ? Boolean(dc.isProtected) : !Boolean(dc.isFree ?? dc.is_free),
+                  notes: lessonNotes,
+                };
+              });
             chap.lessons = chap.dailyClasses;
             return chap;
           });
         return subj;
       });
 
+    const subjectIdSet = new Set(c.subjects.map(s => s.id));
+    const chapterIdSet = new Set(c.subjects.flatMap(s => s.chapters.map(ch => ch.id)));
+    const lessonIdSet = new Set(c.subjects.flatMap(s => s.chapters.flatMap(ch => ch.lessons.map(l => l.id))));
+
+    allNormalizedNotes.forEach(n => {
+      if (
+        n.courseId === courseId ||
+        (n.subjectId && subjectIdSet.has(n.subjectId)) ||
+        (n.chapterId && chapterIdSet.has(n.chapterId)) ||
+        (n.lessonId && lessonIdSet.has(n.lessonId))
+      ) {
+        courseNotes.push(n);
+      }
+    });
+
+    c.notes = courseNotes;
     return c;
   }
 
@@ -246,17 +329,17 @@ export class CourseRepository {
     const safeRating = rating !== undefined && rating !== null ? Math.max(0, Math.min(5, Number(rating))) : 4.90;
     const safePrice = Math.max(0, Number(price) || 0);
     const safeDiscountPrice = Math.max(0, Number(discountPrice) || 0);
-    const safeIsFree = Boolean(isFree || safePrice === 0);
+    const safeIsFree = isFree === true || isFree === 'true' || safePrice === 0;
 
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
           INSERT INTO courses (
             id, title, slug, description, price, discount_price, thumbnail, 
-            duration, level, is_published, total_students, enrolled_students, 
-            rating, rating_count, instructor, language, is_free, order_num, created_at, updated_at
+            duration, level, is_published, total_students,
+            rating, instructor, language, is_free, order_num, created_at, updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, $11, $12, $13, $14, $15, NOW(), NOW())
           RETURNING *
         `;
         const res = await query(sql, [
@@ -271,7 +354,6 @@ export class CourseRepository {
           level || 'All Levels',
           Boolean(isPublished),
           safeRating,
-          Number(ratingCount) || 0,
           instructor || 'Sidd Academy Faculty',
           language || 'Hinglish',
           safeIsFree,
@@ -356,7 +438,7 @@ export class CourseRepository {
         }
         if (updates.isPublished !== undefined) {
           fields.push(`is_published = $${pIndex++}`);
-          values.push(Boolean(updates.isPublished));
+          values.push(updates.isPublished === true || updates.isPublished === 'true');
         }
         if (updates.rating !== undefined) {
           fields.push(`rating = $${pIndex++}`);
@@ -372,7 +454,7 @@ export class CourseRepository {
         }
         if (updates.isFree !== undefined) {
           fields.push(`is_free = $${pIndex++}`);
-          values.push(Boolean(updates.isFree));
+          values.push(updates.isFree === true || updates.isFree === 'true');
         }
         if (updates.orderNum !== undefined || updates.order !== undefined) {
           fields.push(`order_num = $${pIndex++}`);
@@ -406,11 +488,11 @@ export class CourseRepository {
     if (updates.thumbnail !== undefined) course.thumbnail = updates.thumbnail;
     if (updates.duration !== undefined) course.duration = updates.duration;
     if (updates.level !== undefined) course.level = updates.level;
-    if (updates.isPublished !== undefined) course.isPublished = Boolean(updates.isPublished);
+    if (updates.isPublished !== undefined) course.isPublished = updates.isPublished === true || updates.isPublished === 'true';
     if (updates.rating !== undefined) course.rating = Math.max(0, Math.min(5, Number(updates.rating)));
     if (updates.instructor !== undefined) course.instructor = updates.instructor;
     if (updates.language !== undefined) course.language = updates.language;
-    if (updates.isFree !== undefined) course.isFree = Boolean(updates.isFree);
+    if (updates.isFree !== undefined) course.isFree = updates.isFree === true || updates.isFree === 'true';
     if (updates.orderNum !== undefined) course.orderNum = Number(updates.orderNum);
     course.updatedAt = new Date().toISOString();
 
@@ -494,6 +576,7 @@ export class CourseRepository {
       createdAt: c.created_at || c.createdAt,
       updatedAt: c.updated_at || c.updatedAt,
       subjects: c.subjects || [],
+      notes: c.notes || [],
     };
   }
 }

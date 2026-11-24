@@ -44,28 +44,25 @@ const HeroSection = () => {
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <div 
             style={{
-              borderRadius: '16px',
+              borderRadius: '18px',
               overflow: 'hidden',
               boxShadow: 'var(--shadow-xl)',
               border: '1px solid var(--border)',
-              backgroundColor: '#ffffff',
+              backgroundColor: '#0b0e1a',
               width: '100%',
-              maxWidth: '500px',
+              maxWidth: '600px',
             }}
           >
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', backgroundColor: '#0b0e1a' }}>
               <img 
-                src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80" 
-                alt="Sidd Academy Hindi Medium Classroom" 
-                style={{ width: '100%', height: '280px', objectFit: 'cover' }}
+                src="/posters/sid-academy-faculty-team.jpg" 
+                alt="SID Academy Prayagraj Expert Faculty Team — Shahzad Sir, Siddhant Bhaiya & Aakash Sir" 
+                style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
                 loading="eager"
               />
-              <div style={{ position: 'absolute', bottom: '12px', left: '12px', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(4px)', color: '#ffffff', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <FiPlayCircle style={{ color: '#ef4444' }} /> High Quality Video Classes
-              </div>
             </div>
             
-            <div style={{ padding: '1.25rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', backgroundColor: '#ffffff', borderTop: '1px solid var(--border)' }}>
+            <div style={{ padding: '1.15rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', backgroundColor: '#ffffff', borderTop: '1px solid var(--border)' }}>
               <div>
                 <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary)' }}>Class 10–12</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>All Streams</div>

@@ -27,6 +27,12 @@ export const createLessonValidator = [
     .optional()
     .isInt({ min: 0 })
     .withMessage('Order must be a non-negative integer'),
+  body('classNumber')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Class number must be a positive integer'),
+  body('isFree').optional().isBoolean(),
+  body('isProtected').optional().isBoolean(),
 ];
 
 export const updateLessonValidator = [
@@ -43,4 +49,7 @@ export const updateLessonValidator = [
   body('duration')
     .optional()
     .isInt({ min: 0 }),
+  body('classNumber').optional().isInt({ min: 1 }),
+  body('isFree').optional().isBoolean(),
+  body('isProtected').optional().isBoolean(),
 ];

@@ -31,9 +31,7 @@ const NoteCard = ({
         border: isLocked ? '1px solid rgba(255, 117, 140, 0.2)' : '1px solid rgba(255, 255, 255, 0.08)',
         position: 'relative',
         transition: 'transform 0.2s ease, border-color 0.2s ease',
-        background: isLocked
-          ? 'linear-gradient(180deg, rgba(27, 28, 43, 0.9) 0%, rgba(20, 21, 33, 0.9) 100%)'
-          : 'rgba(255, 255, 255, 0.03)',
+        background: 'var(--bg-card)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-3px)';
@@ -114,7 +112,7 @@ const NoteCard = ({
               margin: '0 0 0.25rem 0',
               lineHeight: 1.35,
               fontWeight: 700,
-              color: '#fff',
+              color: 'var(--text-primary)',
             }}
           >
             {note.title}
@@ -161,7 +159,7 @@ const NoteCard = ({
           <span
             style={{
               fontWeight: 800,
-              color: note.isFree ? '#43e97b' : '#fff',
+              color: note.isFree ? 'var(--accent-dark)' : 'var(--text-primary)',
               fontSize: '1.2rem',
             }}
           >

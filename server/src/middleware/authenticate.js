@@ -4,35 +4,36 @@ import { AppError } from '../utils/apiResponse.js';
 import ENV from '../config/env.js';
 
 /**
+ * Helper to extract token from Authorization header, cookie, or query string
+ */
+const extractTokenFromRequest = (req) => {
+  if (req.headers && req.headers.authorization) {
+    const match = req.headers.authorization.match(/^Bearer\s+([^\s,]+)/i);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token;
+  }
+  if (req.query && typeof req.query.token === 'string' && req.query.token.trim()) {
+    return req.query.token.trim();
+  }
+  return null;
+};
+
+/**
  * SECURITY-SENSITIVE: JWT Authentication Middleware
- * 
- * Flow:
- * 1. Extracts Bearer token from 'Authorization' header or 'refreshToken' cookie.
- * 2. Cryptographically verifies JWT signature against server's JWT_ACCESS_SECRET.
- * 3. Checks token expiration and decoding payload.
- * 4. Resolves user from repository (PostgreSQL or fallback store).
- * 5. Verifies account active status (`is_active` / `isActive`).
- * 6. Attaches sanitized user record to `req.user`.
- * 
- * Rejects unauthenticated requests with HTTP 401 Unauthorized.
  */
 export const authenticate = async (req, res, next) => {
   try {
-    let token = null;
-
-    // 1. Extract Bearer Token from HTTP Authorization Header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1].trim();
-    } else if (req.cookies && req.cookies.token) {
-      // Fallback: check cookie if header not provided
-      token = req.cookies.token;
-    }
+    const token = extractTokenFromRequest(req);
 
     if (!token || token === 'undefined' || token === 'null') {
       return next(new AppError('Not authenticated. Please log in to access this resource.', 401));
     }
 
-    // 2. Verify JWT signature using access secret
+    // Verify JWT signature using access secret
     const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET;
     let decoded;
     try {
@@ -48,19 +49,19 @@ export const authenticate = async (req, res, next) => {
       return next(new AppError('Malformed token payload.', 401));
     }
 
-    // 3. Retrieve user profile by id from repository
+    // Retrieve user profile by id from repository
     const user = await authRepository.findById(decoded.id);
     if (!user) {
       return next(new AppError('User belonging to this token no longer exists.', 401));
     }
 
-    // 4. Ensure user account is active
+    // Ensure user account is active
     const isActive = user.is_active !== undefined ? user.is_active : (user.isActive !== undefined ? user.isActive : true);
     if (!isActive) {
       return next(new AppError('Your account has been deactivated. Please contact support.', 401));
     }
 
-    // 5. Normalize user role to facilitate uniform RBAC evaluation
+    // Normalize user role to facilitate uniform RBAC evaluation
     const normalizedRole = (user.role || 'student').toLowerCase();
     const userPayload = {
       ...user,
@@ -70,7 +71,6 @@ export const authenticate = async (req, res, next) => {
       rawRole: user.role,
     };
 
-    // Attach to request object for downstream controllers and authorize middleware
     req.user = userPayload;
     next();
   } catch (error) {
@@ -84,10 +84,7 @@ export const authenticate = async (req, res, next) => {
  */
 export const optionalAuth = async (req, res, next) => {
   try {
-    let token = null;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1].trim();
-    }
+    const token = extractTokenFromRequest(req);
     if (token && token !== 'undefined' && token !== 'null') {
       const secret = ENV.JWT_ACCESS_SECRET || ENV.JWT_SECRET;
       const decoded = jwt.verify(token, secret);

@@ -30,15 +30,199 @@ export class VideoService {
   }
 
   /**
-   * Extract YouTube Playlist ID
+   * Extract YouTube Playlist ID from playlist URL, watch URL with list=, or bare PL... ID
    */
   extractPlaylistId(url) {
     if (!url || typeof url !== 'string') return null;
     const cleanUrl = url.trim();
 
-    const regExp = /[?&]list=([^#\&\?]+)/i;
+    if (/^PL[a-zA-Z0-9_-]{8,}$/.test(cleanUrl)) {
+      return cleanUrl;
+    }
+
+    const regExp = /[?&]list=([^#\&\?\s]+)/i;
     const match = cleanUrl.match(regExp);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Convert MM:SS or HH:MM:SS duration string to seconds
+   */
+  parseDurationToSeconds(durationStr) {
+    if (!durationStr || typeof durationStr !== 'string') return 1800;
+    const parts = durationStr.trim().split(':').map(Number);
+    if (parts.some(isNaN)) return 1800;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return Number(durationStr) || 1800;
+  }
+
+  /**
+   * Fetch all videos in exact order from a YouTube Playlist URL (or list of YouTube Video URLs)
+   */
+  async fetchPlaylistMetadata(input) {
+    if (!input || typeof input !== 'string' || !input.trim()) {
+      throw new AppError('Please provide a valid YouTube Playlist URL or video links', 400);
+    }
+
+    const raw = input.trim();
+    const playlistId = this.extractPlaylistId(raw);
+
+    if (playlistId) {
+      const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+      const res = await fetch(playlistUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Cookie: 'CONSENT=YES+cb.20210328-17-p0.en+FX+999',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+
+      if (!res.ok) {
+        throw new AppError(`Failed to fetch YouTube playlist (HTTP ${res.status})`, 400);
+      }
+
+      const html = await res.text();
+      const marker = 'var ytInitialData = ';
+      const idx = html.indexOf(marker);
+      if (idx === -1) {
+        throw new AppError('Could not parse YouTube playlist data from URL', 400);
+      }
+
+      const sub = html.slice(idx + marker.length);
+      const endIdx = sub.indexOf(';</script>');
+      const data = JSON.parse(sub.slice(0, endIdx));
+
+      const rawTitle =
+        data.metadata?.playlistMetadataRenderer?.title ||
+        (html.match(/<title>(.*?)<\/title>/)?.[1] || '').replace(/\s*-\s*YouTube$/i, '') ||
+        'Imported YouTube Playlist Course';
+      const playlistDescription =
+        data.metadata?.playlistMetadataRenderer?.description ||
+        `Complete structured video lecture series imported from YouTube Playlist "${rawTitle}" in exact playlist order.`;
+
+      const videos = [];
+      const seen = new Set();
+
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+
+        if (node.lockupViewModel) {
+          const lvm = node.lockupViewModel;
+          const vid = lvm.contentId;
+          const title = lvm.metadata?.lockupMetadataViewModel?.title?.content;
+          if (vid && /^[a-zA-Z0-9_-]{11}$/.test(vid) && title && !seen.has(vid)) {
+            seen.add(vid);
+            const imgJson = JSON.stringify(lvm.contentImage || {});
+            const durMatch = imgJson.match(/"text":"(\d+:\d+(?::\d+)?)"/);
+            const duration = durMatch ? durMatch[1] : '30:00';
+            videos.push({
+              order: videos.length + 1,
+              videoId: vid,
+              youtubeId: vid,
+              title: title.trim(),
+              duration,
+              durationSeconds: this.parseDurationToSeconds(duration),
+              videoUrl: `https://www.youtube.com/watch?v=${vid}`,
+              playlistUrl,
+              thumbnailUrl: `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
+              isFree: videos.length < 2,
+            });
+          }
+        } else if (node.playlistVideoRenderer) {
+          const pvr = node.playlistVideoRenderer;
+          const vid = pvr.videoId;
+          const title = pvr.title?.runs?.[0]?.text || pvr.title?.simpleText;
+          if (vid && /^[a-zA-Z0-9_-]{11}$/.test(vid) && title && !seen.has(vid)) {
+            seen.add(vid);
+            const duration = pvr.lengthText?.simpleText || '30:00';
+            videos.push({
+              order: videos.length + 1,
+              videoId: vid,
+              youtubeId: vid,
+              title: title.trim(),
+              duration,
+              durationSeconds: this.parseDurationToSeconds(duration),
+              videoUrl: `https://www.youtube.com/watch?v=${vid}`,
+              playlistUrl,
+              thumbnailUrl: `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
+              isFree: videos.length < 2,
+            });
+          }
+        }
+
+        for (const key of Object.keys(node)) {
+          walk(node[key]);
+        }
+      };
+
+      walk(data);
+
+      if (videos.length === 0) {
+        throw new AppError('No public videos found in the provided YouTube playlist', 400);
+      }
+
+      return {
+        playlistId,
+        playlistUrl,
+        title: rawTitle.trim(),
+        description: playlistDescription.trim(),
+        thumbnailUrl: videos[0]?.thumbnailUrl || '',
+        videoCount: videos.length,
+        videos,
+      };
+    }
+
+    // Fallback: Parse one or more individual YouTube video URLs separated by newlines or commas
+    const lines = raw
+      .split(/[\n,]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const videos = [];
+    const seen = new Set();
+
+    for (const line of lines) {
+      const vid = this.extractYoutubeId(line);
+      if (vid && !seen.has(vid)) {
+        seen.add(vid);
+        let title = `Lecture ${videos.length + 1}`;
+        try {
+          const oRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`);
+          if (oRes.ok) {
+            const oData = await oRes.json();
+            if (oData.title) title = oData.title.trim();
+          }
+        } catch {
+          // keep fallback title
+        }
+        videos.push({
+          order: videos.length + 1,
+          videoId: vid,
+          youtubeId: vid,
+          title,
+          duration: '30:00',
+          durationSeconds: 1800,
+          videoUrl: `https://www.youtube.com/watch?v=${vid}`,
+          playlistUrl: '',
+          thumbnailUrl: `https://img.youtube.com/vi/${vid}/hqdefault.jpg`,
+          isFree: videos.length < 2,
+        });
+      }
+    }
+
+    if (videos.length === 0) {
+      throw new AppError('Could not extract any valid YouTube playlist or video IDs from input', 400);
+    }
+
+    return {
+      playlistId: null,
+      playlistUrl: '',
+      title: videos[0]?.title || 'Imported YouTube Video Series',
+      description: `Video series containing ${videos.length} lecture(s).`,
+      thumbnailUrl: videos[0]?.thumbnailUrl || '',
+      videoCount: videos.length,
+      videos,
+    };
   }
 
   /**

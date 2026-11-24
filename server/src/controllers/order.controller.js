@@ -12,9 +12,19 @@ export class OrderController {
    * GET /api/v1/orders/key OR GET /api/v1/payments/key
    */
   getPaymentKey = (req, res) => {
-    const key = paymentGatewayService.getPublicKey();
-    const isMock = !paymentGatewayService.isConfigured();
-    sendSuccess(res, 200, 'Payment gateway configuration retrieved', { key, isMock });
+    const isConfigured = paymentGatewayService.isConfigured();
+    let key = null;
+    try {
+      key = paymentGatewayService.getPublicKey();
+    } catch {
+      key = null;
+    }
+    sendSuccess(res, 200, 'Payment gateway configuration retrieved', {
+      key,
+      isConfigured,
+      isMock: !isConfigured,
+      mode: paymentGatewayService.getMode(),
+    });
   };
 
   /**
@@ -54,6 +64,8 @@ export class OrderController {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
+        forceLiveMode,
+        simulateDbFailure,
       } = req.body;
 
       const result = await orderService.verifyPayment(userId, {
@@ -64,6 +76,8 @@ export class OrderController {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
+        forceLiveMode: Boolean(forceLiveMode),
+        simulateDbFailure: Boolean(simulateDbFailure),
       });
 
       return sendSuccess(res, 200, result.message, result);
@@ -117,6 +131,17 @@ export class OrderController {
 
       const cancelled = await orderService.cancelOrder(orderId, userId, isAdmin);
       return sendSuccess(res, 200, 'Order cancelled successfully', { order: cancelled });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  failOrder = async (req, res, next) => {
+    try {
+      const userId = req.user.id || req.user._id;
+      const isAdmin = req.user.role === 'admin';
+      const order = await orderService.failOrder(req.params.id, userId, isAdmin);
+      return sendSuccess(res, 200, 'Payment marked as failed', { order });
     } catch (error) {
       next(error);
     }

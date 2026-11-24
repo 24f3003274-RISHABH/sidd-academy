@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import Loader from '../../components/common/Loader';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
@@ -60,7 +61,7 @@ const RegisterPage = () => {
           </div>
           <div className="form-group">
             <label className="form-label">Phone</label>
-            <input type="text" className="form-input" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Phone Number" />
+            <input type="tel" inputMode="numeric" autoComplete="tel" className="form-input" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 15)})} placeholder="Phone Number" />
           </div>
           <div className="form-group">
             <label className="form-label">Password</label>
@@ -71,7 +72,7 @@ const RegisterPage = () => {
             <input type="password" className="form-input" required value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} placeholder="Confirm Password" />
           </div>
           <button type="submit" className="btn btn-primary btn-full" disabled={loading} style={{ marginTop: '1rem' }}>
-            {loading ? 'Creating...' : 'Register'}
+            {loading ? <><Loader size={18} label="Creating account" /> Creating...</> : 'Register'}
           </button>
         </form>
         <div style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-muted)' }}>

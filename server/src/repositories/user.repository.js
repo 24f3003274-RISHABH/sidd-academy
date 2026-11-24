@@ -3,6 +3,8 @@ import { query } from '../config/db.js';
 import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 
+const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 /**
  * User Repository
  * Data Access Layer for User Administration, Role Management, and Profiles.
@@ -126,7 +128,7 @@ export class UserRepository extends AuthRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at, updated_at
@@ -153,7 +155,7 @@ export class UserRepository extends AuthRepository {
   async updateRole(id, role) {
     if (!id || !role) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           UPDATE users 
