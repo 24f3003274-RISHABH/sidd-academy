@@ -3,6 +3,9 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
+
 /**
  * Banner Repository - PostgreSQL / Supabase Data Access Layer
  * 
@@ -92,7 +95,7 @@ export class BannerRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `SELECT * FROM banners WHERE id = $1 LIMIT 1`;
         const res = await query(sql, [id]);
@@ -191,7 +194,7 @@ export class BannerRepository {
     const orderNum = data.order_num !== undefined ? Number(data.order_num) : (data.order !== undefined ? Number(data.order) : undefined);
     const bgColor = data.bgColor || data.bg_color;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
         const params = [id];
@@ -250,7 +253,7 @@ export class BannerRepository {
   async delete(id) {
     if (!id) return false;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `DELETE FROM banners WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);

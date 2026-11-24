@@ -10,8 +10,9 @@ import {
 
 const router = express.Router();
 
-// Public / Authenticated key endpoint
+// Public / Webhook endpoints
 router.get('/key', orderController.getPaymentKey);
+router.post('/webhook', orderController.handleWebhook);
 
 // Student Protected Endpoints
 router.use(protect);
@@ -20,6 +21,7 @@ router.post('/', validateCreateOrder, orderController.createOrder);
 router.post('/verify', validateVerifyPayment, orderController.verifyPayment);
 router.get('/', validateOrderQueryParams, orderController.getMyOrders);
 router.get('/:id', validateOrderIdParam, orderController.getOrderById);
+router.post('/:id/retry', validateOrderIdParam, orderController.retryOrder);
 router.patch('/:id/cancel', validateOrderIdParam, orderController.cancelOrder);
 router.patch('/:id/fail', validateOrderIdParam, orderController.failOrder);
 

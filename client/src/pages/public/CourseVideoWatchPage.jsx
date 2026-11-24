@@ -8,10 +8,10 @@ import { useAuth } from '../../hooks/useAuth';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
 import Loader from '../../components/common/Loader';
 import toast from 'react-hot-toast';
-import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import {
   formatPrice,
   getEffectivePrice,
+  resolveMediaUrl,
   getNoteStreamUrl,
   getNoteDrivePreviewUrl,
   getNoteDriveViewUrl,
@@ -464,7 +464,7 @@ const CourseVideoWatchPage = () => {
               videoUrl={currentLesson.videoUrl || currentLesson.youtubeUrl}
               playlistUrl={currentLesson.playlistUrl}
               title={currentLesson.title}
-              thumbnailUrl={currentLesson.thumbnailUrl || course.thumbnail}
+              thumbnailUrl={resolveMediaUrl(currentLesson.thumbnailUrl || course.thumbnail)}
               isLocked={false}
               isFree={currentLesson.isFree}
               duration={currentLesson.duration}

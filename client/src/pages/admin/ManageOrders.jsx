@@ -44,28 +44,28 @@ const ManageOrders = () => {
     if (s === 'PAID' || s === 'COMPLETED' || s === 'SUCCESS') {
       return (
         <span className="badge badge-success">
-          <FiCheckCircle size={12} /> PAID
+          <FiCheckCircle size={12} /> Paid
         </span>
       );
     }
     if (s === 'PENDING' || s === 'CREATED') {
       return (
         <span className="badge badge-secondary">
-          <FiClock size={12} /> PENDING
+          <FiClock size={12} /> Pending checkout
         </span>
       );
     }
     if (s === 'FAILED') {
       return (
         <span className="badge badge-danger">
-          <FiAlertCircle size={12} /> FAILED
+          <FiAlertCircle size={12} /> Payment failed
         </span>
       );
     }
     if (s === 'CANCELLED') {
       return (
         <span className="badge badge-outline">
-          <FiXCircle size={12} /> CANCELLED
+          <FiXCircle size={12} /> Checkout cancelled
         </span>
       );
     }

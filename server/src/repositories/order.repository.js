@@ -473,13 +473,31 @@ export class OrderRepository {
           LIMIT $2 OFFSET $3
         `;
         const res = await query(sql, [userId, Number(limit), offset]);
+        const orderIds = res.rows.map((o) => o.id).filter(Boolean);
 
-        const orders = [];
-        for (const o of res.rows) {
-          const itemsRes = await query(`SELECT * FROM order_items WHERE order_id = $1`, [o.id]);
-          const paymentsRes = await query(`SELECT * FROM payments WHERE order_id = $1`, [o.id]);
-          orders.push(this.normalizeOrder(o, itemsRes.rows, paymentsRes.rows));
+        const itemsByOrder = new Map();
+        const paymentsByOrder = new Map();
+
+        if (orderIds.length > 0) {
+          const [itemsRes, paymentsRes] = await Promise.all([
+            query(`SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY created_at ASC`, [orderIds]),
+            query(`SELECT * FROM payments WHERE order_id = ANY($1::uuid[]) ORDER BY created_at DESC`, [orderIds]),
+          ]);
+          for (const item of itemsRes.rows) {
+            const list = itemsByOrder.get(item.order_id) || [];
+            list.push(item);
+            itemsByOrder.set(item.order_id, list);
+          }
+          for (const payment of paymentsRes.rows) {
+            const list = paymentsByOrder.get(payment.order_id) || [];
+            list.push(payment);
+            paymentsByOrder.set(payment.order_id, list);
+          }
         }
+
+        const orders = res.rows.map((o) =>
+          this.normalizeOrder(o, itemsByOrder.get(o.id) || [], paymentsByOrder.get(o.id) || [])
+        );
 
         return {
           orders,
@@ -558,13 +576,31 @@ export class OrderRepository {
         params.push(Number(limit), offset);
 
         const res = await query(sql, params);
-        const orders = [];
+        const orderIds = res.rows.map((o) => o.id).filter(Boolean);
 
-        for (const o of res.rows) {
-          const itemsRes = await query(`SELECT * FROM order_items WHERE order_id = $1`, [o.id]);
-          const paymentsRes = await query(`SELECT * FROM payments WHERE order_id = $1`, [o.id]);
-          orders.push(this.normalizeOrder(o, itemsRes.rows, paymentsRes.rows));
+        const itemsByOrder = new Map();
+        const paymentsByOrder = new Map();
+
+        if (orderIds.length > 0) {
+          const [itemsRes, paymentsRes] = await Promise.all([
+            query(`SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY created_at ASC`, [orderIds]),
+            query(`SELECT * FROM payments WHERE order_id = ANY($1::uuid[]) ORDER BY created_at DESC`, [orderIds]),
+          ]);
+          for (const item of itemsRes.rows) {
+            const list = itemsByOrder.get(item.order_id) || [];
+            list.push(item);
+            itemsByOrder.set(item.order_id, list);
+          }
+          for (const payment of paymentsRes.rows) {
+            const list = paymentsByOrder.get(payment.order_id) || [];
+            list.push(payment);
+            paymentsByOrder.set(payment.order_id, list);
+          }
         }
+
+        const orders = res.rows.map((o) =>
+          this.normalizeOrder(o, itemsByOrder.get(o.id) || [], paymentsByOrder.get(o.id) || [])
+        );
 
         return {
           orders,
@@ -830,9 +866,6 @@ export class OrderRepository {
     if (order.status === ORDER_STATUS.FAILED) {
       return order;
     }
-    if (order.status === ORDER_STATUS.FAILED) {
-      return order;
-    }
 
     if (ENV.DATABASE_URL && isUuid(orderId)) {
       try {
@@ -902,6 +935,46 @@ export class OrderRepository {
   }
 
   /**
+   * Refresh an existing unpaid order with a new Razorpay order ID for retry checkout
+   */
+  async refreshOrderForRetry(orderId, razorpayOrderId) {
+    if (ENV.DATABASE_URL && isUuid(orderId)) {
+      try {
+        await query(
+          `UPDATE orders
+           SET status = $1, payment_status = 'pending', razorpay_order_id = $2, updated_at = NOW()
+           WHERE id = $3 AND COALESCE(status, '') <> $4`,
+          [ORDER_STATUS.PENDING, razorpayOrderId, orderId, ORDER_STATUS.PAID]
+        );
+        await query(
+          `UPDATE payments
+           SET status = 'initiated', transaction_id = $1, updated_at = NOW()
+           WHERE order_id = $2`,
+          [razorpayOrderId, orderId]
+        );
+        return this.findById(orderId);
+      } catch (err) {
+        console.warn('OrderRepository refreshOrderForRetry fallback:', err.message);
+      }
+    }
+
+    const rawOrder = (mockData.orders || []).find(o => o._id === orderId || o.id === orderId);
+    if (rawOrder) {
+      rawOrder.status = ORDER_STATUS.PENDING;
+      rawOrder.paymentStatus = 'pending';
+      rawOrder.razorpayOrderId = razorpayOrderId;
+      rawOrder.razorpay_order_id = razorpayOrderId;
+      rawOrder.updatedAt = new Date().toISOString();
+    }
+    const payment = (mockData.payments || []).find(p => p.orderId === orderId || p.order_id === orderId);
+    if (payment) {
+      payment.status = PAYMENT_STATUS.CREATED;
+      payment.transactionId = razorpayOrderId;
+    }
+    return this.findById(orderId);
+  }
+
+  /**
    * Count total paid orders
    */
   async countPaid() {
@@ -951,13 +1024,30 @@ export class OrderRepository {
           LIMIT $1
         `;
         const res = await query(sql, [limit]);
-        const orders = [];
-        for (const o of res.rows) {
-          const itemsRes = await query(`SELECT * FROM order_items WHERE order_id = $1`, [o.id]);
-          const paymentsRes = await query(`SELECT * FROM payments WHERE order_id = $1`, [o.id]);
-          orders.push(this.normalizeOrder(o, itemsRes.rows, paymentsRes.rows));
+        const orderIds = res.rows.map((o) => o.id).filter(Boolean);
+        const itemsByOrder = new Map();
+        const paymentsByOrder = new Map();
+
+        if (orderIds.length > 0) {
+          const [itemsRes, paymentsRes] = await Promise.all([
+            query(`SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY created_at ASC`, [orderIds]),
+            query(`SELECT * FROM payments WHERE order_id = ANY($1::uuid[]) ORDER BY created_at DESC`, [orderIds]),
+          ]);
+          for (const item of itemsRes.rows) {
+            const list = itemsByOrder.get(item.order_id) || [];
+            list.push(item);
+            itemsByOrder.set(item.order_id, list);
+          }
+          for (const payment of paymentsRes.rows) {
+            const list = paymentsByOrder.get(payment.order_id) || [];
+            list.push(payment);
+            paymentsByOrder.set(payment.order_id, list);
+          }
         }
-        return orders;
+
+        return res.rows.map((o) =>
+          this.normalizeOrder(o, itemsByOrder.get(o.id) || [], paymentsByOrder.get(o.id) || [])
+        );
       } catch (err) {
         console.warn('OrderRepository getRecentOrders fallback to mockStore:', err.message);
       }

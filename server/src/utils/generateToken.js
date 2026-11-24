@@ -11,7 +11,7 @@ export const generateAccessToken = (userId, role) => {
 };
 
 export const generateRefreshToken = (userId) => {
-  const secret = ENV.JWT_REFRESH_SECRET || ENV.JWT_SECRET;
+  const secret = ENV.JWT_REFRESH_SECRET;
   return jwt.sign(
     { id: userId },
     secret,

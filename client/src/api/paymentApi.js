@@ -4,6 +4,7 @@ import orderApi, {
   verifyPayment,
   getMyOrders,
   getOrderById,
+  retryOrder,
   cancelOrder,
   failOrder,
 } from './orderApi';
@@ -15,6 +16,7 @@ export {
   verifyPayment,
   getMyOrders,
   getOrderById,
+  retryOrder,
   cancelOrder,
   failOrder,
 };

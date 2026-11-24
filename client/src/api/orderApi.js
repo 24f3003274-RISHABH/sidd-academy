@@ -5,6 +5,7 @@ export const createOrder = (payload) => axiosInstance.post('/orders', Array.isAr
 export const verifyPayment = (payload) => axiosInstance.post('/orders/verify', payload);
 export const getMyOrders = (params) => axiosInstance.get('/orders', { params });
 export const getOrderById = (id) => axiosInstance.get(`/orders/${id}`);
+export const retryOrder = (id) => axiosInstance.post(`/orders/${id}/retry`, {});
 export const cancelOrder = (id) => axiosInstance.patch(`/orders/${id}/cancel`, {});
 export const failOrder = (id) => axiosInstance.patch(`/orders/${id}/fail`, {});
 
@@ -14,6 +15,7 @@ export default {
   verifyPayment,
   getMyOrders,
   getOrderById,
+  retryOrder,
   cancelOrder,
   failOrder,
 };

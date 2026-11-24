@@ -36,14 +36,22 @@ export const clearGetCache = () => {
 // Ensure baseURL uses VITE_API_URL or defaults to production Render API
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
+  const isBrowserRemote =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
     const cleaned = envUrl.trim().replace(/\/+$/, '');
-    if (!cleaned.includes('/api')) {
-      return `${cleaned}/api/v1`;
+    const isLocalEnvUrl = cleaned.includes('localhost') || cleaned.includes('127.0.0.1');
+    if (!(isBrowserRemote && isLocalEnvUrl)) {
+      if (!cleaned.includes('/api')) {
+        return `${cleaned}/api/v1`;
+      }
+      return cleaned;
     }
-    return cleaned;
   }
-  return import.meta.env.DEV
+  return import.meta.env.DEV && !isBrowserRemote
     ? 'http://localhost:5000/api/v1'
     : 'https://sidd-academy.onrender.com/api/v1';
 };

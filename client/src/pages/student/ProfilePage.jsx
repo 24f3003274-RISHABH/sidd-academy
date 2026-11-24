@@ -92,7 +92,7 @@ const ProfilePage = () => {
         {/* Left Column: Personal Information & Avatars */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* Profile Form Card */}
-          <div className="card-glass" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div className="card-glass" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <FiUser style={{ color: 'var(--accent)' }} /> Personal Information
             </h2>
@@ -181,7 +181,7 @@ const ProfilePage = () => {
           </div>
 
           {/* Account Details & Badges */}
-          <div className="card-glass" style={{ padding: '1.75rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div className="card-glass" style={{ padding: '1.75rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <FiShield style={{ color: '#10b981' }} /> Account Verification
             </h2>
@@ -214,7 +214,7 @@ const ProfilePage = () => {
 
         {/* Right Column: Security & Password Update */}
         <div>
-          <div className="card-glass" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div className="card-glass" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <FiLock style={{ color: '#f59e0b' }} /> Change Password
             </h2>

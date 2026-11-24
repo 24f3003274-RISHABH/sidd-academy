@@ -2,21 +2,23 @@ import { body, param } from 'express-validator';
 
 export const createSubjectValidator = [
   body('course')
-    .optional()
+    .optional({ checkFalsy: true })
     .notEmpty()
     .withMessage('Parent Course ID is required'),
   body('courseId')
-    .optional()
+    .optional({ checkFalsy: true })
     .notEmpty()
     .withMessage('Parent Course ID is required'),
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Subject name is required')
-    .isLength({ min: 2, max: 200 })
-    .withMessage('Subject name must be between 2 and 200 characters'),
+  body()
+    .custom((val, { req }) => {
+      const raw = (req.body?.name || req.body?.title || '').trim();
+      if (raw.length < 2 || raw.length > 200) {
+        throw new Error('Subject name is required and must be between 2 and 200 characters');
+      }
+      return true;
+    }),
   body('order')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 0 })
     .withMessage('Order must be a non-negative integer'),
 ];
@@ -26,10 +28,14 @@ export const updateSubjectValidator = [
     .notEmpty()
     .withMessage('Subject ID is required'),
   body('name')
-    .optional()
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 2, max: 200 }),
+  body('title')
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 2, max: 200 }),
   body('order')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 0 }),
 ];

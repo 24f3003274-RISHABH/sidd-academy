@@ -23,7 +23,7 @@ const LoginPage = () => {
     }
     setLoading(true);
     try {
-      const data = await login({ email: email.trim(), password: password.trim() });
+      const data = await login({ email: email.trim(), password });
       toast.success('Login successful! Welcome back.');
       const role = (data?.user?.role || '').toLowerCase();
       if (role === 'admin') {

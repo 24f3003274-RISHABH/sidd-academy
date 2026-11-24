@@ -49,7 +49,7 @@ const StudentSidebar = () => {
           style={{
             padding: '1.25rem',
             borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             gap: '0.85rem',
@@ -60,8 +60,8 @@ const StudentSidebar = () => {
               width: '44px',
               height: '44px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(108, 99, 255, 0.2)',
-              color: 'var(--accent)',
+              backgroundColor: 'var(--primary-subtle)',
+              color: 'var(--primary-dark)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -78,10 +78,10 @@ const StudentSidebar = () => {
             )}
           </div>
           <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', color: 'var(--text-primary)' }}>
               {user?.name || 'Student'}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--accent-dark)', fontWeight: 600 }}>
               <FiCheckCircle size={11} /> Verified Student
             </div>
           </div>
@@ -93,7 +93,7 @@ const StudentSidebar = () => {
           style={{
             padding: '0.75rem',
             borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--border)',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.35rem',
@@ -113,20 +113,20 @@ const StudentSidebar = () => {
                 gap: '0.75rem',
                 padding: '0.7rem 0.85rem',
                 borderRadius: '10px',
-                color: isActive ? '#fff' : 'var(--text-muted)',
-                backgroundColor: isActive ? 'rgba(108, 99, 255, 0.2)' : 'transparent',
-                fontWeight: isActive ? 600 : 500,
+                color: isActive ? 'var(--primary-dark)' : 'var(--text-secondary)',
+                backgroundColor: isActive ? 'var(--primary-subtle)' : 'transparent',
+                fontWeight: isActive ? 700 : 500,
                 fontSize: '0.9rem',
                 textDecoration: 'none',
                 transition: 'all 0.2s ease',
               })}
             >
-              <span style={{ color: 'var(--accent)' }}>{item.icon}</span>
+              <span style={{ color: 'var(--primary)' }}>{item.icon}</span>
               <span>{item.name}</span>
             </NavLink>
           ))}
 
-          <div style={{ margin: '0.5rem 0', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }} />
+          <div style={{ margin: '0.5rem 0', borderTop: '1px solid var(--border-subtle)' }} />
 
           <NavLink
             to="/courses"

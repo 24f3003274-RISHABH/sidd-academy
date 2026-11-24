@@ -14,10 +14,13 @@ const NoteCard = ({
   isAuthenticated,
   user,
   isPurchasing,
+  purchasingNoteId,
 }) => {
+  const noteId = note.id || note._id;
   // Determine if user has unlocked access
-  const isPurchased = isAuthenticated && (user?.purchasedNotes?.includes(note.id || note._id) || user?.role === 'admin');
+  const isPurchased = isAuthenticated && (user?.purchasedNotes?.includes(noteId) || (user?.role || '').toLowerCase() === 'admin');
   const isLocked = !note.isFree && !isPurchased && note.isLocked !== false;
+  const isThisNotePurchasing = Boolean(isPurchasing && (!purchasingNoteId || purchasingNoteId === noteId));
 
   return (
     <div
@@ -28,18 +31,18 @@ const NoteCard = ({
         display: 'flex',
         flexDirection: 'column',
         borderRadius: '12px',
-        border: isLocked ? '1px solid rgba(255, 117, 140, 0.2)' : '1px solid rgba(255, 255, 255, 0.08)',
+        border: '1px solid var(--border)',
         position: 'relative',
         transition: 'transform 0.2s ease, border-color 0.2s ease',
         background: 'var(--bg-card)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-3px)';
-        e.currentTarget.style.borderColor = isLocked ? 'rgba(255, 117, 140, 0.4)' : 'var(--primary)';
+        e.currentTarget.style.borderColor = 'var(--primary)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = isLocked ? 'rgba(255, 117, 140, 0.2)' : 'rgba(255, 255, 255, 0.08)';
+        e.currentTarget.style.borderColor = 'var(--border)';
       }}
     >
       {/* Top Badges & Subject Header */}
@@ -97,9 +100,9 @@ const NoteCard = ({
         <div
           style={{
             padding: '0.75rem',
-            backgroundColor: note.isFree ? 'rgba(67, 233, 123, 0.12)' : 'rgba(108, 99, 255, 0.12)',
+            backgroundColor: note.isFree ? 'var(--accent-subtle)' : 'var(--primary-subtle)',
             borderRadius: '10px',
-            color: note.isFree ? '#43e97b' : 'var(--primary)',
+            color: note.isFree ? 'var(--accent-dark)' : 'var(--primary)',
             flexShrink: 0,
           }}
         >
@@ -145,7 +148,7 @@ const NoteCard = ({
           color: 'var(--text-muted)',
           marginBottom: '1rem',
           paddingBottom: '0.75rem',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          borderBottom: '1px solid var(--border-subtle)',
         }}
       >
         <span>📄 {note.pageCount || 24} Pages</span>
@@ -185,7 +188,7 @@ const NoteCard = ({
                 padding: '0.45rem 0.9rem',
               }}
             >
-              <FiLock size={13} /> {isPurchasing ? 'Processing...' : `Unlock (${formatPrice(note.price)})`}
+              <FiLock size={13} /> {isThisNotePurchasing ? 'Opening Checkout…' : `Unlock (${formatPrice(note.price)})`}
             </button>
           ) : (
             <>

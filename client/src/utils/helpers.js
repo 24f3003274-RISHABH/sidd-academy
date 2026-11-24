@@ -37,15 +37,26 @@ export const truncateText = (text, length) => {
 
 export const getBackendOrigin = () => {
   const envUrl = import.meta.env.VITE_API_URL;
+  const isBrowserRemote =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-    try {
-      const urlObj = new URL(envUrl.trim());
-      return urlObj.origin;
-    } catch {
-      return envUrl.trim().replace(/\/api(\/v1)?\/?$/, '');
+    const cleaned = envUrl.trim();
+    const isLocalEnvUrl = cleaned.includes('localhost') || cleaned.includes('127.0.0.1');
+    if (!(isBrowserRemote && isLocalEnvUrl)) {
+      try {
+        const urlObj = new URL(cleaned);
+        return urlObj.origin;
+      } catch {
+        return cleaned.replace(/\/api(\/v1)?\/?$/, '');
+      }
     }
   }
-  return import.meta.env.DEV ? 'http://localhost:5000' : 'https://sidd-academy.onrender.com';
+  return import.meta.env.DEV && !isBrowserRemote
+    ? 'http://localhost:5000'
+    : 'https://sidd-academy.onrender.com';
 };
 
 export const resolveMediaUrl = (url) => {

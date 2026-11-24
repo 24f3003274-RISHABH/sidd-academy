@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
 import { getAllNotes, getSecureAccess } from '../../api/noteApi';
-import { createOrder, verifyPayment, cancelOrder, failOrder } from '../../api/orderApi';
+import { createOrder, verifyPayment, cancelOrder, failOrder, getPaymentKey } from '../../api/orderApi';
 import { clearGetCache } from '../../api/axiosInstance';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
@@ -155,25 +155,23 @@ const CourseDetailPage = () => {
 
       const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
 
-      // Case 2: Development Mock Payment Mode — verify immediately and update dashboard
-      if (isMock) {
-        await verifyPayment({
-          orderId,
-          razorpayOrderId: razorpayOrderId || `order_mock_${Date.now()}`,
-          razorpayPaymentId: `pay_mock_${Date.now()}`,
-          razorpaySignature: `sig_mock_verified_${Date.now()}`,
-        });
-        clearGetCache();
-        if (refreshUser) await refreshUser();
-        toast.success('Course purchased! Your Student Dashboard has been updated.');
-        setPurchased(true);
-        setPaymentLoading(false);
-        navigate('/student/dashboard');
-        return;
+      let resolvedKey = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
+      if (!resolvedKey) {
+        try {
+          const keyRes = await getPaymentKey();
+          resolvedKey = (keyRes.data?.data?.key || keyRes.data?.key || '').trim();
+        } catch {
+          resolvedKey = '';
+        }
       }
 
-      if (!razorpayOrderId) {
-        throw new Error('No payment order was created. Please try again.');
+      if (isMock || !razorpayOrderId || razorpayOrderId.startsWith('order_mock_') || !resolvedKey) {
+        if (orderId) {
+          cancelOrder(orderId).catch(() => {});
+        }
+        throw new Error(
+          'Razorpay payment gateway keys are not configured yet. Please add your live RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env to accept payments.'
+        );
       }
 
       const scriptLoaded = await loadRazorpayScript();
@@ -182,7 +180,7 @@ const CourseDetailPage = () => {
       }
 
       const options = {
-        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: resolvedKey,
         amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
         currency: currency || 'INR',
         name: 'Sidd Academy',
@@ -213,7 +211,7 @@ const CourseDetailPage = () => {
           contact: user?.phone || '',
         },
         theme: {
-          color: '#6c63ff'
+          color: '#2563eb'
         },
         modal: {
           escape: true,

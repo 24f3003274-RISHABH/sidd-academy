@@ -567,6 +567,18 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid #fecaca;
 }
 
+.badge-warning {
+  background-color: var(--secondary-subtle);
+  color: var(--secondary-dark);
+  border: 1px solid #fde68a;
+}
+
+.badge-paid {
+  background-color: var(--primary-subtle);
+  color: var(--primary-dark);
+  border: 1px solid var(--primary-border);
+}
+
 .badge-outline {
   background-color: var(--bg-card);
   color: var(--text-secondary);
@@ -586,7 +598,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
 }
 
-.form-input, select.form-input, textarea.form-input {
+.form-input, select.form-input, textarea.form-input, .form-textarea {
   width: 100%;
   padding: 0.625rem 0.875rem;
   background-color: var(--bg-card);
@@ -598,16 +610,16 @@ h1, h2, h3, h4, h5, h6 {
   outline: none;
 }
 
-.form-input:focus {
+.form-input:focus, .form-textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-.form-input::placeholder {
+.form-input::placeholder, .form-textarea::placeholder {
   color: #94a3b8;
 }
 
-.form-input:disabled {
+.form-input:disabled, .form-textarea:disabled {
   background-color: var(--bg-muted);
   cursor: not-allowed;
   opacity: 0.7;
@@ -713,6 +725,18 @@ tbody tr:hover {
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-box.max-w-md {
+  max-width: 460px;
+}
+
+.modal-box.max-w-2xl {
+  max-width: 640px;
+}
+
+.modal-box.max-w-4xl {
+  max-width: 880px;
 }
 
 .modal-header {

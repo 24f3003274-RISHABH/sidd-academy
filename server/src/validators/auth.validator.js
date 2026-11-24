@@ -16,7 +16,7 @@ export const registerValidator = [
     .withMessage('Email is required')
     .isEmail()
     .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
+    .toLowerCase(),
   body('password')
     .notEmpty()
     .withMessage('Password is required')
@@ -33,7 +33,8 @@ export const loginValidator = [
     .notEmpty()
     .withMessage('Email is required')
     .isEmail()
-    .withMessage('Please provide a valid email address'),
+    .withMessage('Please provide a valid email address')
+    .toLowerCase(),
   body('password')
     .notEmpty()
     .withMessage('Password is required'),

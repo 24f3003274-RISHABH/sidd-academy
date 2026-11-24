@@ -398,7 +398,8 @@ export class CourseRepository {
    * Update an existing Course
    */
   async update(id, updates) {
-    if (ENV.DATABASE_URL) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+    if (ENV.DATABASE_URL && isUuid) {
       try {
         const fields = [];
         const values = [id];
@@ -529,7 +530,8 @@ export class CourseRepository {
    * Delete a Course
    */
   async delete(id) {
-    if (ENV.DATABASE_URL) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+    if (ENV.DATABASE_URL && isUuid) {
       try {
         const sql = `DELETE FROM courses WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);

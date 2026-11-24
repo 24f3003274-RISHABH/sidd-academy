@@ -154,7 +154,7 @@ const ManageClasses = () => {
       setFormData({
         title: '',
         description: '',
-        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        videoUrl: '',
         duration: '30:00',
         isFree: true,
         isProtected: false,
@@ -324,8 +324,8 @@ const ManageClasses = () => {
                     alignItems: 'center', 
                     justifyContent: 'space-between', 
                     padding: '1.25rem', 
-                    backgroundColor: 'rgba(255,255,255,0.02)', 
-                    border: '1px solid rgba(255,255,255,0.06)', 
+                    backgroundColor: 'var(--bg-muted)', 
+                    border: '1px solid var(--border)', 
                     borderRadius: '12px',
                     flexWrap: 'wrap',
                     gap: '1rem'

@@ -1,7 +1,19 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file if available
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from server/.env, root .env, and client/.env (as fallback for public keys)
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../client/.env') });
+
+const cleanEnvVal = (val, fallback = '') => {
+  if (typeof val !== 'string') return fallback;
+  return val.trim().replace(/^['"]|['"]$/g, '');
+};
 
 const DEFAULT_JWT_SECRET = 'sidd_academy_secure_jwt_secret_key_2026';
 const DEFAULT_REFRESH_SECRET = 'sidd_academy_secure_refresh_secret_key_2026';
@@ -44,19 +56,20 @@ if (process.env.NODE_ENV === 'production') {
  */
 export const ENV = {
   PORT: process.env.PORT || 5000,
-  NODE_ENV: process.env.NODE_ENV || 'development',
-  DATABASE_URL: process.env.DATABASE_URL || '',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
-  JWT_SECRET: process.env.JWT_SECRET || process.env.JWT_ACCESS_SECRET || DEFAULT_JWT_SECRET,
-  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || DEFAULT_REFRESH_SECRET,
-  JWT_ACCESS_EXPIRES: process.env.JWT_ACCESS_EXPIRES || '7d',
-  JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || '7d',
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || '',
-  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || '',
-  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID || '1axziJZcQmDY1Ptbkm8s3c1ZJYStrL7Rf',
-  GOOGLE_DRIVE_ACCESS_TOKEN: process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '',
+  NODE_ENV: cleanEnvVal(process.env.NODE_ENV, 'development'),
+  DATABASE_URL: cleanEnvVal(process.env.DATABASE_URL, ''),
+  CORS_ORIGIN: cleanEnvVal(process.env.CORS_ORIGIN, '*'),
+  JWT_SECRET: cleanEnvVal(process.env.JWT_SECRET || process.env.JWT_ACCESS_SECRET, DEFAULT_JWT_SECRET),
+  JWT_ACCESS_SECRET: cleanEnvVal(process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET, DEFAULT_JWT_SECRET),
+  JWT_REFRESH_SECRET: cleanEnvVal(process.env.JWT_REFRESH_SECRET, DEFAULT_REFRESH_SECRET),
+  JWT_ACCESS_EXPIRES: cleanEnvVal(process.env.JWT_ACCESS_EXPIRES, '7d'),
+  JWT_REFRESH_EXPIRES: cleanEnvVal(process.env.JWT_REFRESH_EXPIRES, '7d'),
+  CLIENT_URL: cleanEnvVal(process.env.CLIENT_URL, 'http://localhost:5173'),
+  RAZORPAY_KEY_ID: cleanEnvVal(process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID, ''),
+  RAZORPAY_KEY_SECRET: cleanEnvVal(process.env.RAZORPAY_KEY_SECRET, ''),
+  RAZORPAY_WEBHOOK_SECRET: cleanEnvVal(process.env.RAZORPAY_WEBHOOK_SECRET, ''),
+  GOOGLE_DRIVE_FOLDER_ID: cleanEnvVal(process.env.GOOGLE_DRIVE_FOLDER_ID, '1axziJZcQmDY1Ptbkm8s3c1ZJYStrL7Rf'),
+  GOOGLE_DRIVE_ACCESS_TOKEN: cleanEnvVal(process.env.GOOGLE_DRIVE_ACCESS_TOKEN, ''),
 };
 
 export default ENV;

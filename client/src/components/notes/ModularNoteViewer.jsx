@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { FiFolder, FiFileText, FiDownload, FiEye, FiCheckCircle, FiSearch, FiLayers, FiBookOpen } from 'react-icons/fi';
-import { formatFileSize, formatPrice } from '../../utils/helpers';
+import { formatFileSize, formatPrice, getNoteStreamUrl } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 
-const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAuthenticated, user, isPurchasing }) => {
+const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAuthenticated, user, isPurchasing, purchasingNoteId }) => {
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activePdfPreview, setActivePdfPreview] = useState(null);
@@ -106,13 +106,13 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
             style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
           >
             {/* Subject Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
               <div 
                 style={{
                   width: '42px',
                   height: '42px',
                   borderRadius: '10px',
-                  backgroundColor: 'rgba(108, 99, 255, 0.15)',
+                  backgroundColor: 'var(--primary-subtle)',
                   color: 'var(--primary)',
                   display: 'flex',
                   alignItems: 'center',
@@ -125,7 +125,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Modular Subject
                 </span>
-                <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#fff', fontWeight: 700 }}>
+                <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)', fontWeight: 700 }}>
                   {subjectName}
                 </h2>
               </div>
@@ -136,8 +136,8 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
               <div 
                 key={chapterTitle}
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  backgroundColor: 'var(--bg-muted)',
+                  border: '1px solid var(--border)',
                   borderRadius: '12px',
                   padding: '1.25rem',
                   display: 'flex',
@@ -145,7 +145,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                   gap: '1rem',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#939aff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-dark)' }}>
                   <FiBookOpen size={18} />
                   <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>
                     {chapterTitle}
@@ -169,7 +169,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                         id={`pdf-module-${noteId}`}
                         style={{
                           backgroundColor: 'var(--bg-card)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          border: '1px solid var(--border)',
                           borderRadius: '10px',
                           padding: '1.2rem',
                           display: 'flex',
@@ -183,15 +183,15 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                           e.currentTarget.style.transform = 'translateY(-2px)';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.borderColor = 'var(--border)';
                           e.currentTarget.style.transform = 'translateY(0)';
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <span 
                             style={{
-                              backgroundColor: 'rgba(108, 99, 255, 0.2)',
-                              color: '#939aff',
+                              backgroundColor: 'var(--primary-subtle)',
+                              color: 'var(--primary-dark)',
                               fontSize: '0.75rem',
                               fontWeight: 700,
                               padding: '0.2rem 0.6rem',
@@ -205,7 +205,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                             style={{
                               fontWeight: 700,
                               fontSize: '0.9rem',
-                              color: note.isFree ? '#43e97b' : '#ff758c',
+                              color: note.isFree ? 'var(--accent-dark)' : 'var(--primary-dark)',
                             }}
                           >
                             {note.isFree ? 'Free' : formatPrice(note.price)}
@@ -218,8 +218,8 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                               width: '36px',
                               height: '36px',
                               borderRadius: '8px',
-                              backgroundColor: 'rgba(255, 101, 132, 0.15)',
-                              color: '#ff6584',
+                              backgroundColor: note.isFree ? 'var(--accent-subtle)' : 'var(--primary-subtle)',
+                              color: note.isFree ? 'var(--accent-dark)' : 'var(--primary)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -229,7 +229,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                             <FiFileText size={18} />
                           </div>
                           <div>
-                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
                               {note.title}
                             </h4>
                             {note.pageCount && (
@@ -246,7 +246,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                           </p>
                         )}
 
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)' }}>
                           {canAccess ? (
                             <>
                               <button
@@ -271,7 +271,9 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                               className="btn btn-sm btn-primary"
                               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
                             >
-                              Unlock {pdfLabel} ({formatPrice(note.price)})
+                              {isPurchasing && (!purchasingNoteId || purchasingNoteId === noteId)
+                                ? 'Opening Checkout…'
+                                : `Unlock ${pdfLabel} (${formatPrice(note.price)})`}
                             </button>
                           )}
                         </div>
@@ -314,13 +316,13 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid var(--border)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{activePdfPreview.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{activePdfPreview.title}</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Modular Study PDF Preview</span>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -341,7 +343,7 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
             </div>
             <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
-                src={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
+                src={getNoteStreamUrl(activePdfPreview)}
                 title={activePdfPreview.title}
                 style={{ width: '100%', height: '100%', border: 'none' }}
               />

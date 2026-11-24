@@ -33,8 +33,8 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
           width: '100%',
           maxWidth: '860px',
           overflow: 'hidden',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-xl)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -43,12 +43,12 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-card)',
         }}>
           <div>
             {chapterTitle && (
-              <span style={{ fontSize: '0.8rem', color: '#939aff', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
                 {chapterTitle}
               </span>
             )}
@@ -77,10 +77,11 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
             </a>
             <button 
               onClick={onClose}
+              aria-label="Close video modal"
               style={{
-                background: 'rgba(255,255,255,0.08)',
-                border: 'none',
-                color: '#fff',
+                background: 'var(--bg-muted)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
                 borderRadius: '50%',
                 width: '32px',
                 height: '32px',
@@ -119,7 +120,7 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, description, chapterTitl
         </div>
 
         {description && (
-          <div style={{ padding: '1.25rem 1.5rem', backgroundColor: 'rgba(255,255,255,0.02)', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          <div style={{ padding: '1.25rem 1.5rem', backgroundColor: 'var(--bg-muted)', color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
             {description}
           </div>
         )}

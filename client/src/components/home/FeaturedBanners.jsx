@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiArrowRight, FiChevronLeft, FiChevronRight, FiZap, FiSettings, FiLayers, FiPhoneCall } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
+import { resolveMediaUrl } from '../../utils/helpers';
 
 const FeaturedBanners = ({ banners = [] }) => {
   const { user } = useAuth();
@@ -126,7 +127,7 @@ const FeaturedBanners = ({ banners = [] }) => {
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: `url(${currentBanner.imageUrl})`,
+              backgroundImage: `url(${resolveMediaUrl(currentBanner.imageUrl)})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               filter: 'blur(26px) brightness(0.25) saturate(1.3)',
@@ -279,7 +280,7 @@ const FeaturedBanners = ({ banners = [] }) => {
               }}
             >
               <img
-                src={currentBanner.imageUrl}
+                src={resolveMediaUrl(currentBanner.imageUrl)}
                 alt={currentBanner.title}
                 style={{
                   width: 'auto',
