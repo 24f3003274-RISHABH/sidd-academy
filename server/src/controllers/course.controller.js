@@ -86,3 +86,37 @@ export const deleteCourse = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * POST /api/v1/courses/playlist/preview (Admin only)
+ * Fetch all videos and metadata from a YouTube playlist URL in exact order
+ */
+export const previewPlaylist = async (req, res, next) => {
+  try {
+    const input = req.body.playlistUrl || req.body.videoUrls || req.body.url;
+    const result = await courseService.previewPlaylist(input);
+    return sendSuccess(res, 200, 'YouTube playlist fetched successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/courses/import-playlist (Admin only)
+ * Import a YouTube playlist directly as a new Course or into an existing Course/Chapter
+ */
+export const importPlaylist = async (req, res, next) => {
+  try {
+    const data = { ...req.body };
+    if (req.file) data.thumbnail = `/uploads/images/${req.file.filename}`;
+    const result = await courseService.importPlaylistAsCourse(data);
+    return sendSuccess(
+      res,
+      201,
+      `Successfully imported ${result.importedCount} videos in playlist order`,
+      result
+    );
+  } catch (error) {
+    next(error);
+  }
+};

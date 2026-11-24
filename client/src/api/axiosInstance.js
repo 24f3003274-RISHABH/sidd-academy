@@ -28,8 +28,9 @@ const getCacheKey = (config) => {
   return `${token}:${config.baseURL || ''}${config.url || ''}?${params}`;
 };
 
-const clearGetCache = () => {
+export const clearGetCache = () => {
   getCache.clear();
+  inFlightGets.clear();
 };
 
 // Ensure baseURL uses VITE_API_URL or defaults to production Render API

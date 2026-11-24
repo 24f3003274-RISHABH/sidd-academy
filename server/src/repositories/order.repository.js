@@ -2,20 +2,16 @@ import { getPool, query } from '../config/db.js';
 import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { ORDER_STATUS, PAYMENT_STATUS } from '../constants/index.js';
+import { AppError } from '../utils/apiResponse.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 /**
  * Order & Payment Repository
- * 
+ *
  * Manages database persistence for Orders, Order Items, Payments,
- * Course Enrollments, and Note Purchases.
- * 
- * ACID TRANSACTIONS:
- * Utilizes PostgreSQL database transactions (BEGIN ... COMMIT / ROLLBACK)
- * to guarantee that payment verification, order state mutation, and entitlement
- * provisioning succeed atomically without partial failure or orphan states.
+ * Course Enrollments, and Note Purchases with ACID transaction guarantees.
  */
 export class OrderRepository {
   /**
@@ -25,8 +21,7 @@ export class OrderRepository {
     if (!order) return null;
     const id = order.id || order._id;
     const userId = order.user_id || (order.user && (order.user._id || order.user.id || order.user)) || order.userId;
-    
-    // Status normalizer
+
     const rawStatuses = [order.status, order.payment_status, order.paymentStatus]
       .filter(Boolean)
       .map((value) => String(value).toUpperCase());
@@ -86,6 +81,82 @@ export class OrderRepository {
   }
 
   /**
+   * Provision entitlements in MockStore atomically for both courses and notes
+   */
+  provisionMockEntitlements(userId, orderId, items = []) {
+    if (!mockData.enrollments) mockData.enrollments = [];
+    if (!mockData.notePurchases) mockData.notePurchases = [];
+
+    const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
+    if (user) {
+      if (!user.purchasedCourses) user.purchasedCourses = [];
+      if (!user.purchasedNotes) user.purchasedNotes = [];
+    }
+
+    for (const item of items) {
+      const type = (item.itemType || item.item_type || '').toLowerCase();
+      const targetId = item.itemId || item.item_id;
+      if (!targetId) continue;
+
+      if (type === 'course') {
+        if (user && !user.purchasedCourses.includes(targetId)) {
+          user.purchasedCourses.push(targetId);
+        }
+
+        const existingEnr = mockData.enrollments.find(
+          e => e.userId === userId && e.courseId === targetId
+        );
+        if (existingEnr) {
+          existingEnr.status = 'active';
+          existingEnr.orderId = orderId;
+        } else {
+          const enrId = uuidv4();
+          mockData.enrollments.unshift({
+            _id: enrId,
+            id: enrId,
+            userId,
+            courseId: targetId,
+            orderId,
+            status: 'active',
+            progressPercentage: 0,
+            enrolledAt: new Date(),
+          });
+        }
+
+        const course = (mockData.courses || []).find(c => c._id === targetId || c.id === targetId);
+        if (course) {
+          course.enrolledStudents = (course.enrolledStudents || course.enrolledCount || 0) + 1;
+          course.totalStudents = course.enrolledStudents;
+          course.enrolledCount = course.enrolledStudents;
+        }
+      } else if (type === 'note') {
+        if (user && !user.purchasedNotes.includes(targetId)) {
+          user.purchasedNotes.push(targetId);
+        }
+
+        const existingNp = mockData.notePurchases.find(
+          np => np.userId === userId && np.noteId === targetId
+        );
+        if (existingNp) {
+          existingNp.orderId = orderId;
+          existingNp.pricePaid = Number(item.price || 0);
+        } else {
+          const npId = uuidv4();
+          mockData.notePurchases.unshift({
+            _id: npId,
+            id: npId,
+            userId,
+            noteId: targetId,
+            orderId,
+            pricePaid: Number(item.price || 0),
+            purchasedAt: new Date(),
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * Check if a student is already actively enrolled in a course
    */
   async checkUserEnrollment(userId, courseId) {
@@ -100,6 +171,11 @@ export class OrderRepository {
         console.warn('OrderRepository checkUserEnrollment fallback:', err.message);
       }
     }
+
+    const hasEnr = (mockData.enrollments || []).some(
+      e => e.userId === userId && e.courseId === courseId && (e.status || 'active') === 'active'
+    );
+    if (hasEnr) return true;
 
     const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
     if (user && user.purchasedCourses && user.purchasedCourses.includes(courseId)) {
@@ -141,7 +217,7 @@ export class OrderRepository {
     const orderId = uuidv4();
     const paymentId = uuidv4();
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       const pool = getPool();
       const client = await pool.connect();
       try {
@@ -204,7 +280,7 @@ export class OrderRepository {
           currency,
           'razorpay',
           razorpayOrderId || `txn_${orderId.substring(0, 8)}`,
-          totalAmount === 0 ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.CREATED,
+          totalAmount === 0 ? 'completed' : 'initiated',
         ]);
         const createdPayment = paymentRes.rows[0];
 
@@ -216,11 +292,11 @@ export class OrderRepository {
               await client.query(
                 `INSERT INTO enrollments (id, user_id, course_id, order_id, status, progress_percentage, enrolled_at)
                  VALUES ($1, $2, $3, $4, 'active', 0.00, NOW())
-                 ON CONFLICT (user_id, course_id) DO NOTHING`,
+                 ON CONFLICT (user_id, course_id) DO UPDATE SET status = 'active', order_id = EXCLUDED.order_id, updated_at = NOW()`,
                 [enrollId, userId, item.itemId, orderId]
               );
               await client.query(
-                `UPDATE courses SET total_students = total_students + 1, enrolled_students = enrolled_students + 1 WHERE id = $1`,
+                `UPDATE courses SET total_students = total_students + 1 WHERE id = $1`,
                 [item.itemId]
               );
             } else if (item.itemType === 'note') {
@@ -299,20 +375,9 @@ export class OrderRepository {
     mockData.orderItems.push(...mockItems);
     mockData.payments.unshift(mockPayment);
 
-    // Free order instant access
+    // Free order instant access: update BOTH user arrays AND mockData.enrollments / mockData.notePurchases
     if (totalAmount === 0) {
-      const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
-      if (user) {
-        for (const item of items) {
-          if (item.itemType === 'course') {
-            if (!user.purchasedCourses) user.purchasedCourses = [];
-            if (!user.purchasedCourses.includes(item.itemId)) user.purchasedCourses.push(item.itemId);
-          } else if (item.itemType === 'note') {
-            if (!user.purchasedNotes) user.purchasedNotes = [];
-            if (!user.purchasedNotes.includes(item.itemId)) user.purchasedNotes.push(item.itemId);
-          }
-        }
-      }
+      this.provisionMockEntitlements(userId, orderId, items);
     }
 
     return this.normalizeOrder(mockOrder, mockItems, [mockPayment]);
@@ -356,7 +421,6 @@ export class OrderRepository {
     const items = (mockData.orderItems || []).filter(i => i.orderId === orderId || i.order_id === orderId);
     const payments = (mockData.payments || []).filter(p => p.orderId === orderId || p.order_id === orderId);
 
-    // Attach user details if available
     const userId = order.user_id || (typeof order.user === 'object' ? order.user._id || order.user.id : order.user) || order.userId;
     const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
     if (user) {
@@ -394,7 +458,7 @@ export class OrderRepository {
   async findByUserId(userId, { page = 1, limit = 20 } = {}) {
     const offset = (Number(page) - 1) * Number(limit);
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const countSql = `SELECT COUNT(*) FROM orders WHERE user_id = $1`;
         const countRes = await query(countSql, [userId]);
@@ -551,170 +615,201 @@ export class OrderRepository {
 
   /**
    * Execute atomic transaction to verify payment and provision entitlements
+   * Supports fault injection (`simulateDbFailure`) for SRS TC-09 rollback verification.
    */
-  async executePaymentVerificationTransaction({ orderId, userId, razorpayPaymentId, razorpaySignature, gatewayResponse = {} }) {
-    if (!orderId) throw new Error('Order ID is required');
+  async executePaymentVerificationTransaction({
+    orderId,
+    userId,
+    razorpayPaymentId,
+    razorpaySignature,
+    gatewayResponse = {},
+    simulateDbFailure = false,
+  }) {
+    if (!orderId) throw new AppError('Order ID is required', 400);
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(orderId)) {
       const pool = getPool();
       const client = await pool.connect();
+      let foundInDb = false;
       try {
         await client.query('BEGIN');
 
         // 1. Lock and fetch order
         const lockSql = `SELECT * FROM orders WHERE id = $1 FOR UPDATE`;
         const lockRes = await client.query(lockSql, [orderId]);
-        if (lockRes.rows.length === 0) {
-          throw new Error('Order not found');
-        }
+        if (lockRes.rows.length > 0) {
+          foundInDb = true;
+          const order = lockRes.rows[0];
 
-        const order = lockRes.rows[0];
+          // If already paid, exit idempotently
+          if (order.status === ORDER_STATUS.PAID || order.payment_status === 'paid') {
+            await client.query('COMMIT');
+            return this.findById(orderId);
+          }
 
-        // If already paid, exit idempotently
-        if (order.status === ORDER_STATUS.PAID || order.payment_status === 'paid') {
+          // 2. Update Order status to PAID
+          const updateOrderSql = `
+            UPDATE orders
+            SET status = $1, payment_status = 'paid', 
+                razorpay_payment_id = $2, razorpay_signature = $3, updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+          `;
+          await client.query(updateOrderSql, [
+            ORDER_STATUS.PAID,
+            razorpayPaymentId || `pay_${Date.now()}`,
+            razorpaySignature || 'verified_sig',
+            orderId,
+          ]);
+
+          if (simulateDbFailure) {
+            throw new AppError('Simulated database failure partway through verification transaction', 500);
+          }
+
+          // 3. Update or Insert into Payments table with completed status
+          const updatePaymentSql = `
+            UPDATE payments
+            SET status = $1, transaction_id = $2, gateway_response = $3, paid_at = NOW(), updated_at = NOW()
+            WHERE order_id = $4
+          `;
+          const paymentRes = await client.query(updatePaymentSql, [
+            'completed',
+            razorpayPaymentId || `pay_${Date.now()}`,
+            JSON.stringify(gatewayResponse),
+            orderId,
+          ]);
+
+          if (paymentRes.rowCount === 0) {
+            const insertPaySql = `
+              INSERT INTO payments (
+                id, order_id, user_id, amount, currency, gateway, 
+                transaction_id, status, gateway_response, paid_at, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), NOW())
+            `;
+            await client.query(insertPaySql, [
+              uuidv4(),
+              orderId,
+              order.user_id || userId,
+              order.total_amount,
+              order.currency || 'INR',
+              'razorpay',
+              razorpayPaymentId || `pay_${Date.now()}`,
+              'completed',
+              JSON.stringify(gatewayResponse),
+            ]);
+          }
+
+          // 4. Fetch line items
+          const itemsRes = await client.query(`SELECT * FROM order_items WHERE order_id = $1`, [orderId]);
+          const items = itemsRes.rows;
+
+          // 5. Provision Entitlements
+          for (const item of items) {
+            if (item.item_type === 'course') {
+              const enrollId = uuidv4();
+              await client.query(
+                `INSERT INTO enrollments (id, user_id, course_id, order_id, status, progress_percentage, enrolled_at)
+                 VALUES ($1, $2, $3, $4, 'active', 0.00, NOW())
+                 ON CONFLICT (user_id, course_id) DO UPDATE SET status = 'active', order_id = EXCLUDED.order_id, updated_at = NOW()`,
+                [enrollId, order.user_id || userId, item.item_id, orderId]
+              );
+              await client.query(
+                `UPDATE courses SET total_students = total_students + 1 WHERE id = $1`,
+                [item.item_id]
+              );
+            } else if (item.item_type === 'note') {
+              const npId = uuidv4();
+              await client.query(
+                `INSERT INTO note_purchases (id, user_id, note_id, order_id, price_paid, purchased_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW())
+                 ON CONFLICT (user_id, note_id) DO UPDATE SET order_id = EXCLUDED.order_id, price_paid = EXCLUDED.price_paid`,
+                [npId, order.user_id || userId, item.item_id, orderId, item.price]
+              );
+            }
+          }
+
           await client.query('COMMIT');
           return this.findById(orderId);
+        } else {
+          await client.query('ROLLBACK');
         }
-
-        // 2. Update Order status to PAID
-        const updateOrderSql = `
-          UPDATE orders
-          SET status = $1, payment_status = 'paid', 
-              razorpay_payment_id = $2, razorpay_signature = $3, updated_at = NOW()
-          WHERE id = $4
-          RETURNING *
-        `;
-        await client.query(updateOrderSql, [
-          ORDER_STATUS.PAID,
-          razorpayPaymentId || `pay_${Date.now()}`,
-          razorpaySignature || 'verified_sig',
-          orderId,
-        ]);
-
-        // 3. Update or Insert into Payments table with SUCCESS status
-        const updatePaymentSql = `
-          UPDATE payments
-          SET status = $1, transaction_id = $2, gateway_response = $3, paid_at = NOW(), updated_at = NOW()
-          WHERE order_id = $4
-        `;
-        const paymentRes = await client.query(updatePaymentSql, [
-          PAYMENT_STATUS.SUCCESS,
-          razorpayPaymentId || `pay_${Date.now()}`,
-          JSON.stringify(gatewayResponse),
-          orderId,
-        ]);
-
-        if (paymentRes.rowCount === 0) {
-          const insertPaySql = `
-            INSERT INTO payments (
-              id, order_id, user_id, amount, currency, gateway, 
-              transaction_id, status, gateway_response, paid_at, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), NOW())
-          `;
-          await client.query(insertPaySql, [
-            uuidv4(),
-            orderId,
-            order.user_id || userId,
-            order.total_amount,
-            order.currency || 'INR',
-            'razorpay',
-            razorpayPaymentId || `pay_${Date.now()}`,
-            PAYMENT_STATUS.SUCCESS,
-            JSON.stringify(gatewayResponse),
-          ]);
-        }
-
-        // 4. Fetch line items
-        const itemsRes = await client.query(`SELECT * FROM order_items WHERE order_id = $1`, [orderId]);
-        const items = itemsRes.rows;
-
-        // 5. Provision Entitlements
-        for (const item of items) {
-          if (item.item_type === 'course') {
-            const enrollId = uuidv4();
-            await client.query(
-              `INSERT INTO enrollments (id, user_id, course_id, order_id, status, progress_percentage, enrolled_at)
-               VALUES ($1, $2, $3, $4, 'active', 0.00, NOW())
-               ON CONFLICT (user_id, course_id) DO NOTHING`,
-              [enrollId, order.user_id || userId, item.item_id, orderId]
-            );
-            await client.query(
-              `UPDATE courses SET total_students = total_students + 1, enrolled_students = enrolled_students + 1 WHERE id = $1`,
-              [item.item_id]
-            );
-          } else if (item.item_type === 'note') {
-            const npId = uuidv4();
-            await client.query(
-              `INSERT INTO note_purchases (id, user_id, note_id, order_id, price_paid, purchased_at)
-               VALUES ($1, $2, $3, $4, $5, NOW())
-               ON CONFLICT (user_id, note_id) DO UPDATE SET order_id = EXCLUDED.order_id, price_paid = EXCLUDED.price_paid`,
-              [npId, order.user_id || userId, item.item_id, orderId, item.price]
-            );
-          }
-        }
-
-        await client.query('COMMIT');
-        return this.findById(orderId);
       } catch (err) {
         await client.query('ROLLBACK');
+        // Fail closed if the order existed in PostgreSQL or if fault injection was triggered (SRS TC-09 / NFR-REL-01)
+        if (foundInDb || simulateDbFailure) {
+          throw err instanceof AppError ? err : new AppError(`Payment verification transaction rolled back: ${err.message}`, 500);
+        }
         console.warn('OrderRepository executePaymentVerificationTransaction DB fallback:', err.message);
       } finally {
         client.release();
       }
     }
 
-    // In-memory atomic transaction simulation
+    // In-memory atomic transaction with rollback snapshot
     const order = (mockData.orders || []).find(o => o._id === orderId || o.id === orderId);
-    if (!order) throw new Error('Order not found in store');
-
-    order.status = ORDER_STATUS.PAID;
-    order.paymentStatus = 'paid';
-    order.razorpayPaymentId = razorpayPaymentId || `sim_pay_${Date.now()}`;
-    order.razorpaySignature = razorpaySignature || 'sim_sig';
-    order.updatedAt = new Date().toISOString();
+    if (!order) throw new AppError('Order not found in store', 404);
 
     const payment = (mockData.payments || []).find(p => p.orderId === orderId || p.order_id === orderId);
-    if (payment) {
-      payment.status = PAYMENT_STATUS.SUCCESS;
-      payment.transactionId = order.razorpayPaymentId;
-      payment.paidAt = new Date().toISOString();
-    }
+    const effectiveUserId = order.user_id || order.userId || (typeof order.user === 'object' ? order.user._id || order.user.id : order.user) || userId;
+    const user = (mockData.users || []).find(u => u._id === effectiveUserId || u.id === effectiveUserId);
 
-    const items = (mockData.orderItems || []).filter(i => i.orderId === orderId || i.order_id === orderId);
-    const user = (mockData.users || []).find(u => u._id === (order.user_id || userId) || u.id === (order.user_id || userId));
+    // Snapshot for atomic rollback guarantee
+    const snapshot = {
+      orderStatus: order.status,
+      orderPaymentStatus: order.paymentStatus,
+      orderPaymentId: order.razorpayPaymentId,
+      orderSignature: order.razorpaySignature,
+      paymentStatus: payment?.status,
+      paymentTxnId: payment?.transactionId,
+      paymentPaidAt: payment?.paidAt,
+      userCourses: user?.purchasedCourses ? [...user.purchasedCourses] : [],
+      userNotes: user?.purchasedNotes ? [...user.purchasedNotes] : [],
+      enrollments: JSON.parse(JSON.stringify(mockData.enrollments || [])),
+      notePurchases: JSON.parse(JSON.stringify(mockData.notePurchases || [])),
+    };
 
-    if (user) {
-      if (!user.purchasedCourses) user.purchasedCourses = [];
-      if (!user.purchasedNotes) user.purchasedNotes = [];
+    try {
+      order.status = ORDER_STATUS.PAID;
+      order.paymentStatus = 'paid';
+      order.razorpayPaymentId = razorpayPaymentId || `sim_pay_${Date.now()}`;
+      order.razorpaySignature = razorpaySignature || 'sim_sig';
+      order.updatedAt = new Date().toISOString();
 
-      for (const item of items) {
-        if (item.itemType === 'course' || item.item_type === 'course') {
-          const cId = item.itemId || item.item_id;
-          if (!user.purchasedCourses.includes(cId)) user.purchasedCourses.push(cId);
-
-          const course = (mockData.courses || []).find(c => c._id === cId || c.id === cId);
-          if (course) course.enrolledStudents = (course.enrolledStudents || 0) + 1;
-        } else if (item.itemType === 'note' || item.item_type === 'note') {
-          const nId = item.itemId || item.item_id;
-          if (!user.purchasedNotes.includes(nId)) user.purchasedNotes.push(nId);
-
-          if (!mockData.notePurchases) mockData.notePurchases = [];
-          if (!mockData.notePurchases.some(np => np.userId === user._id && np.noteId === nId)) {
-            mockData.notePurchases.push({
-              _id: uuidv4(),
-              id: uuidv4(),
-              userId: user._id,
-              noteId: nId,
-              orderId,
-              pricePaid: item.price,
-              purchasedAt: new Date(),
-            });
-          }
-        }
+      if (simulateDbFailure) {
+        throw new AppError('Simulated database failure partway through verification transaction', 500);
       }
-    }
 
-    return this.findById(orderId);
+      if (payment) {
+        payment.status = PAYMENT_STATUS.SUCCESS;
+        payment.transactionId = order.razorpayPaymentId;
+        payment.paidAt = new Date().toISOString();
+      }
+
+      const items = (mockData.orderItems || []).filter(i => i.orderId === orderId || i.order_id === orderId);
+      const effectiveItems = items.length > 0 ? items : (order.items || []);
+
+      this.provisionMockEntitlements(effectiveUserId, orderId, effectiveItems);
+
+      return this.findById(orderId);
+    } catch (err) {
+      // Rollback state to snapshot
+      order.status = snapshot.orderStatus;
+      order.paymentStatus = snapshot.orderPaymentStatus;
+      order.razorpayPaymentId = snapshot.orderPaymentId;
+      order.razorpaySignature = snapshot.orderSignature;
+      if (payment) {
+        payment.status = snapshot.paymentStatus;
+        payment.transactionId = snapshot.paymentTxnId;
+        payment.paidAt = snapshot.paymentPaidAt;
+      }
+      if (user) {
+        user.purchasedCourses = snapshot.userCourses;
+        user.purchasedNotes = snapshot.userNotes;
+      }
+      mockData.enrollments = snapshot.enrollments;
+      mockData.notePurchases = snapshot.notePurchases;
+      throw err instanceof AppError ? err : new AppError(`Transaction failed and rolled back: ${err.message}`, 500);
+    }
   }
 
   /**
@@ -722,15 +817,18 @@ export class OrderRepository {
    */
   async cancelOrder(orderId, userId, isAdmin = false) {
     const order = await this.findById(orderId);
-    if (!order) return null;
+    if (!order) throw new AppError('Order not found', 404);
 
     const matchesUser = order.userId === userId || order.user?.id === userId || order.user?._id === userId;
     if (!isAdmin && !matchesUser) {
-      throw new Error('Unauthorized to cancel this order');
+      throw new AppError('Unauthorized to cancel this order', 403);
     }
 
     if (order.status === ORDER_STATUS.PAID) {
-      throw new Error('Cannot cancel an already completed and paid order');
+      throw new AppError('Cannot cancel an already completed and paid order', 400);
+    }
+    if (order.status === ORDER_STATUS.FAILED) {
+      return order;
     }
     if (order.status === ORDER_STATUS.FAILED) {
       return order;
@@ -745,7 +843,7 @@ export class OrderRepository {
           ORDER_STATUS.FAILED,
         ]);
         await query(`UPDATE payments SET status = $1, updated_at = NOW() WHERE order_id = $2`, [
-          PAYMENT_STATUS.FAILED,
+          'failed',
           orderId,
         ]);
         return this.findById(orderId);
@@ -754,6 +852,11 @@ export class OrderRepository {
       }
     }
 
+    const rawOrder = (mockData.orders || []).find(o => o._id === orderId || o.id === orderId);
+    if (rawOrder) {
+      rawOrder.status = ORDER_STATUS.CANCELLED;
+      rawOrder.paymentStatus = 'cancelled';
+    }
     order.status = ORDER_STATUS.CANCELLED;
     order.paymentStatus = 'cancelled';
     return order;
@@ -761,14 +864,14 @@ export class OrderRepository {
 
   async failOrder(orderId, userId, isAdmin = false) {
     const order = await this.findById(orderId);
-    if (!order) return null;
+    if (!order) throw new AppError('Order not found', 404);
 
     const matchesUser = order.userId === userId || order.user?.id === userId || order.user?._id === userId;
     if (!isAdmin && !matchesUser) {
-      throw new Error('Unauthorized to update this order');
+      throw new AppError('Unauthorized to update this order', 403);
     }
     if (order.status === ORDER_STATUS.PAID) {
-      throw new Error('Cannot fail an already paid order');
+      throw new AppError('Cannot fail an already paid order', 400);
     }
 
     if (ENV.DATABASE_URL && isUuid(orderId)) {
@@ -780,7 +883,7 @@ export class OrderRepository {
         );
         await query(
           `UPDATE payments SET status = $1, updated_at = NOW() WHERE order_id = $2`,
-          [PAYMENT_STATUS.FAILED, orderId]
+          ['failed', orderId]
         );
         return this.findById(orderId);
       } catch (err) {
@@ -788,6 +891,11 @@ export class OrderRepository {
       }
     }
 
+    const rawOrder = (mockData.orders || []).find(o => o._id === orderId || o.id === orderId);
+    if (rawOrder) {
+      rawOrder.status = ORDER_STATUS.FAILED;
+      rawOrder.paymentStatus = 'failed';
+    }
     order.status = ORDER_STATUS.FAILED;
     order.paymentStatus = 'failed';
     return order;

@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
+import { getAllNotes, getSecureAccess } from '../../api/noteApi';
 import { createOrder, verifyPayment, cancelOrder, failOrder } from '../../api/orderApi';
+import { clearGetCache } from '../../api/axiosInstance';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
-import YouTubeVideoCard from '../../components/video/YouTubeVideoCard';
 import VideoModal from '../../components/video/VideoModal';
 import toast from 'react-hot-toast';
-import { formatPrice, getEffectivePrice } from '../../utils/helpers';
+import {
+  formatPrice,
+  getEffectivePrice,
+  resolveMediaUrl,
+  getNoteStreamUrl,
+  getNoteDrivePreviewUrl,
+  getNoteDriveViewUrl,
+  getNoteDownloadUrl,
+} from '../../utils/helpers';
 import { 
   FiClock, 
   FiVideo, 
@@ -19,20 +28,26 @@ import {
   FiLock, 
   FiCheckCircle, 
   FiFolder,
-  FiBookOpen
+  FiBookOpen,
+  FiExternalLink,
+  FiDownload,
+  FiCloud,
 } from 'react-icons/fi';
 
 const CourseDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, refreshUser } = useAuth();
   
   const [course, setCourse] = useState(null);
+  const [courseNotes, setCourseNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [purchased, setPurchased] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [previewVideo, setPreviewVideo] = useState(null);
+  const [selectedNoteModal, setSelectedNoteModal] = useState(null);
+  const [noteViewMode, setNoteViewMode] = useState('portal'); // 'portal' | 'gdrive'
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
 
@@ -48,6 +63,16 @@ const CourseDetailPage = () => {
         }
 
         setCourse(fetchedCourse);
+        const courseId = fetchedCourse.id || fetchedCourse._id;
+
+        // Load study materials for this course
+        try {
+          const notesRes = await getAllNotes({ courseId });
+          const fetchedNotes = notesRes.data?.data?.notes || notesRes.data?.notes || fetchedCourse.notes || [];
+          setCourseNotes(fetchedNotes.length > 0 ? fetchedNotes : (fetchedCourse.notes || []));
+        } catch {
+          setCourseNotes(fetchedCourse.notes || []);
+        }
         
         // Auto expand first subject and chapter by default
         if (fetchedCourse.subjects && fetchedCourse.subjects.length > 0) {
@@ -60,8 +85,10 @@ const CourseDetailPage = () => {
         }
 
         // Check if user already purchased or enrolled
-        const courseId = fetchedCourse.id || fetchedCourse._id;
-        if (fetchedCourse.isEnrolled || (isAuthenticated && (user?.purchasedCourses?.includes(courseId) || user?.role?.toLowerCase() === 'admin'))) {
+        if (
+          fetchedCourse.isEnrolled ||
+          (isAuthenticated && (user?.purchasedCourses?.includes(courseId) || user?.role?.toLowerCase() === 'admin'))
+        ) {
           setPurchased(true);
         }
       } catch (err) {
@@ -116,15 +143,34 @@ const CourseDetailPage = () => {
       const orderRes = await createOrder({ items: [{ itemId: courseId, itemType: 'course' }] });
       const orderData = orderRes.data?.data || orderRes.data;
 
-      // If 100% free course, access is immediately granted on backend
+      // Case 1: 100% free course — access is immediately granted on backend
       if (orderData.isFree || orderData.status === 'PAID') {
+        clearGetCache();
+        if (refreshUser) await refreshUser();
         toast.success(orderData.message || 'Enrolled for free! Welcome to the course.');
         setPurchased(true);
-        navigate(`/student/my-courses`);
+        navigate('/student/dashboard');
         return;
       }
 
-      const { orderId, razorpayOrderId, amount, currency, keyId } = orderData;
+      const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
+
+      // Case 2: Development Mock Payment Mode — verify immediately and update dashboard
+      if (isMock) {
+        await verifyPayment({
+          orderId,
+          razorpayOrderId: razorpayOrderId || `order_mock_${Date.now()}`,
+          razorpayPaymentId: `pay_mock_${Date.now()}`,
+          razorpaySignature: `sig_mock_verified_${Date.now()}`,
+        });
+        clearGetCache();
+        if (refreshUser) await refreshUser();
+        toast.success('Course purchased! Your Student Dashboard has been updated.');
+        setPurchased(true);
+        setPaymentLoading(false);
+        navigate('/student/dashboard');
+        return;
+      }
 
       if (!razorpayOrderId) {
         throw new Error('No payment order was created. Please try again.');
@@ -150,10 +196,12 @@ const CourseDetailPage = () => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
-            toast.success('Payment verified! Course added to your library.');
+            clearGetCache();
+            if (refreshUser) await refreshUser();
+            toast.success('Payment verified! Course added to your dashboard.');
             setPurchased(true);
             setPaymentLoading(false);
-            navigate(`/student/my-courses`);
+            navigate('/student/dashboard');
           } catch (err) {
             setPaymentLoading(false);
             toast.error(err.response?.data?.message || 'Payment verification failed. Please contact support.');
@@ -199,19 +247,19 @@ const CourseDetailPage = () => {
       paymentObject.open();
       checkoutOpened = true;
 
-      // Safety timeout guard so UI never stays stuck on Processing...
       window.setTimeout(() => {
         finishCheckout();
       }, 60000);
     } catch (err) {
       setPaymentLoading(false);
-      // Provide meaningful error messages
       const status = err.response?.status;
       const serverMsg = err.response?.data?.message;
       if (status === 401) {
         toast.error('Your session has expired. Please log in again to enroll.');
         navigate('/login', { state: { from: `/courses/${id}` } });
       } else if (status === 400 && serverMsg?.includes('already enrolled')) {
+        clearGetCache();
+        if (refreshUser) await refreshUser();
         toast.success('You are already enrolled in this course!');
         setPurchased(true);
       } else {
@@ -224,7 +272,6 @@ const CourseDetailPage = () => {
   };
 
   const handleLessonPlay = (lesson, chapterTitle) => {
-    // Only allow free lessons to preview. Paid lessons require enrollment.
     const lessonIsFree = lesson.isFree === true || lesson.is_free === true;
     if (!lessonIsFree && !purchased) {
       toast('This lecture is locked. Enroll to watch it.', { icon: '🔒' });
@@ -241,6 +288,25 @@ const CourseDetailPage = () => {
       description: `Class scheduled on ${new Date(lesson.classDate || lesson.created_at || Date.now()).toLocaleDateString()} (${lesson.duration || 60} mins)`,
       chapterTitle: chapterTitle || 'Academic Lecture',
     });
+  };
+
+  const handleOpenStudyMaterial = async (note) => {
+    const noteIsFree = note.isFree === true || note.is_free === true;
+    if (!noteIsFree && !purchased && !isAuthenticated) {
+      toast('Please enroll in the course or log in to access this study material.', { icon: '🔒' });
+      navigate('/login', { state: { from: `/courses/${id}` } });
+      return;
+    }
+    try {
+      toast.loading('Accessing Google Drive study material...', { id: 'course-note-open' });
+      const res = await getSecureAccess(note.id || note._id);
+      const accessData = res.data?.data || res.data;
+      setSelectedNoteModal(accessData);
+      setNoteViewMode('portal');
+      toast.success('Google Drive study material ready', { id: 'course-note-open' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Enroll in this course to unlock this study material.', { id: 'course-note-open' });
+    }
   };
 
   if (loading) return <Loader fullPage />;
@@ -264,16 +330,37 @@ const CourseDetailPage = () => {
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '5rem' }}>
       {/* Header Banner */}
-      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '3.5rem 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '2.5rem 0 3.5rem', borderBottom: '1px solid var(--border)' }}>
+        <div className="container" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Link to="/courses" className="btn btn-sm btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              ← Back to All Courses
+            </Link>
+            <Link to={`/courses/${id}/watch`} className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <FiPlay size={13} /> Open Video Classroom
+            </Link>
+            <Link to="/notes" className="btn btn-sm btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <FiFileText size={13} /> Notes Library
+            </Link>
+          </div>
+          {(user?.role || '').toLowerCase() === 'admin' && (
+            <Link to={`/admin/curriculum?courseId=${course.id || course._id || id}`} className="btn btn-sm btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <FiFolder size={13} /> Admin: Edit Curriculum & Upload Notes
+            </Link>
+          )}
+        </div>
         <div className="container grid-2" style={{ alignItems: 'center', gap: '3rem' }}>
           <div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
               <span className="badge badge-primary">{course.level || 'Class 10'}</span>
               {course.rating && (
                 <span className="badge badge-warning" style={{ backgroundColor: 'rgba(255,183,3,0.15)', color: '#ffb703' }}>
-                  ★ {course.rating.toFixed(1)} ({course.enrolledStudents || 0} enrolled)
+                  ★ {Number(course.rating).toFixed(1)} ({course.enrolledStudents || 0} enrolled)
                 </span>
               )}
+              <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <FiCloud size={12} /> Google Drive Study Materials Included
+              </span>
             </div>
             <h1 style={{ fontSize: '2.4rem', marginBottom: '1rem', fontWeight: 800 }}>{course.title}</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
@@ -282,13 +369,14 @@ const CourseDetailPage = () => {
             <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiClock /> {course.duration || '6 Months'}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiBookOpen /> {subjects.length} Subjects</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiFileText /> {courseNotes.length} Google Drive PDFs</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiVideo /> Interactive Live & Recorded Classes</div>
             </div>
           </div>
           <div>
             <div className="card-glass" style={{ padding: '2rem', textAlign: 'center', borderRadius: '16px' }}>
               <img 
-                src={course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'} 
+                src={resolveMediaUrl(course.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'} 
                 alt={course.title} 
                 style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '10px', marginBottom: '1.5rem' }} 
               />
@@ -304,10 +392,10 @@ const CourseDetailPage = () => {
               {purchased ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <Link to={`/courses/${id}/watch`} className="btn btn-primary btn-full btn-lg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <FiPlay /> Watch Video Lectures
+                    <FiPlay /> Open Course Classroom & GDrive Notes
                   </Link>
-                  <Link to={`/student/my-courses`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <FiCheckCircle /> Enrolled in My Courses
+                  <Link to={`/student/dashboard`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    <FiCheckCircle /> Go to Student Dashboard
                   </Link>
                 </div>
               ) : (
@@ -335,7 +423,7 @@ const CourseDetailPage = () => {
                   </button>
                   {checkoutMessage && <p role="status" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>{checkoutMessage}</p>}
                   <Link to={`/courses/${id}/watch`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <FiPlay /> Preview Course Lectures
+                    <FiPlay /> Preview Course Lectures & Notes
                   </Link>
                 </div>
               )}
@@ -347,15 +435,15 @@ const CourseDetailPage = () => {
       {/* Complete Academic Hierarchy & Syllabus Browser */}
       <div className="container" style={{ padding: '3.5rem 0' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>Course Syllabus & Academic Hierarchy</h2>
               <p style={{ color: 'var(--text-muted)' }}>
-                Structured curriculum from Subjects down to Chapters and Scheduled Classes with video lectures.
+                Structured curriculum from Subjects down to Chapters, Scheduled Video Lectures, and Google Drive Study Materials.
               </p>
             </div>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              {subjects.length} Subjects available
+              {subjects.length} Subjects • {courseNotes.length} Study Materials
             </span>
           </div>
 
@@ -453,60 +541,90 @@ const CourseDetailPage = () => {
                                         {classes.map((cls, lIdx) => {
                                           const lessonIsFree = cls.isFree === true || cls.is_free === true;
                                           const isLocked = !purchased && !lessonIsFree;
+                                          const lessonNotes = cls.notes || [];
                                           return (
                                           <div 
                                             key={cls.id || cls._id || lIdx}
                                             style={{ 
-                                              display: 'flex', 
-                                              justifyContent: 'space-between', 
-                                              alignItems: 'center', 
-                                              padding: '0.6rem 0.8rem', 
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              gap: '0.5rem',
+                                              padding: '0.75rem 0.9rem', 
                                               borderRadius: '6px', 
                                               backgroundColor: isLocked ? 'var(--bg-muted)' : 'var(--bg-card)',
                                               border: '1px solid var(--border)',
                                               fontSize: '0.9rem',
-                                              opacity: isLocked ? 0.75 : 1,
+                                              opacity: isLocked ? 0.8 : 1,
                                             }}
                                           >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{lIdx + 1}.</span>
-                                              <span style={{ fontWeight: 500 }}>{cls.title}</span>
-                                              {cls.isLive && (
-                                                <span className="badge badge-danger" style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>LIVE</span>
-                                              )}
-                                              {lessonIsFree && !purchased && (
-                                                <span style={{ fontSize: '0.7rem', color: '#43e97b', fontWeight: 600, border: '1px solid #43e97b', borderRadius: '4px', padding: '0.05rem 0.35rem' }}>FREE</span>
-                                              )}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <FiCalendar /> {new Date(cls.classDate || cls.createdAt).toLocaleDateString()}
-                                              </span>
-                                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <FiClock /> {cls.duration || 60}m
-                                              </span>
-                                              {isLocked ? (
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                                  <FiLock size={13} /> Locked
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{lIdx + 1}.</span>
+                                                <span style={{ fontWeight: 500 }}>{cls.title}</span>
+                                                {cls.isLive && (
+                                                  <span className="badge badge-danger" style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>LIVE</span>
+                                                )}
+                                                {lessonIsFree && !purchased && (
+                                                  <span style={{ fontSize: '0.7rem', color: '#43e97b', fontWeight: 600, border: '1px solid #43e97b', borderRadius: '4px', padding: '0.05rem 0.35rem' }}>FREE</span>
+                                                )}
+                                                {lessonNotes.length > 0 && (
+                                                  <span className="badge badge-success" style={{ fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                    <FiCloud size={11} /> {lessonNotes.length} GDrive PDF
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                  <FiCalendar /> {new Date(cls.classDate || cls.createdAt || Date.now()).toLocaleDateString()}
                                                 </span>
-                                              ) : purchased ? (
-                                                <Link 
-                                                  to={`/courses/${id}/watch?lessonId=${cls.id || cls._id}`}
-                                                  className="btn btn-primary"
-                                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                                                >
-                                                  <FiPlay size={12} /> Play in Classroom
-                                                </Link>
-                                              ) : (
-                                                <button 
-                                                  onClick={() => handleLessonPlay(cls, chapter.title)}
-                                                  className="btn btn-secondary"
-                                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                                                >
-                                                  <FiPlay size={12} /> Watch Preview
-                                                </button>
-                                              )}
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                  <FiClock /> {cls.duration || 60}m
+                                                </span>
+                                                {isLocked ? (
+                                                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                                    <FiLock size={13} /> Locked
+                                                  </span>
+                                                ) : purchased ? (
+                                                  <Link 
+                                                    to={`/courses/${id}/watch?lessonId=${cls.id || cls._id}`}
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                  >
+                                                    <FiPlay size={12} /> Play in Classroom
+                                                  </Link>
+                                                ) : (
+                                                  <button 
+                                                    onClick={() => handleLessonPlay(cls, chapter.title)}
+                                                    className="btn btn-secondary"
+                                                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                                                  >
+                                                    <FiPlay size={12} /> Watch Preview
+                                                  </button>
+                                                )}
+                                              </div>
                                             </div>
+
+                                            {/* Attached Google Drive Study Materials for this lesson */}
+                                            {lessonNotes.length > 0 && (
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', paddingTop: '0.4rem', borderTop: '1px dashed var(--border)' }}>
+                                                {lessonNotes.map((ln) => {
+                                                  const canViewNote = purchased || ln.isFree || ln.is_free;
+                                                  return (
+                                                    <button
+                                                      key={ln.id || ln._id}
+                                                      type="button"
+                                                      onClick={() => handleOpenStudyMaterial(ln)}
+                                                      className="btn btn-sm btn-outline"
+                                                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                                                    >
+                                                      {canViewNote ? <FiCloud size={12} /> : <FiLock size={12} />}
+                                                      <span>{ln.title}</span>
+                                                      <span style={{ opacity: 0.7 }}>(Google Drive PDF)</span>
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
                                           </div>
                                           );
                                         })}
@@ -525,6 +643,80 @@ const CourseDetailPage = () => {
               })}
             </div>
           )}
+
+          {/* Dedicated Course Study Materials (Google Drive) Section */}
+          <div style={{ marginTop: '3.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FiCloud style={{ color: 'var(--primary)' }} /> Course Study Materials (Google Drive)
+                </h2>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.95rem' }}>
+                  Access admin-uploaded study notes, formula sheets, and chapter PDFs directly from Google Drive inside the Course Portal.
+                </p>
+              </div>
+              <Link to={`/courses/${id}/watch`} className="btn btn-sm btn-outline">
+                Open in Classroom Portal
+              </Link>
+            </div>
+
+            {courseNotes.length === 0 ? (
+              <div className="card-glass" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <FiFileText size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                <p style={{ margin: 0 }}>No study materials uploaded for this course yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '1.25rem' }}>
+                {courseNotes.map((note) => {
+                  const canAccessNote = purchased || note.isFree || !note.isLocked;
+                  return (
+                    <div
+                      key={note.id || note._id}
+                      className="card-glass"
+                      style={{
+                        padding: '1.25rem',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                          <span className="badge badge-success" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <FiCloud size={11} /> Google Drive PDF
+                          </span>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: note.isFree ? '#10b981' : 'var(--primary)' }}>
+                            {note.isFree ? 'FREE' : purchased ? 'INCLUDED IN COURSE' : formatPrice(note.price)}
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1rem', fontWeight: 700 }}>
+                          {note.title}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                          {note.subjectTitle || 'Course Material'} • {note.fileSize || '2.5 MB'} • {note.pageCount || 24} Pages
+                        </p>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStudyMaterial(note)}
+                          className="btn btn-sm btn-primary"
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                        >
+                          {canAccessNote ? <FiFileText size={14} /> : <FiLock size={14} />}
+                          {canAccessNote ? 'Access GDrive Content' : 'Enroll to Unlock'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -537,6 +729,103 @@ const CourseDetailPage = () => {
           description={previewVideo.description}
           chapterTitle={previewVideo.chapterTitle}
         />
+      )}
+
+      {/* Google Drive Study Material Viewer Modal */}
+      {selectedNoteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setSelectedNoteModal(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '940px',
+              height: '86vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: '1rem 1.5rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid var(--border)',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{selectedNoteModal.title}</h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {selectedNoteModal.fileName || 'Study Material'} • Stored in Google Drive ({selectedNoteModal.fileSize || '2.5 MB'})
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {getNoteDrivePreviewUrl(selectedNoteModal) && (
+                  <button
+                    type="button"
+                    onClick={() => setNoteViewMode(noteViewMode === 'portal' ? 'gdrive' : 'portal')}
+                    className="btn btn-sm btn-outline"
+                  >
+                    {noteViewMode === 'portal' ? 'Switch to GDrive Embed' : 'Switch to Portal Stream'}
+                  </button>
+                )}
+                {getNoteDriveViewUrl(selectedNoteModal) && (
+                  <a
+                    href={getNoteDriveViewUrl(selectedNoteModal)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <FiExternalLink size={14} /> Open in Google Drive
+                  </a>
+                )}
+                <a
+                  href={getNoteDownloadUrl(selectedNoteModal)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-outline"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <FiDownload size={14} /> Download PDF
+                </a>
+                <button type="button" onClick={() => setSelectedNoteModal(null)} className="btn btn-sm btn-outline">
+                  Close
+                </button>
+              </div>
+            </div>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
+              <iframe
+                src={
+                  noteViewMode === 'gdrive' && getNoteDrivePreviewUrl(selectedNoteModal)
+                    ? getNoteDrivePreviewUrl(selectedNoteModal)
+                    : getNoteStreamUrl(selectedNoteModal)
+                }
+                title={selectedNoteModal.title}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

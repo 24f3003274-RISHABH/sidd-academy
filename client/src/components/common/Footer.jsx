@@ -16,9 +16,14 @@ const Footer = () => {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: '340px', marginBottom: '1.25rem' }}>
             UP Board & NCERT Hindi-Medium विद्यार्थियों के लिए प्रयागराज का सबसे विश्वसनीय ई-लर्निंग प्लेटफॉर्म। आसान भाषा में वीडियो क्लासेस और हस्तलिखित PDF नोट्स।
           </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', backgroundColor: 'var(--primary-subtle)', borderRadius: '20px', color: 'var(--primary-dark)', fontSize: '0.8rem', fontWeight: 600 }}>
-            <FiYoutube style={{ color: '#ef4444' }} /> YouTube: @A2CCENTRE
-          </div>
+          <a
+            href="https://www.youtube.com/@Sidacademyprayagraj"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', backgroundColor: 'var(--primary-subtle)', borderRadius: '20px', color: 'var(--primary-dark)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+          >
+            <FiYoutube style={{ color: '#ef4444' }} /> YouTube: @Sidacademyprayagraj
+          </a>
         </div>
 
         <div>

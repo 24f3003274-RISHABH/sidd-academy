@@ -1,0 +1,41 @@
+==============================================================================
+SIDD ACADEMY — ALL ENVIRONMENT (.env) FILES REFERENCE
+==============================================================================
+Note: On macOS, files starting with a dot (like ".env" and ".env.example") are
+hidden in Finder by default (press Cmd + Shift + . in Finder to toggle hidden files).
+Both the actual ".env" files AND this visible reference file are saved in the project.
+
+------------------------------------------------------------------------------
+1. BACKEND ENV FILE (Saved at: server/.env)
+------------------------------------------------------------------------------
+PORT=5000
+NODE_ENV=development
+DATABASE_URL=
+CORS_ORIGIN=http://localhost:5173
+CLIENT_URL=http://localhost:5173
+
+JWT_SECRET=sidd_academy_prod_jwt_master_secret_9f8e7d6c5b4a3210
+JWT_ACCESS_SECRET=sidd_academy_prod_jwt_access_secret_9f8e7d6c5b4a3210
+JWT_REFRESH_SECRET=sidd_academy_prod_jwt_refresh_secret_1a2b3c4d5e6f7890
+JWT_ACCESS_EXPIRES=7d
+JWT_REFRESH_EXPIRES=7d
+
+GOOGLE_DRIVE_FOLDER_ID=1axziJZcQmDY1Ptbkm8s3c1ZJYStrL7Rf
+GOOGLE_DRIVE_ACCESS_TOKEN=
+
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+FROM_NAME=Sidd Academy
+FROM_EMAIL=no-reply@siddacademy.com
+
+
+------------------------------------------------------------------------------
+2. FRONTEND ENV FILE (Saved at: client/.env)
+------------------------------------------------------------------------------
+VITE_API_URL=http://localhost:5000/api/v1
+VITE_RAZORPAY_KEY_ID=

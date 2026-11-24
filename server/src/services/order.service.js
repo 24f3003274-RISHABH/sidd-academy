@@ -178,7 +178,7 @@ export class OrderService {
    * Access is ONLY granted after rigorous cryptographic HMAC-SHA256 signature verification
    * executed on the server.
    */
-  async verifyPayment(userId, { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature, razorpayOrderId, razorpayPaymentId, razorpaySignature }) {
+  async verifyPayment(userId, { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature, razorpayOrderId, razorpayPaymentId, razorpaySignature, forceLiveMode = false, simulateDbFailure = false }) {
     const effectiveOrderId = orderId || razorpayOrderId || razorpay_order_id;
     const effectiveRzpOrderId = razorpayOrderId || razorpay_order_id;
     const effectiveRzpPaymentId = razorpayPaymentId || razorpay_payment_id;
@@ -225,6 +225,7 @@ export class OrderService {
       razorpayOrderId: order.razorpayOrderId || effectiveRzpOrderId,
       razorpayPaymentId: effectiveRzpPaymentId,
       razorpaySignature: effectiveRzpSignature,
+      forceLiveMode,
     });
 
     if (!verificationResult.isValid) {
@@ -238,6 +239,7 @@ export class OrderService {
       userId,
       razorpayPaymentId: effectiveRzpPaymentId,
       razorpaySignature: effectiveRzpSignature,
+      simulateDbFailure,
       gatewayResponse: {
         verifiedAt: new Date().toISOString(),
         gateway: 'razorpay',

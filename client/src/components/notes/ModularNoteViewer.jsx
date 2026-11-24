@@ -158,14 +158,15 @@ const ModularNoteViewer = ({ notes = [], onDownload, onPurchase, onPreview, isAu
                 {/* PDF 1, PDF 2, PDF 3 Modular Cards Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
                   {noteList.map((note, index) => {
-                    const isPurchased = isAuthenticated && user?.purchasedNotes?.includes(note._id);
-                    const canAccess = note.isFree || isPurchased;
+                    const noteId = note.id || note._id;
+                    const isPurchased = isAuthenticated && (user?.purchasedNotes?.includes(noteId) || (user?.role || '').toLowerCase() === 'admin');
+                    const canAccess = note.isFree || isPurchased || note.isLocked === false;
                     const pdfLabel = `PDF ${index + 1}`;
 
                     return (
                       <div
-                        key={note._id}
-                        id={`pdf-module-${note._id}`}
+                        key={noteId}
+                        id={`pdf-module-${noteId}`}
                         style={{
                           backgroundColor: 'var(--bg-card)',
                           border: '1px solid rgba(255, 255, 255, 0.08)',

@@ -76,18 +76,25 @@ export class ChapterRepository {
       }
     }
 
-    const memoryId = `chapter_${Date.now()}`;
+    const memoryId = `chapter_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const parentSubject = mockData.subjects.find(s => s.id === subjectId || s._id === subjectId);
     const newChap = {
       _id: memoryId,
       id: memoryId,
       subject: subjectId,
       subjectId,
+      courseId: parentSubject?.courseId || parentSubject?.course || null,
       title: title.trim(),
       order: Number(order) || 0,
+      dailyClasses: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     mockData.chapters.push(newChap);
+    if (parentSubject) {
+      if (!Array.isArray(parentSubject.chapters)) parentSubject.chapters = [];
+      if (!parentSubject.chapters.includes(memoryId)) parentSubject.chapters.push(memoryId);
+    }
     return this.normalizeChapter(newChap);
   }
 

@@ -16,8 +16,23 @@ router.get('/:id', optionalAuth, courseController.getCourseById);
 router.get('/:id/content', optionalAuth, courseController.getCourseContent);
 
 /**
- * Admin Course Management Endpoints
+ * Admin Course Management & YouTube Playlist Import Endpoints
  */
+router.post(
+  '/playlist/preview',
+  authenticate,
+  authorize('ADMIN'),
+  courseController.previewPlaylist
+);
+
+router.post(
+  '/import-playlist',
+  authenticate,
+  authorize('ADMIN'),
+  uploadImage.single('thumbnail'),
+  courseController.importPlaylist
+);
+
 router.post(
   '/',
   authenticate,

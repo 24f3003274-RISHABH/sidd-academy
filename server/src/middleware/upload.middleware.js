@@ -11,11 +11,14 @@ const ensureDir = (dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 };
 
+export const UPLOADS_ROOT = path.join(__dirname, '../../uploads');
+export const NOTES_UPLOAD_DIR = path.join(UPLOADS_ROOT, 'notes');
+export const IMAGES_UPLOAD_DIR = path.join(UPLOADS_ROOT, 'images');
+
 const pdfStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../../../uploads/notes');
-    ensureDir(uploadPath);
-    cb(null, uploadPath);
+    ensureDir(NOTES_UPLOAD_DIR);
+    cb(null, NOTES_UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -25,19 +28,21 @@ const pdfStorage = multer.diskStorage({
 
 const imageStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../../../uploads/images');
-    ensureDir(uploadPath);
-    cb(null, uploadPath);
+    ensureDir(IMAGES_UPLOAD_DIR);
+    cb(null, IMAGES_UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname) || '.jpg';
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     cb(null, `img-${uniqueSuffix}${ext}`);
   },
 });
 
 const pdfFilter = (req, file, cb) => {
-  if (file.mimetype === 'application/pdf') {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const isPdfMime = file.mimetype === 'application/pdf';
+  const isPdfExt = !ext || ext === '.pdf';
+  if (isPdfMime && isPdfExt) {
     cb(null, true);
   } else {
     cb(new AppError('Only PDF files are allowed.', 400), false);

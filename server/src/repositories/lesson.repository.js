@@ -68,10 +68,11 @@ export class LessonRepository {
   /**
    * Create lesson
    */
-  async create({ chapterId, title, description = '', classDate, duration = 60, order = 0, classNumber = 1, isLive = false, isFree = false, isProtected = true, videoUrl = '', videoProvider = 'youtube' }) {
+  async create({ chapterId, title, description = '', classDate, duration = 60, order = 0, classNumber = 1, isLive = false, isFree = false, isProtected = true, videoUrl = '', playlistUrl = '', thumbnailUrl = '', videoProvider = 'youtube' }) {
     const id = uuidv4();
     const dateVal = classDate ? new Date(classDate).toISOString() : new Date().toISOString();
     const ord = Number(order) || 0;
+    const durationVal = typeof duration === 'string' && duration.includes(':') ? duration : (Number(duration) || 60);
 
     if (ENV.DATABASE_URL) {
       try {
@@ -80,15 +81,15 @@ export class LessonRepository {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, NOW(), NOW())
           RETURNING *
         `;
-        const res = await query(sql, [id, chapterId, title.trim(), description.trim(), dateVal, Number(classNumber) || 1, `${duration} mins`, ord, Boolean(isFree), Boolean(isProtected)]);
-        const createdLesson = res.rows[0];
+        const durStr = typeof durationVal === 'string' ? durationVal : `${durationVal} mins`;
+        await query(sql, [id, chapterId, title.trim(), description.trim(), dateVal, Number(classNumber) || 1, durStr, ord, Boolean(isFree), Boolean(isProtected)]);
 
         if (videoUrl) {
           const videoId = uuidv4();
           await query(
-            `INSERT INTO videos (id, lesson_id, title, video_url, video_provider, quality, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, '1080p', NOW(), NOW())`,
-            [videoId, id, title.trim(), videoUrl.trim(), videoProvider || 'youtube']
+            `INSERT INTO videos (id, lesson_id, title, video_url, playlist_url, thumbnail_url, video_provider, quality, order_num, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, '1080p', $8, NOW(), NOW())`,
+            [videoId, id, title.trim(), videoUrl.trim(), playlistUrl || '', thumbnailUrl || '', videoProvider || 'youtube', ord]
           );
         }
 
@@ -98,7 +99,7 @@ export class LessonRepository {
       }
     }
 
-    const memoryId = `class_${Date.now()}`;
+    const memoryId = `class_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const newClass = {
       _id: memoryId,
       id: memoryId,
@@ -108,18 +109,25 @@ export class LessonRepository {
       description: description.trim(),
       classDate: dateVal,
       classNumber: Number(classNumber) || 1,
-      duration: Number(duration) || 60,
+      duration: durationVal,
       order: ord,
       order_index: ord,
       isLive: Boolean(isLive),
       isFree: Boolean(isFree),
       isProtected: Boolean(isProtected),
       videoUrl: videoUrl.trim(),
+      playlistUrl: playlistUrl ? playlistUrl.trim() : '',
+      thumbnailUrl: thumbnailUrl ? thumbnailUrl.trim() : '',
       videoProvider: videoProvider || 'youtube',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     mockData.dailyClasses.push(newClass);
+    const parentChapter = mockData.chapters.find(c => c.id === chapterId || c._id === chapterId);
+    if (parentChapter) {
+      if (!Array.isArray(parentChapter.dailyClasses)) parentChapter.dailyClasses = [];
+      if (!parentChapter.dailyClasses.includes(memoryId)) parentChapter.dailyClasses.push(memoryId);
+    }
     return this.normalizeLesson(newClass);
   }
 

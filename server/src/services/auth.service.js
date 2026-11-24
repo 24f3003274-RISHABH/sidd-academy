@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authRepository } from '../repositories/auth.repository.js';
+import { studentRepository } from '../repositories/student.repository.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/generateToken.js';
 import { AppError } from '../utils/apiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
@@ -11,6 +12,33 @@ import ENV from '../config/env.js';
  * Implements business logic for password hashing, JWT generation, user registration, credential verification, and RBAC roles.
  */
 export class AuthService {
+  /**
+   * Populate purchasedCourses and purchasedNotes on user DTO so client components
+   * immediately reflect live enrollments and unlocked study materials.
+   */
+  async enrichUserEntitlements(userId, baseUser = {}) {
+    try {
+      const [courses, notes] = await Promise.all([
+        studentRepository.getEnrolledCourses(userId),
+        studentRepository.getPurchasedNotes(userId),
+      ]);
+      const courseIds = Array.from(new Set([
+        ...(baseUser.purchasedCourses || []),
+        ...courses.map(c => c.id || c._id).filter(Boolean),
+      ]));
+      const noteIds = Array.from(new Set([
+        ...(baseUser.purchasedNotes || []),
+        ...notes.map(n => n.id || n._id).filter(Boolean),
+      ]));
+      return { purchasedCourses: courseIds, purchasedNotes: noteIds };
+    } catch {
+      return {
+        purchasedCourses: baseUser.purchasedCourses || [],
+        purchasedNotes: baseUser.purchasedNotes || [],
+      };
+    }
+  }
+
   /**
    * Register a new Student account
    * @param {Object} data - { name, email, password, phone }
@@ -62,6 +90,8 @@ export class AuthService {
         role: role === 'user' ? 'student' : role,
         phone: safeUser.phone || '',
         avatar: safeUser.avatar || '',
+        purchasedCourses: [],
+        purchasedNotes: [],
       },
       token,
       refreshToken,
@@ -91,19 +121,21 @@ export class AuthService {
       throw new AppError('Your account has been deactivated. Please contact support.', HTTP_STATUS.UNAUTHORIZED);
     }
 
+    const isProd = (process.env.NODE_ENV || ENV.NODE_ENV) === 'production';
+
     // SECURITY: Compare password using bcrypt against stored hash
     let isMatch = false;
     if (user.password) {
       if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
         isMatch = await bcrypt.compare(password, user.password);
-      } else {
-        // Fallback for unhashed test seeds
+      } else if (!isProd) {
+        // Development-only fallback for unhashed test seeds (SRS Table 8.1 #2)
         isMatch = user.password === password;
       }
     }
 
-    // Demo account fallback for student test login if unseeded
-    if (!isMatch && cleanEmail === 'student@siddacademy.com' && (password === 'password123' || password === 'student123')) {
+    // Development-only demo account fallback if unseeded (disabled in production)
+    if (!isMatch && !isProd && cleanEmail === 'student@siddacademy.com' && (password === 'password123' || password === 'student123')) {
       isMatch = true;
     }
 
@@ -123,6 +155,7 @@ export class AuthService {
     const refreshToken = generateRefreshToken(userId);
 
     const { password: _, refreshToken: __, ...safeUser } = user;
+    const entitlements = await this.enrichUserEntitlements(userId, safeUser);
 
     return {
       user: {
@@ -133,6 +166,7 @@ export class AuthService {
         role: role,
         phone: safeUser.phone || '',
         avatar: safeUser.avatar || '',
+        ...entitlements,
       },
       token,
       refreshToken,
@@ -150,9 +184,12 @@ export class AuthService {
       throw new AppError('User profile not found', HTTP_STATUS.NOT_FOUND);
     }
     const role = (user.role || 'student').toLowerCase();
+    const uid = user.id || user._id;
+    const entitlements = await this.enrichUserEntitlements(uid, user);
+
     return {
-      id: user.id || user._id,
-      _id: user.id || user._id,
+      id: uid,
+      _id: uid,
       name: user.name,
       email: user.email,
       role: role === 'user' ? 'student' : role,
@@ -160,6 +197,7 @@ export class AuthService {
       avatar: user.avatar || '',
       isActive: user.is_active !== undefined ? user.is_active : user.isActive,
       createdAt: user.created_at || user.createdAt,
+      ...entitlements,
     };
   }
 
@@ -172,14 +210,18 @@ export class AuthService {
       throw new AppError('User profile not found', HTTP_STATUS.NOT_FOUND);
     }
     const role = (updated.role || 'student').toLowerCase();
+    const uid = updated.id || updated._id;
+    const entitlements = await this.enrichUserEntitlements(uid, updated);
+
     return {
-      id: updated.id || updated._id,
-      _id: updated.id || updated._id,
+      id: uid,
+      _id: uid,
       name: updated.name,
       email: updated.email,
       role: role === 'user' ? 'student' : role,
       phone: updated.phone || '',
       avatar: updated.avatar || '',
+      ...entitlements,
     };
   }
 
@@ -199,12 +241,14 @@ export class AuthService {
       throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
     }
 
+    const isProd = (process.env.NODE_ENV || ENV.NODE_ENV) === 'production';
+
     // Verify current password
     let isMatch = false;
     if (userWithPw.password) {
       if (userWithPw.password.startsWith('$2a$') || userWithPw.password.startsWith('$2b$')) {
         isMatch = await bcrypt.compare(oldPassword, userWithPw.password);
-      } else {
+      } else if (!isProd) {
         isMatch = userWithPw.password === oldPassword;
       }
     }
@@ -240,6 +284,11 @@ export class AuthService {
     const user = await authRepository.findById(decoded.id);
     if (!user) {
       throw new AppError('User not found', HTTP_STATUS.UNAUTHORIZED);
+    }
+
+    const isActive = user.is_active !== undefined ? user.is_active : (user.isActive !== undefined ? user.isActive : true);
+    if (!isActive) {
+      throw new AppError('Your account has been deactivated.', HTTP_STATUS.UNAUTHORIZED);
     }
 
     const role = (user.role || 'student').toLowerCase();

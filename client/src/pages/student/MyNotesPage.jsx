@@ -5,6 +5,7 @@ import { getSecureAccess } from '../../api/noteApi';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonCard } from '../../components/common/SkeletonLoader';
 import toast from 'react-hot-toast';
+import { getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
 import {
   FiFileText,
   FiDownload,
@@ -15,6 +16,7 @@ import {
   FiCompass,
   FiAlertCircle,
   FiCheckCircle,
+  FiCloud,
 } from 'react-icons/fi';
 
 const MyNotesPage = () => {
@@ -76,16 +78,11 @@ const MyNotesPage = () => {
       const id = note.id || note._id;
       setDownloadingId(id);
       const res = await getSecureAccess(id);
-      const fileUrl = res.data?.data?.fileUrl || res.data?.fileUrl || note.fileUrl;
+      const accessData = res.data?.data || res.data || note;
+      const fileUrl = getNoteDownloadUrl(accessData) || getNoteDriveViewUrl(accessData) || accessData.fileUrl;
 
-      toast.success(`Starting download: ${note.title}`);
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.target = '_blank';
-      link.download = `${note.title.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      toast.success(`Opening study material from Google Drive: ${note.title}`);
+      window.open(fileUrl, '_blank');
     } catch (err) {
       toast.error('Failed to generate secure note download link');
     } finally {
@@ -334,9 +331,20 @@ const MyNotesPage = () => {
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {getNoteDriveViewUrl(previewNote) && (
+                  <a
+                    href={getNoteDriveViewUrl(previewNote)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <FiExternalLink /> Open in Google Drive
+                  </a>
+                )}
                 <button
                   onClick={() => handleDownload(previewNote)}
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-outline"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   <FiDownload /> Download PDF
@@ -348,7 +356,7 @@ const MyNotesPage = () => {
             </div>
             <div style={{ flex: 1, backgroundColor: '#0b0e17' }}>
               <iframe
-                src={`${previewNote.fileUrl}#toolbar=1`}
+                src={getNoteStreamUrl(previewNote)}
                 title={previewNote.title}
                 style={{ width: '100%', height: '100%', border: 'none' }}
               />

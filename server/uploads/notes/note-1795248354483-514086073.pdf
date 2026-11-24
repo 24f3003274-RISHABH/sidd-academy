@@ -1,0 +1,53 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 742 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(Sidd Academy - Class 12 Chemistry: Chemical Kinetics) Tj
+/F1 12 Tf
+0 -24 Td
+(Faculty: Siddhant Pandey & Aakash Sir | Complete Formula & Revision Sheet) Tj
+0 -16 Td
+(------------------------------------------------------------------------) Tj
+0 -18 Td
+(1. Rate of Reaction: r = -d[R]/dt = +d[P]/dt) Tj
+0 -18 Td
+(2. Rate Law: r = k [A]^x [B]^y \(Order = x + y\)) Tj
+0 -18 Td
+(3. Zero Order Integrated Rate Law: k = \([R]0 - [R]\) / t, t_1/2 = [R]0 / \(2k\)) Tj
+0 -18 Td
+(4. First Order Integrated Rate Law: k = \(2.303 / t\) log\([R]0 / [R]\), t_1/2 = 0.693 / k) Tj
+0 -18 Td
+(5. Arrhenius Equation: k = A * exp\(-Ea / RT\)) Tj
+0 -18 Td
+(6. Log Form: log\(k2 / k1\) = \(Ea / 2.303R\) * [\(T2 - T1\) / \(T1 * T2\)]) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001033 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1103
+%%EOF

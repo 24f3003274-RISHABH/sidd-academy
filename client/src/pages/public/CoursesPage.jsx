@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
+import { useAuth } from '../../hooks/useAuth';
 import { formatPrice, getEffectivePrice } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
-import { FiSearch, FiClock, FiBook, FiStar, FiFilter, FiArrowRight } from 'react-icons/fi';
+import { FiSearch, FiClock, FiBook, FiStar, FiFilter, FiArrowRight, FiCheckCircle } from 'react-icons/fi';
 
 const CoursesPage = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -14,20 +16,23 @@ const CoursesPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  const purchasedIdsKey = (user?.purchasedCourses || []).join(',');
+  const purchasedSet = useMemo(() => new Set(user?.purchasedCourses || []), [purchasedIdsKey]);
+
   const fetchCourses = async (query = '', lvl = '', pg = 1) => {
     setLoading(true);
     try {
-      const params = { page: pg, limit: 9 };
+      const params = { page: pg, limit: 9, excludePurchased: true };
       if (query) params.search = query;
       if (lvl) params.level = lvl;
       
       const res = await getAllCourses(params);
       const data = res.data?.data || res.data || {};
-      const list = data.courses || [];
+      const list = (data.courses || []).filter(c => !purchasedSet.has(c.id || c._id) && !c.isEnrolled);
       setCourses(list);
       setPage(data.page || pg);
       setTotalPages(data.pages || 1);
-      setTotalCount(data.total !== undefined ? data.total : list.length);
+      setTotalCount(list.length);
     } catch (err) {
       console.error('Failed to fetch courses:', err);
     } finally {
@@ -36,12 +41,18 @@ const CoursesPage = () => {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     const timer = setTimeout(() => {
       fetchCourses(search, level, page);
     }, search ? 400 : 0);
 
     return () => clearTimeout(timer);
-  }, [page, search, level]);
+  }, [page, search, level, authLoading, isAuthenticated, user?.id, purchasedIdsKey]);
+
+  const visibleCourses = useMemo(
+    () => courses.filter(c => !purchasedSet.has(c.id || c._id) && !c.isEnrolled),
+    [courses, purchasedSet]
+  );
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
@@ -76,6 +87,34 @@ const CoursesPage = () => {
 
       {/* Filter and Search Controls */}
       <div className="card-glass" style={{ padding: '1.25rem 1.5rem', marginBottom: '2.5rem', borderRadius: '12px' }}>
+        {isAuthenticated && purchasedSet.size > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              fontSize: '0.88rem',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+              <FiCheckCircle color="#10b981" size={16} />
+              Your <strong>{purchasedSet.size}</strong> already-purchased course{purchasedSet.size > 1 ? 's are' : ' is'} hidden from this catalog.
+            </span>
+            <Link
+              to="/student/my-courses"
+              style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              Go to My Purchased Courses <FiArrowRight size={14} />
+            </Link>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', flex: 1, minWidth: '280px' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
@@ -112,32 +151,44 @@ const CoursesPage = () => {
       </div>
 
       {/* Results Content */}
-      {loading && courses.length === 0 ? (
+      {loading && visibleCourses.length === 0 ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem 0' }}>
           <Loader />
         </div>
       ) : (
         <>
-          {loading && courses.length > 0 && (
+          {loading && visibleCourses.length > 0 && (
             <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
               <Loader size={18} label="Updating courses" /> Updating results...
             </div>
           )}
-          {courses.length === 0 ? (
+          {visibleCourses.length === 0 ? (
             <div className="card-glass" style={{ textAlign: 'center', padding: '4rem 2rem', borderRadius: '16px' }}>
               <FiFilter style={{ fontSize: '3rem', color: 'var(--text-muted)', marginBottom: '1rem' }} />
-              <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>No Courses Found</h3>
+              <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>
+                {!search && !level && isAuthenticated && purchasedSet.size > 0
+                  ? 'You Have Purchased All Available Courses!'
+                  : 'No Courses Found'}
+              </h3>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                We could not find any courses matching "{search || level}". Try searching for another subject or clear active filters.
+                {!search && !level && isAuthenticated && purchasedSet.size > 0
+                  ? 'All catalog courses are already in your account. Head over to your Student Dashboard to continue learning.'
+                  : `We could not find any courses matching "${search || level}". Try searching for another subject or clear active filters.`}
               </p>
-              <button onClick={clearFilters} className="btn btn-primary">
-                Browse All Available Courses
-              </button>
+              {!search && !level && isAuthenticated && purchasedSet.size > 0 ? (
+                <Link to="/student/my-courses" className="btn btn-primary">
+                  Open My Purchased Courses
+                </Link>
+              ) : (
+                <button onClick={clearFilters} className="btn btn-primary">
+                  Browse All Available Courses
+                </button>
+              )}
             </div>
           ) : (
             <div>
               <div className="grid-3" style={{ gap: '2rem', marginBottom: '3rem' }}>
-                {courses.map(course => {
+                {visibleCourses.map(course => {
                   const id = course.id || course._id;
                   const price = getEffectivePrice(course);
                   const isFree = price <= 0;

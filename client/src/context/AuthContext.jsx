@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getMe, login as apiLogin, register as apiRegister, logout as apiLogout } from '../api/authApi';
-import toast from 'react-hot-toast';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { login as apiLogin, register as apiRegister, logout as apiLogout } from '../api/authApi';
+import axiosInstance, { clearGetCache } from '../api/axiosInstance';
 
 export const AuthContext = createContext();
 
@@ -9,12 +9,32 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('siddToken');
+    if (!token || token === 'undefined' || token === 'null') {
+      return null;
+    }
+    try {
+      clearGetCache();
+      const res = await axiosInstance.get('/auth/me', { cache: false });
+      const userData = res.data?.data?.user || res.data?.user || res.data;
+      if (userData && (userData.id || userData._id || userData.email)) {
+        setUser(userData);
+        setIsAuthenticated(true);
+        return userData;
+      }
+    } catch (err) {
+      console.warn('refreshUser warning:', err?.message);
+    }
+    return null;
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('siddToken');
       if (token && token !== 'undefined' && token !== 'null') {
         try {
-          const res = await getMe();
+          const res = await axiosInstance.get('/auth/me', { cache: false });
           const userData = res.data?.data?.user || res.data?.user || res.data;
           if (userData && (userData.id || userData._id || userData.email)) {
             setUser(userData);
@@ -55,6 +75,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Login response did not include a valid session token.');
     }
     localStorage.setItem('siddToken', token);
+    clearGetCache();
     setUser(userData);
     setIsAuthenticated(true);
     return payload;
@@ -69,6 +90,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Registration response did not include a valid session token.');
     }
     localStorage.setItem('siddToken', token);
+    clearGetCache();
     setUser(userData);
     setIsAuthenticated(true);
     return payload;
@@ -77,10 +99,11 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await apiLogout();
-    } catch(e) {
+    } catch (e) {
       console.error(e);
     }
     localStorage.removeItem('siddToken');
+    clearGetCache();
     setUser(null);
     setIsAuthenticated(false);
   };
@@ -90,13 +113,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, updateUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Convenience hook
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

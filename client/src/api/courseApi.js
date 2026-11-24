@@ -11,6 +11,8 @@ export const updateCourse = (id, data) => axiosInstance.put(`/courses/${id}`, da
 	headers: { 'Content-Type': 'multipart/form-data' },
 });
 export const deleteCourse = (id) => axiosInstance.delete(`/courses/${id}`);
+export const previewPlaylist = (data) => axiosInstance.post('/courses/playlist/preview', data);
+export const importPlaylist = (data) => axiosInstance.post('/courses/import-playlist', data);
 
 // Subjects
 export const getSubjectsByCourse = (courseId) => axiosInstance.get('/subjects', { params: { courseId } });

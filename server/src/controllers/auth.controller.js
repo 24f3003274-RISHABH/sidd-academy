@@ -1,6 +1,6 @@
 import { authService } from '../services/auth.service.js';
 import { sendSuccess } from '../utils/apiResponse.js';
-import { setRefreshTokenCookie } from '../utils/generateToken.js';
+import { setRefreshTokenCookie, clearRefreshTokenCookie } from '../utils/generateToken.js';
 import { sendWelcomeEmail } from '../utils/sendEmail.js';
 
 /**
@@ -78,8 +78,7 @@ export const getMe = async (req, res, next) => {
  */
 export const logout = async (req, res, next) => {
   try {
-    res.clearCookie('refreshToken');
-    res.clearCookie('token');
+    clearRefreshTokenCookie(res);
     return sendSuccess(res, 200, 'Logged out successfully');
   } catch (error) {
     next(error);

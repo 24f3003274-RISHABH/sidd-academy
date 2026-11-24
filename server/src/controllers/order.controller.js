@@ -13,10 +13,16 @@ export class OrderController {
    */
   getPaymentKey = (req, res) => {
     const isConfigured = paymentGatewayService.isConfigured();
-    const key = isConfigured ? paymentGatewayService.getPublicKey() : null;
+    let key = null;
+    try {
+      key = paymentGatewayService.getPublicKey();
+    } catch {
+      key = null;
+    }
     sendSuccess(res, 200, 'Payment gateway configuration retrieved', {
       key,
       isConfigured,
+      isMock: !isConfigured,
       mode: paymentGatewayService.getMode(),
     });
   };
@@ -58,6 +64,8 @@ export class OrderController {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
+        forceLiveMode,
+        simulateDbFailure,
       } = req.body;
 
       const result = await orderService.verifyPayment(userId, {
@@ -68,6 +76,8 @@ export class OrderController {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
+        forceLiveMode: Boolean(forceLiveMode),
+        simulateDbFailure: Boolean(simulateDbFailure),
       });
 
       return sendSuccess(res, 200, result.message, result);

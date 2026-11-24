@@ -1,15 +1,46 @@
-import { query, getPool } from '../config/db.js';
+import { query } from '../config/db.js';
 import ENV from '../config/env.js';
 import { mockData } from '../data/mockStore.js';
+import { noteRepository } from './note.repository.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 /**
  * Student Repository
- * Handles database operations for student dashboard, enrollments, course progress, and activities
+ * Handles database operations for student dashboard, enrollments, course progress, notes, and activities
  */
 export class StudentRepository {
+  /**
+   * Helper to get all enrolled course IDs for a user in MockStore
+   */
+  getMockEnrolledCourseIds(userId) {
+    const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
+    const fromUser = user?.purchasedCourses || [];
+    const fromEnrollments = (mockData.enrollments || [])
+      .filter(e => e.userId === userId && (e.status || 'active') === 'active')
+      .map(e => e.courseId);
+    return Array.from(new Set([...fromEnrollments, ...fromUser]));
+  }
+
+  /**
+   * Helper to count lessons for a course in MockStore
+   */
+  getMockLessonsForCourse(courseId) {
+    const course = (mockData.courses || []).find(c => c._id === courseId || c.id === courseId);
+    const courseSubjs = (mockData.subjects || []).filter(
+      s => s.courseId === courseId || s.course === courseId || (course?.subjects || []).includes(s._id || s.id)
+    );
+    const subjIds = courseSubjs.map(s => s._id || s.id);
+    const courseChaps = (mockData.chapters || []).filter(
+      ch => subjIds.includes(ch.subjectId || ch.subject)
+    );
+    const chapIds = courseChaps.map(ch => ch._id || ch.id);
+    const allLessons = [...(mockData.dailyClasses || []), ...(mockData.lessons || [])];
+    const courseLessons = allLessons.filter(l => chapIds.includes(l.chapterId || l.chapter));
+    return { courseSubjs, courseChaps, courseLessons };
+  }
+
   /**
    * Get student's enrolled courses with progress
    */
@@ -36,51 +67,52 @@ export class StudentRepository {
           ORDER BY e.enrolled_at DESC
         `;
         const res = await query(sql, [userId]);
-        return res.rows.map(row => ({
-          id: row.id,
-          _id: row.id,
-          title: row.title,
-          description: row.description,
-          instructor: row.instructor,
-          thumbnail: row.thumbnail,
-          level: row.level,
-          category: row.category,
-          enrolledAt: row.enrolled_at,
-          enrollmentStatus: row.enrollment_status,
-          progressPercentage: Number(row.progress_percentage || 0),
-          totalSubjects: parseInt(row.total_subjects || 0, 10),
-          totalLessons: parseInt(row.total_lessons || 0, 10),
-          completedLessons: parseInt(row.completed_lessons || 0, 10),
-        }));
+        return res.rows.map(row => {
+          const totalLessons = parseInt(row.total_lessons || 0, 10);
+          const completedLessons = parseInt(row.completed_lessons || 0, 10);
+          const computedPct = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
+          const progressPercentage = Number(row.progress_percentage || 0) || computedPct;
+          return {
+            id: row.id,
+            _id: row.id,
+            title: row.title,
+            description: row.description,
+            instructor: row.instructor,
+            thumbnail: row.thumbnail,
+            level: row.level,
+            category: row.category,
+            enrolledAt: row.enrolled_at,
+            enrollmentStatus: row.enrollment_status,
+            progressPercentage,
+            totalSubjects: parseInt(row.total_subjects || 0, 10),
+            totalLessons,
+            completedLessons,
+          };
+        });
       } catch (err) {
         console.warn('StudentRepository getEnrolledCourses DB fallback:', err.message);
       }
     }
 
-    // Mock fallback
-    const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
-    const purchasedIds = user?.purchasedCourses || [];
+    // Mock fallback (combines user.purchasedCourses and mockData.enrollments)
+    const purchasedIds = this.getMockEnrolledCourseIds(userId);
     const enrollments = mockData.enrollments || [];
 
     const enrolledCourses = [];
     for (const courseId of purchasedIds) {
       const course = (mockData.courses || []).find(c => c._id === courseId || c.id === courseId);
       if (course) {
-        const enr = enrollments.find(e => (e.userId === userId) && (e.courseId === courseId));
-        const userProgress = (mockData.lessonProgress || []).filter(lp => lp.userId === userId && lp.courseId === courseId && lp.isCompleted);
-        
-        // Count total lessons in this course from mock data
-        const courseSubjs = (mockData.subjects || []).filter(s => s.courseId === courseId || (course.subjects || []).includes(s._id || s.id));
-        const subjIds = courseSubjs.map(s => s._id || s.id);
-        const courseChaps = (mockData.chapters || []).filter(ch => subjIds.includes(ch.subjectId));
-        const chapIds = courseChaps.map(ch => ch._id || ch.id);
-        const courseLessons = (mockData.lessons || []).filter(l => chapIds.includes(l.chapterId));
-        
-        const totalLessonsCount = courseLessons.length || course.totalLessons || 12;
+        const enr = enrollments.find(e => e.userId === userId && e.courseId === courseId);
+        const { courseSubjs, courseLessons } = this.getMockLessonsForCourse(courseId);
+        const lessonIdSet = new Set(courseLessons.map(l => l._id || l.id));
+        const userProgress = (mockData.lessonProgress || []).filter(
+          lp => lp.userId === userId && (lp.courseId === courseId || lessonIdSet.has(lp.lessonId)) && lp.isCompleted
+        );
+
+        const totalLessonsCount = courseLessons.length || course.totalLessons || 1;
         const completedCount = userProgress.length;
-        const progressPct = enr?.progressPercentage !== undefined 
-          ? enr.progressPercentage 
-          : (totalLessonsCount > 0 ? Math.round((completedCount / totalLessonsCount) * 100) : 0);
+        const computedPct = totalLessonsCount > 0 ? Math.min(100, Math.round((completedCount / totalLessonsCount) * 100)) : 0;
+        const progressPct = completedCount > 0 ? computedPct : (enr?.progressPercentage ?? 0);
 
         enrolledCourses.push({
           id: course._id || course.id,
@@ -90,7 +122,7 @@ export class StudentRepository {
           instructor: course.instructor,
           thumbnail: course.thumbnail,
           level: course.level,
-          category: course.category,
+          category: course.category || 'Academic',
           enrolledAt: enr?.enrolledAt || new Date(),
           enrollmentStatus: enr?.status || 'active',
           progressPercentage: progressPct,
@@ -105,7 +137,7 @@ export class StudentRepository {
   }
 
   /**
-   * Get student's purchased notes with file access
+   * Get student's purchased notes AND notes included with enrolled courses (with Google Drive access)
    */
   async getPurchasedNotes(userId) {
     if (!userId) return [];
@@ -113,71 +145,76 @@ export class StudentRepository {
     if (ENV.DATABASE_URL && isUuid(userId)) {
       try {
         const sql = `
-          SELECT 
-            n.id, n.title, n.description, n.file_url, n.file_size, n.is_free, n.price,
-            np.purchased_at, np.price_paid,
-            COALESCE(s.title, 'Academic Material') as subject_name,
-            c.title as course_title, c.id as course_id
-          FROM note_purchases np
-          JOIN notes n ON np.note_id = n.id
-          LEFT JOIN subjects s ON n.subject_id = s.id
-          LEFT JOIN courses c ON n.course_id = c.id
-          WHERE np.user_id = $1
-          ORDER BY np.purchased_at DESC
+          SELECT DISTINCT ON (n.id)
+            n.*,
+            COALESCE(np.purchased_at, e.enrolled_at, n.created_at) as purchased_at,
+            COALESCE(np.price_paid, n.price, 0) as price_paid,
+            COALESCE(s.name, s.title, 'Academic Material') as subject_title,
+            c.title as course_title,
+            ch.title as chapter_title
+          FROM notes n
+          LEFT JOIN note_purchases np ON np.note_id = n.id AND np.user_id = $1
+          LEFT JOIN lessons l ON n.lesson_id = l.id
+          LEFT JOIN chapters ch ON COALESCE(n.chapter_id, l.chapter_id) = ch.id
+          LEFT JOIN subjects s ON COALESCE(n.subject_id, ch.subject_id) = s.id
+          LEFT JOIN courses c ON COALESCE(n.course_id, s.course_id) = c.id
+          LEFT JOIN enrollments e ON e.course_id = c.id AND e.user_id = $1 AND e.status = 'active'
+          WHERE np.user_id = $1 OR e.user_id = $1
+          ORDER BY n.id, purchased_at DESC
         `;
         const res = await query(sql, [userId]);
-        return res.rows.map(row => ({
-          id: row.id,
-          _id: row.id,
-          title: row.title,
-          description: row.description,
-          fileUrl: row.file_url,
-          fileSize: row.file_size || '2.4 MB',
-          isFree: row.is_free,
-          price: Number(row.price || 0),
-          pricePaid: Number(row.price_paid || 0),
-          purchasedAt: row.purchased_at,
-          subjectName: row.subject_name || 'Study Material',
-          courseTitle: row.course_title,
-          courseId: row.course_id,
-        }));
+        return res.rows.map(row => {
+          const normalized = noteRepository.normalizeNote(row);
+          const noteId = normalized.id || normalized._id;
+          return {
+            ...normalized,
+            isLocked: false,
+            streamUrl: `/api/v1/notes/${noteId}/stream`,
+            downloadUrl: `/api/v1/notes/${noteId}/download`,
+            pricePaid: Number(row.price_paid || 0),
+            purchasedAt: row.purchased_at || normalized.createdAt,
+            subjectName: normalized.subjectTitle || 'Study Material',
+          };
+        });
       } catch (err) {
         console.warn('StudentRepository getPurchasedNotes DB fallback:', err.message);
       }
     }
 
-    // Mock fallback
+    // Mock fallback: combine direct note purchases, user.purchasedNotes, and notes belonging to enrolled courses
     const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
-    const purchasedNoteIds = user?.purchasedNotes || [];
+    const directNoteIds = new Set([
+      ...(user?.purchasedNotes || []),
+      ...(mockData.notePurchases || []).filter(p => p.userId === userId).map(p => p.noteId),
+    ]);
+    const enrolledCourseIds = new Set(this.getMockEnrolledCourseIds(userId));
     const notePurchases = mockData.notePurchases || [];
 
-    const notes = [];
-    for (const noteId of purchasedNoteIds) {
-      const note = (mockData.notes || []).find(n => n._id === noteId || n.id === noteId);
-      if (note) {
-        const np = notePurchases.find(p => p.userId === userId && (p.noteId === noteId));
-        const course = (mockData.courses || []).find(c => c._id === note.courseId || c.id === note.courseId);
-        const subject = (mockData.subjects || []).find(s => s._id === note.subjectId || s.id === note.subjectId);
+    const allNotes = (mockData.notes || []).map(n => noteRepository.normalizeNote(n)).filter(Boolean);
+    const resultNotes = [];
 
-        notes.push({
-          id: note._id || note.id,
-          _id: note._id || note.id,
-          title: note.title,
-          description: note.description,
-          fileUrl: note.fileUrl,
-          fileSize: note.fileSize || '3.2 MB',
-          isFree: note.isFree || false,
-          price: note.price || 0,
-          pricePaid: np?.pricePaid || note.price || 0,
-          purchasedAt: np?.purchasedAt || new Date(),
-          subjectName: subject?.name || 'Science & Grammar',
-          courseTitle: course?.title || 'Academic Course Material',
-          courseId: note.courseId,
+    for (const note of allNotes) {
+      const noteId = note.id || note._id;
+      const isDirectlyPurchased = directNoteIds.has(noteId);
+      const isFromEnrolledCourse = note.courseId && enrolledCourseIds.has(note.courseId);
+
+      if (isDirectlyPurchased || isFromEnrolledCourse) {
+        const np = notePurchases.find(p => p.userId === userId && p.noteId === noteId);
+        const enr = (mockData.enrollments || []).find(e => e.userId === userId && e.courseId === note.courseId);
+
+        resultNotes.push({
+          ...note,
+          isLocked: false,
+          streamUrl: `/api/v1/notes/${noteId}/stream`,
+          downloadUrl: `/api/v1/notes/${noteId}/download`,
+          pricePaid: np?.pricePaid ?? note.price ?? 0,
+          purchasedAt: np?.purchasedAt || enr?.enrolledAt || note.createdAt || new Date(),
+          subjectName: note.subjectTitle || 'Study Material',
         });
       }
     }
 
-    return notes;
+    return resultNotes;
   }
 
   /**
@@ -190,7 +227,7 @@ export class StudentRepository {
           SELECT 
             l.id, l.title, l.description, l.order_num as order_index, l.created_at,
             ch.title as chapter_title,
-            s.title as subject_name,
+            COALESCE(s.name, s.title) as subject_name,
             c.id as course_id, c.title as course_title,
             v.id as video_id, v.duration_seconds, v.thumbnail_url,
             COALESCE(lp.is_completed, false) as is_completed
@@ -198,7 +235,7 @@ export class StudentRepository {
           JOIN chapters ch ON l.chapter_id = ch.id
           JOIN subjects s ON ch.subject_id = s.id
           JOIN courses c ON s.course_id = c.id
-          JOIN enrollments e ON e.course_id = c.id AND e.user_id = $1
+          JOIN enrollments e ON e.course_id = c.id AND e.user_id = $1 AND e.status = 'active'
           LEFT JOIN videos v ON v.lesson_id = l.id
           LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
           ORDER BY l.created_at DESC
@@ -226,35 +263,40 @@ export class StudentRepository {
     }
 
     // Mock fallback
-    const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
-    const purchasedIds = user?.purchasedCourses || [];
+    const purchasedIds = this.getMockEnrolledCourseIds(userId);
     const recentLessons = [];
 
     for (const courseId of purchasedIds) {
       const course = (mockData.courses || []).find(c => c._id === courseId || c.id === courseId);
       if (!course) continue;
 
-      const subjs = (mockData.subjects || []).filter(s => s.courseId === courseId);
+      const subjs = (mockData.subjects || []).filter(s => s.courseId === courseId || s.course === courseId);
       for (const subj of subjs) {
-        const chaps = (mockData.chapters || []).filter(ch => ch.subjectId === (subj._id || subj.id));
+        const sId = subj._id || subj.id;
+        const chaps = (mockData.chapters || []).filter(ch => ch.subjectId === sId || ch.subject === sId);
         for (const chap of chaps) {
-          const lessons = (mockData.lessons || []).filter(l => l.chapterId === (chap._id || chap.id));
+          const chId = chap._id || chap.id;
+          const allLessons = [...(mockData.dailyClasses || []), ...(mockData.lessons || [])];
+          const lessons = allLessons.filter(l => l.chapterId === chId || l.chapter === chId);
           for (const les of lessons) {
-            const vid = (mockData.videos || []).find(v => v.lessonId === (les._id || les.id));
-            const isComp = (mockData.lessonProgress || []).some(lp => lp.userId === userId && lp.lessonId === (les._id || les.id) && lp.isCompleted);
-            
+            const lId = les._id || les.id;
+            const vid = (mockData.videos || []).find(v => v.lessonId === lId);
+            const isComp = (mockData.lessonProgress || []).some(
+              lp => lp.userId === userId && lp.lessonId === lId && lp.isCompleted
+            );
+
             recentLessons.push({
-              id: les._id || les.id,
-              _id: les._id || les.id,
+              id: lId,
+              _id: lId,
               title: les.title,
               description: les.description,
               chapterTitle: chap.title,
-              subjectName: subj.name,
+              subjectName: subj.name || subj.title,
               courseId: course._id || course.id,
               courseTitle: course.title,
               videoId: vid?._id || vid?.id,
-              duration: vid?.durationSeconds ? `${Math.round(vid.durationSeconds / 60)} mins` : '45 mins',
-              thumbnail: vid?.thumbnailUrl || course.thumbnail,
+              duration: les.duration || (vid?.durationSeconds ? `${Math.round(vid.durationSeconds / 60)} mins` : '45 mins'),
+              thumbnail: les.thumbnailUrl || vid?.thumbnailUrl || course.thumbnail,
               isCompleted: isComp,
               createdAt: les.createdAt || new Date(),
             });
@@ -304,8 +346,7 @@ export class StudentRepository {
     }
 
     // Mock fallback
-    const user = (mockData.users || []).find(u => u._id === userId || u.id === userId);
-    const purchasedIds = user?.purchasedCourses || [];
+    const purchasedIds = this.getMockEnrolledCourseIds(userId);
 
     return (mockData.courses || [])
       .filter(c => c.isPublished !== false && !purchasedIds.includes(c._id || c.id))
@@ -334,7 +375,7 @@ export class StudentRepository {
   async getCourseProgress(userId, courseId) {
     if (!userId || !courseId) return { completedLessonIds: [], progressPercentage: 0 };
 
-    if (ENV.DATABASE_URL && isUuid(userId)) {
+    if (ENV.DATABASE_URL && isUuid(userId) && isUuid(courseId)) {
       try {
         const lpSql = `SELECT lesson_id FROM lesson_progress WHERE user_id = $1 AND course_id = $2 AND is_completed = true`;
         const lpRes = await query(lpSql, [userId, courseId]);
@@ -350,14 +391,19 @@ export class StudentRepository {
       }
     }
 
+    const { courseLessons } = this.getMockLessonsForCourse(courseId);
+    const lessonIdSet = new Set(courseLessons.map(l => l._id || l.id));
     const completed = (mockData.lessonProgress || [])
-      .filter(lp => lp.userId === userId && lp.courseId === courseId && lp.isCompleted)
+      .filter(lp => lp.userId === userId && (lp.courseId === courseId || lessonIdSet.has(lp.lessonId)) && lp.isCompleted)
       .map(lp => lp.lessonId);
 
     const enr = (mockData.enrollments || []).find(e => e.userId === userId && e.courseId === courseId);
+    const totalLessonsCount = courseLessons.length || 1;
+    const computedPct = Math.min(100, Math.round((completed.length / totalLessonsCount) * 100));
+
     return {
       completedLessonIds: completed,
-      progressPercentage: enr?.progressPercentage || 0,
+      progressPercentage: completed.length > 0 ? computedPct : (enr?.progressPercentage || 0),
     };
   }
 
@@ -377,7 +423,6 @@ export class StudentRepository {
         `;
         await query(upsertSql, [id, userId, courseId, lessonId, isCompleted]);
 
-        // Calculate new progress percentage
         const totalLessonsSql = `
           SELECT COUNT(*) as total FROM lessons l
           JOIN chapters ch ON l.chapter_id = ch.id
@@ -412,10 +457,12 @@ export class StudentRepository {
     const existing = mockData.lessonProgress.find(lp => lp.userId === userId && lp.lessonId === lessonId);
     if (existing) {
       existing.isCompleted = isCompleted;
+      existing.courseId = courseId;
       existing.completedAt = isCompleted ? new Date() : null;
     } else {
       mockData.lessonProgress.push({
         _id: uuidv4(),
+        id: uuidv4(),
         userId,
         courseId,
         lessonId,
@@ -424,13 +471,31 @@ export class StudentRepository {
       });
     }
 
-    const enr = (mockData.enrollments || []).find(e => e.userId === userId && e.courseId === courseId);
+    const { courseLessons } = this.getMockLessonsForCourse(courseId);
+    const totalCount = Math.max(1, courseLessons.length);
+    const userComps = mockData.lessonProgress.filter(
+      lp => lp.userId === userId && lp.courseId === courseId && lp.isCompleted
+    );
+    const newPercentage = Math.min(100, Math.round((userComps.length / totalCount) * 100));
+
+    if (!mockData.enrollments) mockData.enrollments = [];
+    let enr = mockData.enrollments.find(e => e.userId === userId && e.courseId === courseId);
     if (enr) {
-      const userComps = mockData.lessonProgress.filter(lp => lp.userId === userId && lp.courseId === courseId && lp.isCompleted);
-      enr.progressPercentage = Math.min(100, Math.round((userComps.length / 4) * 100));
+      enr.progressPercentage = newPercentage;
+    } else {
+      enr = {
+        _id: uuidv4(),
+        id: uuidv4(),
+        userId,
+        courseId,
+        status: 'active',
+        progressPercentage: newPercentage,
+        enrolledAt: new Date(),
+      };
+      mockData.enrollments.push(enr);
     }
 
-    return { lessonId, isCompleted, progressPercentage: enr?.progressPercentage || 0 };
+    return { lessonId, isCompleted, progressPercentage: newPercentage };
   }
 
   /**
@@ -459,15 +524,14 @@ export class StudentRepository {
       activities.push({
         id: `act_note_${n.id}`,
         type: 'NOTE_PURCHASE',
-        title: `Purchased ${n.title}`,
-        description: `Unlocked full digital notes (${n.fileSize})`,
+        title: `Unlocked ${n.title}`,
+        description: `Full digital notes available via Google Drive (${n.fileSize})`,
         timestamp: n.purchasedAt,
         badge: 'Note',
-        link: `/notes`,
+        link: `/student/notes`,
       });
     });
 
-    // Sort descending by timestamp
     return activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10);
   }
 }

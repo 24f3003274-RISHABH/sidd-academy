@@ -12,6 +12,7 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
     title,
     description,
     videoUrl,
+    playlistUrl,
     duration,
     isFree,
     notesUrl,
@@ -108,23 +109,43 @@ const YouTubeVideoCard = ({ video, onNoteClick }) => {
           )}
 
           {/* Action Row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={handleOpenYoutubeDirectly}
-              id={`yt-btn-${videoId}`}
-              className="btn btn-sm"
-              style={{
-                backgroundColor: '#fef2f2',
-                color: '#dc2626',
-                border: '1px solid #fecaca',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontWeight: 600,
-              }}
-            >
-              YouTube <FiExternalLink size={12} />
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleOpenYoutubeDirectly}
+                id={`yt-btn-${videoId}`}
+                className="btn btn-sm"
+                style={{
+                  backgroundColor: '#fef2f2',
+                  color: '#dc2626',
+                  border: '1px solid #fecaca',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontWeight: 600,
+                }}
+              >
+                YouTube <FiExternalLink size={12} />
+              </button>
+
+              {playlistUrl && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(playlistUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="btn btn-sm btn-outline"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  Playlist <FiExternalLink size={11} />
+                </button>
+              )}
+            </div>
 
             {notesUrl && (
               <button

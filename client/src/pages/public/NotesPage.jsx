@@ -18,13 +18,14 @@ import {
   FiExternalLink,
   FiFilter,
 } from 'react-icons/fi';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
+import { clearGetCache } from '../../api/axiosInstance';
 
 const NotesPage = () => {
   const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, refreshUser } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'modular'
@@ -97,10 +98,11 @@ const NotesPage = () => {
       toast.loading('Verifying secure PDF access...', { id: 'download' });
       const accessRes = await getSecureAccess(id);
       const accessData = accessRes.data?.data || accessRes.data;
+      const targetUrl = getNoteDriveViewUrl(accessData) || getNoteDownloadUrl(accessData) || accessData.fileUrl;
 
-      if (accessData.fileUrl) {
-        window.open(accessData.fileUrl, '_blank');
-        toast.success('Download started', { id: 'download' });
+      if (targetUrl) {
+        window.open(targetUrl, '_blank');
+        toast.success('Opening study material from Google Drive', { id: 'download' });
       } else {
         toast.error('Could not locate verified download stream', { id: 'download' });
       }
@@ -164,13 +166,30 @@ const NotesPage = () => {
 
       // If free note or 0 INR, unlocked immediately
       if (orderData.isFree || orderData.status === 'PAID') {
+        clearGetCache();
+        if (refreshUser) await refreshUser();
         toast.success(orderData.message || 'Digital note added to your library!');
         fetchNotes();
         setPaymentLoading(false);
         return;
       }
 
-      const { orderId, razorpayOrderId, amount, currency, keyId } = orderData;
+      const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
+
+      if (isMock) {
+        await verifyPayment({
+          orderId,
+          razorpayOrderId: razorpayOrderId || `order_mock_${Date.now()}`,
+          razorpayPaymentId: `pay_mock_${Date.now()}`,
+          razorpaySignature: `sig_mock_verified_${Date.now()}`,
+        });
+        clearGetCache();
+        if (refreshUser) await refreshUser();
+        toast.success('Payment verified! Google Drive digital note unlocked.');
+        setPaymentLoading(false);
+        fetchNotes();
+        return;
+      }
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
@@ -192,6 +211,8 @@ const NotesPage = () => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
+            clearGetCache();
+            if (refreshUser) await refreshUser();
             toast.success('Payment verified! Digital note unlocked.');
             setPaymentLoading(false);
             fetchNotes();
@@ -454,14 +475,25 @@ const NotesPage = () => {
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
+                {getNoteDriveViewUrl(activePdfPreview) && (
+                  <a
+                    href={getNoteDriveViewUrl(activePdfPreview)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                  >
+                    <FiExternalLink size={14} /> Open in Google Drive
+                  </a>
+                )}
                 <a
-                  href={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
+                  href={getNoteDownloadUrl(activePdfPreview)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn-sm btn-primary"
+                  className="btn btn-sm btn-outline"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 >
-                  <FiExternalLink size={14} /> Open in New Tab
+                  <FiDownload size={14} /> Download PDF
                 </a>
                 <button onClick={() => setActivePdfPreview(null)} className="btn btn-sm btn-outline">
                   Close
@@ -470,7 +502,7 @@ const NotesPage = () => {
             </div>
             <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
-                src={activePdfPreview.fileUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'}
+                src={getNoteStreamUrl(activePdfPreview)}
                 title={activePdfPreview.title}
                 style={{ width: '100%', height: '100%', border: 'none' }}
               />
