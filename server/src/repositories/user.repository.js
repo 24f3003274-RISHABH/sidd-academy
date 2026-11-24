@@ -80,11 +80,13 @@ export class UserRepository extends AuthRepository {
         const res = await query(usersSql, fetchParams);
         const users = res.rows.map(r => this.normalizeUser(r));
 
+        const pages = Math.ceil(total / limitNum) || 1;
         return {
           users,
           total,
           page: pageNum,
-          pages: Math.ceil(total / limitNum) || 1,
+          pages,
+          totalPages: pages,
         };
       } catch (err) {
         console.warn('UserRepository findAll fallback to mockStore:', err.message);
@@ -113,12 +115,14 @@ export class UserRepository extends AuthRepository {
 
     const total = filtered.length;
     const users = filtered.slice(offset, offset + limitNum).map(u => this.normalizeUser(u));
+    const pages = Math.ceil(total / limitNum) || 1;
 
     return {
       users,
       total,
       page: pageNum,
-      pages: Math.ceil(total / limitNum) || 1,
+      pages,
+      totalPages: pages,
     };
   }
 
@@ -246,6 +250,35 @@ export class UserRepository extends AuthRepository {
       filtered = filtered.filter(u => (u.role || '').toLowerCase() === role.toLowerCase());
     }
     return filtered.length;
+  }
+
+  /**
+   * Fetch newest student/user accounts for the Admin Dashboard
+   */
+  async getRecentUsers(limit = 5) {
+    const safeLimit = Math.max(1, Math.min(20, Number(limit) || 5));
+
+    if (ENV.DATABASE_URL) {
+      try {
+        const res = await query(
+          `SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at, updated_at
+           FROM users
+           WHERE LOWER(role) != 'admin'
+           ORDER BY created_at DESC
+           LIMIT $1`,
+          [safeLimit]
+        );
+        return res.rows.map(r => this.normalizeUser(r));
+      } catch (err) {
+        console.warn('UserRepository getRecentUsers fallback to mockStore:', err.message);
+      }
+    }
+
+    return [...(mockData.users || [])]
+      .filter(u => (u.role || '').toLowerCase() !== 'admin')
+      .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0))
+      .slice(0, safeLimit)
+      .map(u => this.normalizeUser(u));
   }
 }
 

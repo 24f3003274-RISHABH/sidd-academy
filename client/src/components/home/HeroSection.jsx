@@ -5,43 +5,43 @@ import { FiBook, FiDownloadCloud, FiAward, FiCheckCircle, FiPlayCircle, FiShield
 const HeroSection = () => {
   return (
     <section className="hero-section">
-      <div className="container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '3rem', alignItems: 'center' }}>
-        <div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--primary-subtle)', border: '1px solid var(--primary-border)', padding: '0.4rem 1rem', borderRadius: '30px', color: 'var(--primary-dark)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '1.25rem' }}>
-            <FiAward /> प्रयागराज का अग्रणी संस्थान • UP Board & NCERT
+      <div className="container hero-grid">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--primary-subtle)', border: '1px solid var(--primary-border)', padding: '0.4rem 0.9rem', borderRadius: '30px', color: 'var(--primary-dark)', fontSize: '0.82rem', fontWeight: 700, marginBottom: '1.1rem', maxWidth: '100%' }}>
+            <FiAward style={{ flexShrink: 0 }} /> <span>प्रयागराज का अग्रणी संस्थान • UP Board &amp; NCERT</span>
           </div>
           
-          <h1 style={{ fontSize: 'clamp(2rem, 3.8vw, 3.25rem)', fontWeight: 800, lineHeight: 1.2, color: 'var(--text-primary)', marginBottom: '1.25rem', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 'clamp(1.75rem, 4.2vw, 3.2rem)', fontWeight: 800, lineHeight: 1.2, color: 'var(--text-primary)', marginBottom: '1.1rem', letterSpacing: '-0.02em' }}>
             Class 10th – 12th की तैयारी, अब होगी <span style={{ color: 'var(--primary)' }}>आसान और व्यवस्थित</span>
           </h1>
 
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.75rem', maxWidth: '560px' }}>
+          <p style={{ fontSize: 'clamp(0.95rem, 2.5vw, 1.05rem)', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.5rem', maxWidth: '560px' }}>
             UP Board एवं अन्य State Board के हिंदी माध्यम विद्यार्थियों के लिए विषयवार <strong>YouTube Video Lectures</strong>, <strong>अध्याय-वार हस्तलिखित PDF नोट्स</strong> और संपूर्ण प्रश्न बैंक।
           </p>
 
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-            <Link to="/courses" className="btn btn-primary btn-lg" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="hero-cta-row">
+            <Link to="/courses" className="btn btn-primary btn-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
               <FiBook /> Explore Courses
             </Link>
-            <Link to="/notes" className="btn btn-outline btn-lg" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Link to="/notes" className="btn btn-outline btn-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
               <FiDownloadCloud /> Modular Notes (PDF)
             </Link>
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 600 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.85rem 1.25rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FiCheckCircle style={{ color: 'var(--accent)' }} /> 100% NCERT Pattern
+              <FiCheckCircle style={{ color: 'var(--accent)', flexShrink: 0 }} /> 100% NCERT Pattern
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FiCheckCircle style={{ color: 'var(--accent)' }} /> Hindi Medium Focus
+              <FiCheckCircle style={{ color: 'var(--accent)', flexShrink: 0 }} /> Hindi Medium Focus
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <FiShield style={{ color: 'var(--secondary)' }} /> Expert Faculty (Prayagraj)
+              <FiShield style={{ color: 'var(--secondary)', flexShrink: 0 }} /> Expert Faculty (Prayagraj)
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', minWidth: 0 }}>
           <div 
             style={{
               borderRadius: '18px',
@@ -62,18 +62,18 @@ const HeroSection = () => {
               />
             </div>
             
-            <div style={{ padding: '1.15rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', backgroundColor: '#ffffff', borderTop: '1px solid var(--border)' }}>
+            <div className="hero-stats-strip">
               <div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary)' }}>Class 10–12</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>All Streams</div>
+                <div className="hero-stat-num" style={{ color: 'var(--primary)' }}>Class 10–12</div>
+                <div className="hero-stat-label">All Streams</div>
               </div>
               <div style={{ borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--secondary)' }}>500+</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>PDF Notes</div>
+                <div className="hero-stat-num" style={{ color: 'var(--secondary)' }}>500+</div>
+                <div className="hero-stat-label">PDF Notes</div>
               </div>
               <div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent)' }}>10k+</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Students</div>
+                <div className="hero-stat-num" style={{ color: 'var(--accent)' }}>10k+</div>
+                <div className="hero-stat-label">Students</div>
               </div>
             </div>
           </div>

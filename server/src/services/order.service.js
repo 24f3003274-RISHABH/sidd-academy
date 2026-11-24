@@ -303,8 +303,8 @@ export class OrderService {
     return orderRepository.cancelOrder(orderId, userId, isAdmin);
   }
 
-  async failOrder(orderId, userId, isAdmin = false) {
-    return orderRepository.failOrder(orderId, userId, isAdmin);
+  async failOrder(orderId, userId, isAdmin = false, failureDetails = {}) {
+    return orderRepository.failOrder(orderId, userId, isAdmin, failureDetails);
   }
 
   /**

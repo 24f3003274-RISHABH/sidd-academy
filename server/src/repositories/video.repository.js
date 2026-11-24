@@ -29,6 +29,7 @@ export class VideoRepository {
       videoProvider: row.video_provider || row.videoProvider || 'youtube',
       quality: row.quality || '1080p',
       order: Number(row.order_num ?? row.order ?? 0),
+      isFree: row.is_free !== undefined ? Boolean(row.is_free) : (row.isFree !== undefined ? Boolean(row.isFree) : false),
       isPublished: row.is_published !== undefined ? Boolean(row.is_published) : (row.isPublished !== undefined ? Boolean(row.isPublished) : true),
       lessonTitle: row.lesson_title || '',
       chapterTitle: row.chapter_title || '',
@@ -51,7 +52,7 @@ export class VideoRepository {
           SELECT v.id, v.lesson_id, v.course_id, v.subject_id, v.chapter_id,
                  v.title, v.description, v.video_url, v.youtube_id, v.playlist_url,
                  v.thumbnail_url, v.duration_seconds, v.video_provider, v.quality, v.order_num,
-                 v.is_published, v.created_at, v.updated_at,
+                 v.is_free, v.is_published, v.created_at, v.updated_at,
                  COALESCE(l.title, '') as lesson_title,
                  COALESCE(ch.title, ch_direct.title, '') as chapter_title,
                  COALESCE(s.title, s_direct.title, '') as subject_title,
@@ -130,6 +131,12 @@ export class VideoRepository {
     if (lessonId) {
       filtered = filtered.filter(v => v.lessonId === lessonId);
     }
+    if (chapterId) {
+      filtered = filtered.filter(v => v.chapterId === chapterId);
+    }
+    if (subjectId) {
+      filtered = filtered.filter(v => v.subjectId === subjectId);
+    }
     if (courseId) {
       filtered = filtered.filter(v => v.courseId === courseId);
     }
@@ -159,7 +166,7 @@ export class VideoRepository {
           SELECT v.id, v.lesson_id, v.course_id, v.subject_id, v.chapter_id,
                  v.title, v.description, v.video_url, v.youtube_id, v.playlist_url,
                  v.thumbnail_url, v.duration_seconds, v.video_provider, v.quality, v.order_num,
-                 v.is_published, v.created_at, v.updated_at,
+                 v.is_free, v.is_published, v.created_at, v.updated_at,
                  COALESCE(l.title, '') as lesson_title,
                  COALESCE(ch.title, ch_direct.title, '') as chapter_title,
                  COALESCE(s.title, s_direct.title, '') as subject_title,
@@ -200,7 +207,7 @@ export class VideoRepository {
           SELECT v.id, v.lesson_id, v.course_id, v.subject_id, v.chapter_id,
                  v.title, v.description, v.video_url, v.youtube_id, v.playlist_url,
                  v.thumbnail_url, v.duration_seconds, v.video_provider, v.quality, v.order_num,
-                 v.is_published, v.created_at, v.updated_at,
+                 v.is_free, v.is_published, v.created_at, v.updated_at,
                  l.title as lesson_title
           FROM videos v
           LEFT JOIN lessons l ON v.lesson_id = l.id
@@ -231,8 +238,8 @@ export class VideoRepository {
           INSERT INTO videos (
             id, lesson_id, course_id, subject_id, chapter_id,
             title, description, video_url, youtube_id, playlist_url,
-            thumbnail_url, duration_seconds, video_provider, quality, order_num, is_published
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            thumbnail_url, duration_seconds, video_provider, quality, order_num, is_free, is_published
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           RETURNING *
         `;
         const params = [
@@ -251,6 +258,7 @@ export class VideoRepository {
           data.videoProvider || 'youtube',
           data.quality || '1080p',
           Number(data.order || 0),
+          Boolean(data.isFree),
           data.isPublished !== undefined ? Boolean(data.isPublished) : true,
         ];
 
@@ -278,6 +286,7 @@ export class VideoRepository {
       videoProvider: data.videoProvider || 'youtube',
       quality: data.quality || '1080p',
       order: Number(data.order || 0),
+      isFree: Boolean(data.isFree),
       isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -314,6 +323,7 @@ export class VideoRepository {
         if (data.videoProvider !== undefined) { fields.push(`video_provider = $${pIndex++}`); params.push(data.videoProvider); }
         if (data.quality !== undefined) { fields.push(`quality = $${pIndex++}`); params.push(data.quality); }
         if (data.order !== undefined) { fields.push(`order_num = $${pIndex++}`); params.push(Number(data.order)); }
+        if (data.isFree !== undefined) { fields.push(`is_free = $${pIndex++}`); params.push(Boolean(data.isFree)); }
         if (data.isPublished !== undefined) { fields.push(`is_published = $${pIndex++}`); params.push(Boolean(data.isPublished)); }
 
         fields.push(`updated_at = CURRENT_TIMESTAMP`);

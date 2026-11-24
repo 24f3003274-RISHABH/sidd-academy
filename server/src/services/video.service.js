@@ -316,6 +316,7 @@ export class VideoService {
       videoProvider: data.videoProvider || 'youtube',
       quality: data.quality || '1080p',
       order: Number(data.order || 0),
+      isFree: data.isFree === true || data.isFree === 'true',
       isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
     });
 

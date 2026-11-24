@@ -1,149 +1,76 @@
 import React, { useState } from 'react';
-import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
-import {
-  FiMenu,
-  FiExternalLink,
-  FiArrowLeft,
-  FiHome,
-  FiGrid,
-  FiBook,
-  FiFolder,
-  FiVideo,
-  FiFileText,
-  FiImage,
-  FiUsers,
-  FiDollarSign,
-  FiLayers,
-} from 'react-icons/fi';
+import { FiMenu, FiExternalLink, FiFolder } from 'react-icons/fi';
+
+const SECTION_LABELS = {
+  '/admin': 'Dashboard',
+  '/admin/dashboard': 'Dashboard',
+  '/admin/courses': 'Courses & Playlists',
+  '/admin/curriculum': 'Course Studio',
+  '/admin/subjects': 'Subjects',
+  '/admin/chapters': 'Chapters',
+  '/admin/classes': 'Daily Classes',
+  '/admin/videos': 'YouTube Videos',
+  '/admin/notes': 'Study Notes (PDF)',
+  '/admin/banners': 'Banners & Posters',
+  '/admin/users': 'Users',
+  '/admin/orders': 'Orders',
+};
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const navigate = useNavigate();
+  const location = useLocation();
 
-  const quickLinks = [
-    { label: 'Dashboard', to: '/admin/dashboard', icon: <FiGrid size={13} /> },
-    { label: 'Courses & Playlists', to: '/admin/courses', icon: <FiBook size={13} /> },
-    { label: 'Curriculum Studio', to: '/admin/curriculum', icon: <FiFolder size={13} /> },
-    { label: 'Videos', to: '/admin/videos', icon: <FiVideo size={13} /> },
-    { label: 'Study Notes', to: '/admin/notes', icon: <FiFileText size={13} /> },
-    { label: 'Banners', to: '/admin/banners', icon: <FiImage size={13} /> },
-    { label: 'Users', to: '/admin/users', icon: <FiUsers size={13} /> },
-    { label: 'Orders', to: '/admin/orders', icon: <FiDollarSign size={13} /> },
-  ];
+  const currentSection = SECTION_LABELS[location.pathname] || 'Admin Studio';
+  const isCurriculum = location.pathname === '/admin/curriculum';
 
   return (
     <div className="admin-layout">
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="admin-main">
-        <div className="admin-mobile-bar">
-          <button
-            type="button"
-            className="admin-menu-button"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open admin navigation"
-          >
-            <FiMenu />
-          </button>
-          <span className="admin-mobile-title">Sidd Admin</span>
-          <Link to="/" className="admin-mobile-site-link" aria-label="View live website">
-            <FiExternalLink />
-          </Link>
-        </div>
-
-        {/* Always-Visible Admin Top Navigation Bar (Desktop & Mobile) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.6rem',
-            padding: '0.75rem 1rem',
-            marginBottom: '1.5rem',
-            borderRadius: '12px',
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+        {/* Single unified slim utility bar (serves both mobile menu toggle & desktop breadcrumb without feeling like a second navbar) */}
+        <header className="admin-header-bar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
             <button
               type="button"
-              onClick={() => navigate(-1)}
-              className="btn btn-sm btn-outline"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.32rem 0.65rem',
-                fontSize: '0.78rem',
-              }}
+              className="admin-menu-button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open admin navigation"
             >
-              <FiArrowLeft size={13} /> Back
+              <FiMenu size={18} />
             </button>
+            <nav aria-label="Admin breadcrumb" className="admin-breadcrumb">
+              <Link to="/admin/dashboard" className="admin-breadcrumb-root">Admin</Link>
+              <span aria-hidden="true">/</span>
+              <strong>{currentSection}</strong>
+            </nav>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            {!isCurriculum && (
+              <Link
+                to="/admin/curriculum"
+                className="btn btn-sm btn-outline admin-header-studio-btn"
+                style={{ fontSize: '0.78rem', padding: '0.32rem 0.7rem' }}
+              >
+                <FiFolder size={13} /> Course Studio
+              </Link>
+            )}
             <Link
               to="/"
-              className="btn btn-sm btn-primary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.32rem 0.75rem',
-                fontSize: '0.78rem',
-              }}
-            >
-              <FiHome size={13} /> Live Website
-            </Link>
-            <Link
-              to="/courses"
               className="btn btn-sm btn-outline"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.32rem 0.65rem',
-                fontSize: '0.78rem',
-              }}
+              style={{ fontSize: '0.78rem', padding: '0.32rem 0.7rem' }}
+              title="Open public website"
             >
-              <FiBook size={13} /> Public Catalog
-            </Link>
-            <Link
-              to="/student/dashboard"
-              className="btn btn-sm btn-outline"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.32rem 0.65rem',
-                fontSize: '0.78rem',
-              }}
-            >
-              <FiLayers size={13} /> Student Portal
+              <FiExternalLink size={13} /> <span className="admin-header-site-label">View Website</span>
             </Link>
           </div>
+        </header>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-            {quickLinks.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) => `btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline'}`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  padding: '0.3rem 0.62rem',
-                  fontSize: '0.76rem',
-                }}
-              >
-                {item.icon} {item.label}
-              </NavLink>
-            ))}
-          </div>
+        <div className="admin-content-body">
+          <Outlet />
         </div>
-
-        <Outlet />
       </main>
       {sidebarOpen && (
         <button

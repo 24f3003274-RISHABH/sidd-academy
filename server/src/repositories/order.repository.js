@@ -63,18 +63,43 @@ export class OrderRepository {
         price: typeof item.price === 'string' ? parseFloat(item.price) : (item.price ?? 0),
         createdAt: item.created_at || item.createdAt || new Date(),
       })),
-      payments: payments.map(p => ({
-        id: p.id || p._id,
-        _id: p.id || p._id,
-        orderId: p.order_id || p.orderId || id,
-        amount: typeof p.amount === 'string' ? parseFloat(p.amount) : (p.amount ?? 0),
-        currency: p.currency || 'INR',
-        gateway: p.gateway || 'razorpay',
-        transactionId: p.transaction_id || p.transactionId || '',
-        status: (p.status || 'CREATED').toUpperCase(),
-        paidAt: p.paid_at || p.paidAt || null,
-        createdAt: p.created_at || p.createdAt || new Date(),
-      })),
+      payments: payments.map(p => {
+        let parsedGatewayResponse = p.gateway_response || p.gatewayResponse || null;
+        if (typeof parsedGatewayResponse === 'string') {
+          try {
+            parsedGatewayResponse = JSON.parse(parsedGatewayResponse);
+          } catch {
+            // keep raw string
+          }
+        }
+        return {
+          id: p.id || p._id,
+          _id: p.id || p._id,
+          orderId: p.order_id || p.orderId || id,
+          amount: typeof p.amount === 'string' ? parseFloat(p.amount) : (p.amount ?? 0),
+          currency: p.currency || 'INR',
+          gateway: p.gateway || 'razorpay',
+          transactionId: p.transaction_id || p.transactionId || '',
+          status: (p.status || 'CREATED').toUpperCase(),
+          gatewayResponse: parsedGatewayResponse,
+          paidAt: p.paid_at || p.paidAt || null,
+          createdAt: p.created_at || p.createdAt || new Date(),
+        };
+      }),
+      failureReason: (() => {
+        const latestPayment = payments[0];
+        let gw = latestPayment?.gateway_response || latestPayment?.gatewayResponse || null;
+        if (typeof gw === 'string') {
+          try { gw = JSON.parse(gw); } catch { gw = null; }
+        }
+        if (gw?.description || gw?.reason) {
+          return gw.description || gw.reason;
+        }
+        if (typeof order.notes === 'string' && order.notes.startsWith('Payment failed:')) {
+          return order.notes.replace(/^Payment failed:\s*/i, '').trim();
+        }
+        return null;
+      })(),
       createdAt: order.created_at || order.createdAt || new Date(),
       updatedAt: order.updated_at || order.updatedAt || new Date(),
     };
@@ -499,11 +524,13 @@ export class OrderRepository {
           this.normalizeOrder(o, itemsByOrder.get(o.id) || [], paymentsByOrder.get(o.id) || [])
         );
 
+        const pages = Math.ceil(total / Number(limit)) || 1;
         return {
           orders,
           total,
           page: Number(page),
-          pages: Math.ceil(total / Number(limit)) || 1,
+          pages,
+          totalPages: pages,
         };
       } catch (err) {
         console.warn('OrderRepository findByUserId fallback to mockStore:', err.message);
@@ -524,11 +551,13 @@ export class OrderRepository {
       return this.normalizeOrder(o, items.length > 0 ? items : (o.items || []), payments);
     });
 
+    const pages = Math.ceil(total / Number(limit)) || 1;
     return {
       orders: normalized,
       total,
       page: Number(page),
-      pages: Math.ceil(total / Number(limit)) || 1,
+      pages,
+      totalPages: pages,
     };
   }
 
@@ -602,11 +631,13 @@ export class OrderRepository {
           this.normalizeOrder(o, itemsByOrder.get(o.id) || [], paymentsByOrder.get(o.id) || [])
         );
 
+        const pages = Math.ceil(total / Number(limit)) || 1;
         return {
           orders,
           total,
           page: Number(page),
-          pages: Math.ceil(total / Number(limit)) || 1,
+          pages,
+          totalPages: pages,
         };
       } catch (err) {
         console.warn('OrderRepository findAll fallback to mockStore:', err.message);
@@ -641,11 +672,13 @@ export class OrderRepository {
       return this.normalizeOrder(o, items.length > 0 ? items : (o.items || []), payments);
     });
 
+    const pages = Math.ceil(total / Number(limit)) || 1;
     return {
       orders: normalized,
       total,
       page: Number(page),
-      pages: Math.ceil(total / Number(limit)) || 1,
+      pages,
+      totalPages: pages,
     };
   }
 
@@ -895,7 +928,7 @@ export class OrderRepository {
     return order;
   }
 
-  async failOrder(orderId, userId, isAdmin = false) {
+  async failOrder(orderId, userId, isAdmin = false, failureDetails = {}) {
     const order = await this.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
 
@@ -907,16 +940,30 @@ export class OrderRepository {
       throw new AppError('Cannot fail an already paid order', 400);
     }
 
+    const description = typeof failureDetails?.description === 'string' ? failureDetails.description.trim().slice(0, 300) : '';
+    const reason = typeof failureDetails?.reason === 'string' ? failureDetails.reason.trim().slice(0, 150) : '';
+    const code = typeof failureDetails?.code === 'string' ? failureDetails.code.trim().slice(0, 100) : '';
+    const failedPaymentId = typeof failureDetails?.paymentId === 'string' ? failureDetails.paymentId.trim().slice(0, 120) : '';
+    const failureSummary = description || reason || 'Payment declined or could not be completed';
+    const failureNote = `Payment failed: ${failureSummary}`;
+    const failurePayload = {
+      failedAt: new Date().toISOString(),
+      code: code || null,
+      reason: reason || null,
+      description: failureSummary,
+      paymentId: failedPaymentId || null,
+    };
+
     if (ENV.DATABASE_URL && isUuid(orderId)) {
       try {
         await query(
-          `UPDATE orders SET status = $1, payment_status = 'failed', updated_at = NOW()
-           WHERE id = $2 AND status <> $3`,
-          [ORDER_STATUS.FAILED, orderId, ORDER_STATUS.PAID]
+          `UPDATE orders SET status = $1, payment_status = 'failed', notes = $2, updated_at = NOW()
+           WHERE id = $3 AND status <> $4`,
+          [ORDER_STATUS.FAILED, failureNote, orderId, ORDER_STATUS.PAID]
         );
         await query(
-          `UPDATE payments SET status = $1, updated_at = NOW() WHERE order_id = $2`,
-          ['failed', orderId]
+          `UPDATE payments SET status = $1, gateway_response = $2, updated_at = NOW() WHERE order_id = $3`,
+          ['failed', JSON.stringify(failurePayload), orderId]
         );
         return this.findById(orderId);
       } catch (err) {
@@ -928,9 +975,17 @@ export class OrderRepository {
     if (rawOrder) {
       rawOrder.status = ORDER_STATUS.FAILED;
       rawOrder.paymentStatus = 'failed';
+      rawOrder.notes = failureNote;
+    }
+    const rawPayment = (mockData.payments || []).find(p => p.orderId === orderId || p.order_id === orderId);
+    if (rawPayment) {
+      rawPayment.status = PAYMENT_STATUS.FAILED;
+      rawPayment.gatewayResponse = failurePayload;
     }
     order.status = ORDER_STATUS.FAILED;
     order.paymentStatus = 'failed';
+    order.notes = failureNote;
+    order.failureReason = failureSummary;
     return order;
   }
 
@@ -1008,6 +1063,46 @@ export class OrderRepository {
 
     const paid = (mockData.orders || []).filter(o => (o.paymentStatus || o.payment_status || o.status || '').toLowerCase() === 'paid');
     return paid.reduce((sum, o) => sum + (o.totalAmount || o.total_amount || 0), 0);
+  }
+
+  /**
+   * Breakdown of all platform orders by normalized payment status (Admin Dashboard)
+   */
+  async getOrderStatusBreakdown() {
+    if (ENV.DATABASE_URL) {
+      try {
+        const res = await query(`
+          SELECT
+            COUNT(*)::int AS total_orders,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(status, payment_status, '')) IN ('PAID', 'COMPLETED'))::int AS paid,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(status, payment_status, '')) = 'FAILED')::int AS failed,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(status, payment_status, '')) = 'CANCELLED')::int AS cancelled,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(status, payment_status, 'PENDING')) IN ('PENDING', 'CREATED', ''))::int AS pending
+          FROM orders
+        `);
+        const row = res.rows[0] || {};
+        return {
+          totalOrders: Number(row.total_orders || 0),
+          paid: Number(row.paid || 0),
+          pending: Number(row.pending || 0),
+          failed: Number(row.failed || 0),
+          cancelled: Number(row.cancelled || 0),
+        };
+      } catch (err) {
+        console.warn('OrderRepository getOrderStatusBreakdown fallback to mockStore:', err.message);
+      }
+    }
+
+    const breakdown = { totalOrders: 0, paid: 0, pending: 0, failed: 0, cancelled: 0 };
+    for (const o of mockData.orders || []) {
+      const normalized = this.normalizeOrder(o);
+      breakdown.totalOrders += 1;
+      if (normalized.status === 'PAID') breakdown.paid += 1;
+      else if (normalized.status === 'FAILED') breakdown.failed += 1;
+      else if (normalized.status === 'CANCELLED') breakdown.cancelled += 1;
+      else breakdown.pending += 1;
+    }
+    return breakdown;
   }
 
   /**

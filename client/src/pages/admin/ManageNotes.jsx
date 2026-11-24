@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getAllNotes, createNote, updateNote, deleteNote, getSecureAccess } from '../../api/noteApi';
 import { getAllCourses, getLessonsByChapter } from '../../api/courseApi';
 import { getSubjectsByCourse, getChaptersBySubject } from '../../api/adminApi';
 import { clearGetCache } from '../../api/axiosInstance';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiTrash2, FiPlus, FiEdit2, FiEye, FiFileText, FiExternalLink, FiCloud, FiDownload } from 'react-icons/fi';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import PdfPreviewModal from '../../components/notes/PdfPreviewModal';
+import { FiTrash2, FiPlus, FiEdit2, FiEye, FiEyeOff, FiCheckCircle, FiFileText, FiExternalLink, FiCloud, FiSearch } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import {
   formatPrice,
-  getNoteStreamUrl,
   getNoteDriveViewUrl,
-  getNoteDownloadUrl,
 } from '../../utils/helpers';
 
 const ManageNotes = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,6 +24,11 @@ const ManageNotes = () => {
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [previewPdf, setPreviewPdf] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pricingFilter, setPricingFilter] = useState('all'); // 'all' | 'free' | 'paid'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'published' | 'draft'
+  const [courseFilter, setCourseFilter] = useState('');
 
   // Cascading hierarchy dropdowns
   const [courses, setCourses] = useState([]);
@@ -74,6 +81,13 @@ const ManageNotes = () => {
     fetchNotes();
     fetchCourses();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      handleOpenCreateModal();
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   // When selectedCourse changes, fetch subjects
   useEffect(() => {
@@ -198,15 +212,16 @@ const ManageNotes = () => {
       if (editingId) {
         await updateNote(editingId, selectedFile ? data : {
           ...formData,
+          price: formData.isFree ? 0 : Number(formData.price) || 0,
           courseId: selectedCourse || null,
           subjectId: selectedSubject || null,
           chapterId: selectedChapter || null,
           lessonId: selectedLesson || null,
         });
-        toast.success(selectedFile ? 'Study material updated & synced to Google Drive' : 'Study material updated successfully');
+        toast.success(selectedFile ? 'Study material & PDF updated successfully' : 'Study material updated successfully');
       } else {
         await createNote(data);
-        toast.success('Study material uploaded & saved to your Google Drive!');
+        toast.success('Study material uploaded and saved to Cloud PDF Storage!');
       }
 
       clearGetCache();
@@ -219,22 +234,64 @@ const ManageNotes = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (noteObj) => {
+    const id = noteObj.id || noteObj._id;
     if (busyId) return;
-    if (window.confirm('Are you sure you want to delete this digital note?')) {
-      setBusyId(id);
-      try {
-        await deleteNote(id);
-        clearGetCache();
-        toast.success('Note deleted successfully');
-        fetchNotes();
-      } catch (err) {
-        toast.error('Error deleting note');
-      } finally {
-        setBusyId(null);
-      }
+    setConfirmState({
+      title: 'Delete Study Material?',
+      message: `Are you sure you want to permanently delete "${noteObj.title}"? Students will no longer be able to access or download this PDF.`,
+      confirmText: 'Delete PDF Note',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setBusyId(id);
+        try {
+          await deleteNote(id);
+          clearGetCache();
+          toast.success('Note deleted successfully');
+          fetchNotes();
+        } catch (err) {
+          toast.error('Error deleting note');
+        } finally {
+          setBusyId(null);
+          setConfirmState(null);
+        }
+      },
+    });
+  };
+
+  const handleTogglePublish = async (noteObj) => {
+    const id = noteObj.id || noteObj._id;
+    if (busyId) return;
+    const nextPublished = noteObj.isPublished === false;
+    setBusyId(id);
+    try {
+      await updateNote(id, { isPublished: nextPublished });
+      clearGetCache();
+      toast.success(nextPublished ? `"${noteObj.title}" is now Published` : `"${noteObj.title}" moved to Draft`);
+      fetchNotes();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not update note visibility');
+    } finally {
+      setBusyId(null);
     }
   };
+
+  const filteredNotes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return notes.filter((note) => {
+      const isPub = note.isPublished !== false;
+      if (statusFilter === 'published' && !isPub) return false;
+      if (statusFilter === 'draft' && isPub) return false;
+      if (pricingFilter === 'free' && !note.isFree) return false;
+      if (pricingFilter === 'paid' && note.isFree) return false;
+      if (courseFilter && (note.courseId || note.course_id || '') !== courseFilter) return false;
+      if (q) {
+        const hay = `${note.title || ''} ${note.courseTitle || ''} ${note.subjectTitle || ''} ${note.chapterTitle || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [notes, searchQuery, pricingFilter, statusFilter, courseFilter]);
 
   const handlePreviewPdf = async (note) => {
     try {
@@ -250,16 +307,76 @@ const ManageNotes = () => {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>Manage Digital Notes & Google Drive Study PDFs</h1>
-          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
-            Uploaded study materials are automatically saved to your Google Drive ("Sidd Academy Study Materials") and accessible in the student Course Portal.
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>Manage Study Materials (PDF)</h1>
+          <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0 0', fontSize: '0.88rem' }}>
+            Upload handwritten notes, formula sheets, and chapter PDFs directly into durable Cloud Storage for instant student reading &amp; downloads.
           </p>
         </div>
-        <button onClick={handleOpenCreateModal} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FiPlus /> Upload Study Material to Google Drive
+        <button type="button" onClick={handleOpenCreateModal} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <FiPlus /> Upload Study PDF
         </button>
+      </div>
+
+      {/* Search & Filter Toolbar */}
+      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'relative', flex: '1 1 250px', maxWidth: '380px' }}>
+          <FiSearch style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingLeft: '2.35rem' }}
+            placeholder="Search notes by title, subject, or chapter..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="form-select"
+            style={{ width: 'auto', minWidth: '175px', maxWidth: '240px' }}
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+          >
+            <option value="">All Courses</option>
+            {courses.map((c) => (
+              <option key={c.id || c._id} value={c.id || c._id}>{c.title}</option>
+            ))}
+          </select>
+          <select
+            className="form-select"
+            style={{ width: 'auto', minWidth: '125px' }}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+          <div style={{ display: 'flex', gap: '0.3rem' }}>
+            {['all', 'free', 'paid'].map((pf) => (
+              <button
+                key={pf}
+                type="button"
+                onClick={() => setPricingFilter(pf)}
+                className={`btn btn-sm ${pricingFilter === pf ? 'btn-primary' : 'btn-outline'}`}
+                style={{ borderRadius: '999px', padding: '0.32rem 0.75rem', fontSize: '0.78rem', textTransform: 'capitalize' }}
+              >
+                {pf}
+              </button>
+            ))}
+          </div>
+          {(searchQuery || courseFilter || pricingFilter !== 'all' || statusFilter !== 'all') && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => { setSearchQuery(''); setCourseFilter(''); setPricingFilter('all'); setStatusFilter('all'); }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ padding: '1.25rem' }}>
@@ -267,24 +384,29 @@ const ManageNotes = () => {
           <table>
             <thead>
               <tr>
-                <th>Note Title</th>
-                <th>Course & Subject</th>
-                <th>Google Drive Storage</th>
+                <th>Note Title ({filteredNotes.length})</th>
+                <th>Course &amp; Subject</th>
+                <th>PDF Storage</th>
+                <th>Status</th>
                 <th>Access / Price</th>
                 <th>Downloads</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {notes.length === 0 ? (
+              {filteredNotes.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                     <FiFileText size={36} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
-                    <p>No digital notes created yet. Click "Upload Study Material to Google Drive" to upload.</p>
+                    <p style={{ margin: 0 }}>
+                      {notes.length === 0
+                        ? 'No study notes created yet. Click "Upload Study PDF" to upload.'
+                        : 'No notes match your search or filter criteria.'}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                notes.map((note) => {
+                filteredNotes.map((note) => {
                   const id = note.id || note._id;
                   const driveViewUrl = getNoteDriveViewUrl(note);
                   return (
@@ -321,20 +443,37 @@ const ManageNotes = () => {
                         </span>
                       </td>
                       <td>
-                        {driveViewUrl ? (
+                        {note.hasFileData || note.storageProvider === 'database' || note.storageProvider === 'database+gdrive' ? (
+                          <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
+                            <FiCloud size={12} /> Cloud PDF Ready
+                          </span>
+                        ) : driveViewUrl ? (
                           <a
                             href={driveViewUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="badge badge-success"
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none', fontSize: '0.75rem' }}
-                            title="Open in your Google Drive"
+                            title="Open in Google Drive"
                           >
-                            <FiCloud size={12} /> Saved in GDrive <FiExternalLink size={11} />
+                            <FiCloud size={12} /> Google Drive <FiExternalLink size={11} />
                           </a>
                         ) : (
-                          <span className="badge badge-outline" style={{ fontSize: '0.75rem' }}>Local Storage</span>
+                          <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>Re-upload PDF</span>
                         )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublish(note)}
+                          disabled={busyId === id}
+                          className={`badge ${note.isPublished !== false ? 'badge-success' : 'badge-outline'}`}
+                          style={{ cursor: 'pointer', border: note.isPublished !== false ? 'none' : '1px solid var(--border)', fontSize: '0.75rem' }}
+                          title={note.isPublished !== false ? 'Click to hide as Draft' : 'Click to Publish for students'}
+                        >
+                          {note.isPublished !== false ? <FiCheckCircle size={11} /> : <FiEyeOff size={11} />}
+                          {busyId === id ? 'Saving...' : note.isPublished !== false ? 'Published' : 'Draft'}
+                        </button>
                       </td>
                       <td>
                         {note.isFree ? (
@@ -351,6 +490,7 @@ const ManageNotes = () => {
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
                           <button
+                            type="button"
                             onClick={() => handlePreviewPdf(note)}
                             className="btn btn-sm btn-outline"
                             title="Preview PDF"
@@ -358,6 +498,7 @@ const ManageNotes = () => {
                             <FiEye size={13} />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleOpenEditModal(note)}
                             className="btn btn-sm btn-outline"
                             title="Edit Note"
@@ -365,7 +506,8 @@ const ManageNotes = () => {
                             <FiEdit2 size={13} />
                           </button>
                           <button
-                            onClick={() => handleDelete(id)}
+                            type="button"
+                            onClick={() => handleDelete(note)}
                             disabled={busyId === id}
                             className="btn btn-sm btn-danger"
                             title="Delete Note"
@@ -388,7 +530,7 @@ const ManageNotes = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         closeDisabled={submitting}
-        title={editingId ? 'Edit Study Material (Google Drive)' : 'Upload Study Material to Google Drive'}
+        title={editingId ? 'Edit Study Material (PDF)' : 'Upload Study Material (PDF)'}
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div className="form-group">
@@ -507,14 +649,25 @@ const ManageNotes = () => {
               />
             </div>
 
-            <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.75rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
                 <input
                   type="checkbox"
                   checked={formData.isFree}
-                  onChange={(e) => setFormData({ ...formData, isFree: e.target.checked })}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData({ ...formData, isFree: checked, ...(checked ? { price: 0 } : {}) });
+                  }}
                 />
                 <span>Free Access</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={formData.isPublished}
+                  onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+                />
+                <span>Published (Live)</span>
               </label>
             </div>
 
@@ -530,11 +683,11 @@ const ManageNotes = () => {
             </div>
           </div>
 
-          {/* PDF File Upload (Saved to Google Drive) */}
+          {/* PDF File Upload (Saved to Cloud Database) */}
           <div className="form-group">
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <FiCloud style={{ color: 'var(--primary)' }} />
-              {editingId ? 'Replace PDF File in Google Drive (Optional)' : 'Upload PDF File (Automatically Saved to Google Drive)'}
+              {editingId ? 'Replace PDF File (Optional, max 25 MB)' : 'Upload PDF File (Saved to Cloud Storage, max 25 MB)'}
             </label>
             <input
               type="file"
@@ -544,13 +697,13 @@ const ManageNotes = () => {
             />
             {selectedFile && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: 'var(--accent-dark)' }}>
-                ✓ Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB) — will be uploaded to your Google Drive
+                ✓ Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB) — ready for durable cloud upload
               </div>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Or Existing Google Drive / PDF URL (Optional)</label>
+            <label className="form-label">Or External PDF / Google Drive Link (Optional)</label>
             <input
               type="text"
               className="form-input"
@@ -574,76 +727,29 @@ const ManageNotes = () => {
               className="btn btn-primary"
               disabled={submitting}
             >
-              {submitting ? 'Uploading to Google Drive...' : editingId ? 'Update Study Material' : 'Upload & Save to Google Drive'}
+              {submitting ? 'Uploading PDF...' : editingId ? 'Update Study Material' : 'Upload & Save PDF'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* PDF Modal Previewer */}
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant={confirmState?.confirmVariant || 'danger'}
+        loading={Boolean(busyId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !busyId && setConfirmState(null)}
+      />
+
+      {/* Unified PDF Modal Previewer */}
       {previewPdf && (
-        <div
-          className="modal-overlay"
-          onClick={() => setPreviewPdf(null)}
-        >
-          <div
-            className="modal-box"
-            style={{ maxWidth: '900px', height: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: '1rem 1.5rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--border)',
-                backgroundColor: 'var(--bg-card)',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{previewPdf.title}</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {previewPdf.fileName} • {previewPdf.fileSize || '2.5 MB'} • Stored in Google Drive
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {getNoteDriveViewUrl(previewPdf) && (
-                  <a
-                    href={getNoteDriveViewUrl(previewPdf)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                  >
-                    <FiExternalLink size={14} /> Open in Google Drive
-                  </a>
-                )}
-                <a
-                  href={getNoteDownloadUrl(previewPdf)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <FiDownload size={14} /> Download PDF
-                </a>
-                <button onClick={() => setPreviewPdf(null)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
-              <iframe
-                src={getNoteStreamUrl(previewPdf)}
-                title={previewPdf.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={previewPdf}
+          onClose={() => setPreviewPdf(null)}
+        />
       )}
     </div>
   );

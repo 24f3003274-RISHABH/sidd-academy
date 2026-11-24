@@ -71,7 +71,7 @@ export class LessonRepository {
   /**
    * Create lesson
    */
-  async create({ chapterId, title, description = '', classDate, duration = 60, order = 0, classNumber = 1, isLive = false, isFree = false, isProtected = true, videoUrl = '', playlistUrl = '', thumbnailUrl = '', videoProvider = 'youtube' }) {
+  async create({ chapterId, title, description = '', classDate, duration = 60, order = 0, classNumber = 1, isLive = false, isFree = false, isProtected = true, videoUrl = '', playlistUrl = '', thumbnailUrl = '', videoProvider = 'youtube', skipVideoInsert = false }) {
     const id = uuidv4();
     const dateVal = classDate ? new Date(classDate).toISOString() : new Date().toISOString();
     const ord = Number(order) || 0;
@@ -87,12 +87,12 @@ export class LessonRepository {
         const durStr = typeof durationVal === 'string' ? durationVal : `${durationVal} mins`;
         await query(sql, [id, chapterId, title.trim(), description.trim(), dateVal, Number(classNumber) || 1, durStr, ord, Boolean(isFree), Boolean(isProtected)]);
 
-        if (videoUrl) {
+        if (videoUrl && !skipVideoInsert) {
           const videoId = uuidv4();
           await query(
-            `INSERT INTO videos (id, lesson_id, title, video_url, playlist_url, thumbnail_url, video_provider, quality, order_num, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, '1080p', $8, NOW(), NOW())`,
-            [videoId, id, title.trim(), videoUrl.trim(), playlistUrl || '', thumbnailUrl || '', videoProvider || 'youtube', ord]
+            `INSERT INTO videos (id, lesson_id, title, video_url, playlist_url, thumbnail_url, video_provider, quality, order_num, is_free, is_published, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, '1080p', $8, $9, true, NOW(), NOW())`,
+            [videoId, id, title.trim(), videoUrl.trim(), playlistUrl || '', thumbnailUrl || '', videoProvider || 'youtube', ord, Boolean(isFree)]
           );
         }
 
@@ -172,10 +172,6 @@ export class LessonRepository {
           fields.push(`order_index = $${pIndex++}`);
           values.push(ord);
         }
-        if (updates.isLive !== undefined) {
-          fields.push(`is_live = $${pIndex++}`);
-          values.push(Boolean(updates.isLive));
-        }
         if (updates.classNumber !== undefined) {
           fields.push(`class_number = $${pIndex++}`);
           values.push(Number(updates.classNumber) || 1);
@@ -194,15 +190,19 @@ export class LessonRepository {
         await query(sql, values);
 
         if (updates.videoUrl !== undefined) {
+          const cleanVideoUrl = String(updates.videoUrl || '').trim();
           const videoRes = await query(`SELECT id FROM videos WHERE lesson_id = $1`, [id]);
           if (videoRes.rows.length > 0) {
-            await query(`UPDATE videos SET video_url = $1, updated_at = NOW() WHERE lesson_id = $2`, [updates.videoUrl.trim(), id]);
-          } else if (updates.videoUrl) {
+            await query(
+              `UPDATE videos SET video_url = $1, title = COALESCE($2, title), is_free = COALESCE($3, is_free), updated_at = NOW() WHERE lesson_id = $4`,
+              [cleanVideoUrl, updates.title ? updates.title.trim() : null, updates.isFree !== undefined ? Boolean(updates.isFree) : null, id]
+            );
+          } else if (cleanVideoUrl) {
             const videoId = uuidv4();
             await query(
-              `INSERT INTO videos (id, lesson_id, title, video_url, video_provider, quality, is_published, created_at, updated_at)
-               VALUES ($1, $2, 'Class Video', $3, 'youtube', '1080p', true, NOW(), NOW())`,
-              [videoId, id, updates.videoUrl.trim()]
+              `INSERT INTO videos (id, lesson_id, title, video_url, video_provider, quality, is_free, is_published, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, 'youtube', '1080p', $5, true, NOW(), NOW())`,
+              [videoId, id, (updates.title || 'Class Video').trim(), cleanVideoUrl, Boolean(updates.isFree)]
             );
           }
         }

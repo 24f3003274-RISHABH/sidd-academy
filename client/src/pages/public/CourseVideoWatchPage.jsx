@@ -7,6 +7,7 @@ import { clearGetCache } from '../../api/axiosInstance';
 import { useAuth } from '../../hooks/useAuth';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
 import Loader from '../../components/common/Loader';
+import PdfPreviewModal from '../../components/notes/PdfPreviewModal';
 import toast from 'react-hot-toast';
 import {
   formatPrice,
@@ -260,13 +261,13 @@ const CourseVideoWatchPage = () => {
 
   const handleOpenPdf = async (note, mode = 'portal') => {
     try {
-      toast.loading('Opening Google Drive study material...', { id: 'pdf-access' });
+      toast.loading('Opening study PDF...', { id: 'pdf-access' });
       const res = await getSecureAccess(note.id || note._id);
       const accessData = res.data?.data || res.data;
       setSelectedPdf(accessData);
       setPdfViewerMode(mode);
       setIsPdfModalOpen(true);
-      toast.success('Google Drive study material unlocked', { id: 'pdf-access' });
+      toast.dismiss('pdf-access');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Access restricted. Please purchase note or enroll in course.', { id: 'pdf-access' });
     }
@@ -290,8 +291,8 @@ const CourseVideoWatchPage = () => {
 
   return (
     <div className="watch-page" style={{ backgroundColor: 'var(--bg-primary)', minHeight: '100vh', color: 'var(--text-primary)' }}>
-      {/* Top Navigation Bar */}
-      <header className="watch-header"
+      {/* Classroom Course Context Bar (clean single-row header — no duplicate site nav links) */}
+      <div className="watch-header"
         style={{
           borderBottom: '1px solid var(--border)',
           backgroundColor: 'var(--bg-secondary)',
@@ -300,42 +301,23 @@ const CourseVideoWatchPage = () => {
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1rem',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
+          gap: '0.85rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0 }}>
           <Link
             to={`/courses/${courseId}`}
             className="btn btn-sm btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}
           >
             <FiArrowLeft /> Course Details
           </Link>
-          <Link
-            to="/courses"
-            className="btn btn-sm btn-outline"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <FiBookOpen /> All Courses
-          </Link>
-          {isAuthenticated && (
-            <Link
-              to="/student/dashboard"
-              className="btn btn-sm btn-outline"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-            >
-              <FiLayers /> Dashboard
-            </Link>
-          )}
-          <div style={{ marginLeft: '0.4rem' }}>
+          <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700, color: 'var(--text-primary)' }}>
               {course.title}
             </h1>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Instructor: {course.instructor || 'SID Academy Faculty'} • {allLessons.length} Lectures • {notes.length} Google Drive PDFs
+              Instructor: {course.instructor || 'SIDD Academy Faculty'} • {allLessons.length} Lectures • {notes.length} Study PDFs
             </span>
           </div>
         </div>
@@ -348,7 +330,7 @@ const CourseVideoWatchPage = () => {
             className="btn btn-sm btn-outline"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', opacity: prevLesson ? 1 : 0.45 }}
           >
-            <FiChevronLeft /> Prev Lecture
+            <FiChevronLeft /> Prev
           </button>
           <button
             type="button"
@@ -357,7 +339,7 @@ const CourseVideoWatchPage = () => {
             className="btn btn-sm btn-outline"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', opacity: nextLesson ? 1 : 0.45 }}
           >
-            Next Lecture <FiChevronRight />
+            Next <FiChevronRight />
           </button>
           {isEnrolled ? (
             <span
@@ -373,7 +355,7 @@ const CourseVideoWatchPage = () => {
                 gap: '0.35rem',
               }}
             >
-              <FiCheckCircle /> Enrolled Full Access
+              <FiCheckCircle /> Enrolled
             </span>
           ) : (
             <Link
@@ -385,7 +367,7 @@ const CourseVideoWatchPage = () => {
             </Link>
           )}
         </div>
-      </header>
+      </div>
 
       {/* Main Watch Layout Grid */}
       <div
@@ -437,7 +419,7 @@ const CourseVideoWatchPage = () => {
                 {currentLesson?.title || 'Unlock Full Syllabus to Continue'}
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '460px', margin: '0 auto 1.5rem auto' }}>
-                This lecture is part of the complete premium curriculum. Enroll now to access all recorded lectures, Google Drive chapter notes, and live doubt sessions.
+                This lecture is part of the complete premium curriculum. Enroll now to access all recorded lectures, chapter PDF notes, and live doubt sessions.
               </p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -591,7 +573,7 @@ const CourseVideoWatchPage = () => {
                     gap: '0.4rem',
                   }}
                 >
-                  <FiCloud size={16} /> Google Drive Study Materials ({notes.length})
+                  <FiFileText size={16} /> Study Materials ({notes.length})
                 </button>
               </div>
 
@@ -600,10 +582,10 @@ const CourseVideoWatchPage = () => {
                 <div>
                   <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, fontSize: '0.95rem', margin: '0 0 1.25rem 0' }}>
                     {currentLesson.description ||
-                      'Comprehensive video lecture featuring in-depth theoretical derivations, previous year board exam questions, conceptual problem solving, and handwritten formulas by SID Academy faculty.'}
+                      'Comprehensive video lecture featuring in-depth theoretical derivations, previous year board exam questions, conceptual problem solving, and handwritten formulas by SIDD Academy faculty.'}
                   </p>
 
-                  {/* Immediate Google Drive Study Materials Card inside Overview so uploaded files are always visible */}
+                  {/* Immediate Study Materials Card inside Overview so uploaded files are always visible */}
                   {currentLessonNotes.length > 0 && (
                     <div
                       style={{
@@ -616,7 +598,7 @@ const CourseVideoWatchPage = () => {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                         <strong style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.95rem', color: 'var(--text-primary)' }}>
-                          <FiCloud style={{ color: 'var(--primary)' }} /> Google Drive Study Materials for This Lecture
+                          <FiFileText style={{ color: 'var(--primary)' }} /> Study PDFs for This Lecture
                         </strong>
                         <button
                           type="button"
@@ -648,7 +630,7 @@ const CourseVideoWatchPage = () => {
                               <div>
                                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{note.title}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                  Google Drive PDF • {note.fileSize || '2.5 MB'} • {note.pageCount || 24} Pages
+                                  Study PDF • {note.fileSize || '2.5 MB'} • {note.pageCount || 24} Pages
                                 </div>
                               </div>
                             </div>
@@ -659,7 +641,7 @@ const CourseVideoWatchPage = () => {
                                 className="btn btn-sm btn-primary"
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                               >
-                                <FiBookOpen size={13} /> View in Portal
+                                <FiBookOpen size={13} /> Read PDF
                               </button>
                               {getNoteDriveViewUrl(note) && (
                                 <a
@@ -669,7 +651,7 @@ const CourseVideoWatchPage = () => {
                                   className="btn btn-sm btn-outline"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                                 >
-                                  <FiExternalLink size={13} /> Open in GDrive
+                                  <FiExternalLink size={13} /> Open in Drive
                                 </a>
                               )}
                             </div>
@@ -689,8 +671,8 @@ const CourseVideoWatchPage = () => {
                       <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{course.level || 'Class 10 / 12 Board Exams'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Study Material Cloud</span>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>Google Drive Synced</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Study Materials</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{notes.length} Cloud PDF{notes.length === 1 ? '' : 's'}</strong>
                     </div>
                   </div>
                 </div>
@@ -731,12 +713,12 @@ const CourseVideoWatchPage = () => {
                               justifyContent: 'center',
                             }}
                           >
-                            <FiCloud size={20} />
+                            <FiFileText size={20} />
                           </div>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: 700 }}>{note.title}</h4>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {note.subjectName || note.subjectTitle || 'Study Material'} • {note.fileSize || '2.8 MB'} • Saved in Google Drive
+                              {note.subjectName || note.subjectTitle || 'Study Material'} • {note.fileSize || '2.8 MB'} • PDF Document
                             </span>
                           </div>
                         </div>
@@ -746,7 +728,7 @@ const CourseVideoWatchPage = () => {
                             className="btn btn-sm btn-primary"
                             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                           >
-                            <FiBookOpen size={14} /> Open in Portal
+                            <FiBookOpen size={14} /> Read PDF
                           </button>
                           {getNoteDriveViewUrl(note) && (
                             <a
@@ -756,7 +738,7 @@ const CourseVideoWatchPage = () => {
                               className="btn btn-sm btn-outline"
                               style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                             >
-                              <FiExternalLink size={14} /> Open in Google Drive
+                              <FiExternalLink size={14} /> Open in Drive
                             </a>
                           )}
                         </div>
@@ -932,7 +914,7 @@ const CourseVideoWatchPage = () => {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', alignItems: 'center' }}>
                                           <span>{lesson.duration || '25 min'}</span>
                                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            {hasAttachedNotes && <span style={{ color: '#10b981', fontWeight: 600 }}>GDrive PDF •</span>}
+                                            {hasAttachedNotes && <span style={{ color: '#10b981', fontWeight: 600 }}>PDF •</span>}
                                             {lessonIsFree ? 'Free Preview' : isEnrolled ? 'Unlocked' : 'Locked'}
                                           </span>
                                         </div>
@@ -954,102 +936,12 @@ const CourseVideoWatchPage = () => {
         </div>
       </div>
 
-      {/* PDF & Google Drive Secure Viewer Modal */}
+      {/* Unified Authenticated PDF Viewer Modal */}
       {isPdfModalOpen && selectedPdf && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-          onClick={() => setIsPdfModalOpen(false)}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '940px',
-              height: '86vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: '1rem 1.5rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--border)',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{selectedPdf.title}</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {selectedPdf.fileName || 'Study Document'} • {selectedPdf.fileSize || '2.5 MB'} • Stored in Google Drive
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {getNoteDrivePreviewUrl(selectedPdf) && (
-                  <button
-                    type="button"
-                    onClick={() => setPdfViewerMode(pdfViewerMode === 'portal' ? 'gdrive' : 'portal')}
-                    className="btn btn-sm btn-outline"
-                  >
-                    {pdfViewerMode === 'portal' ? 'Use GDrive Embed' : 'Use Portal Stream'}
-                  </button>
-                )}
-                {getNoteDriveViewUrl(selectedPdf) && (
-                  <a
-                    href={getNoteDriveViewUrl(selectedPdf)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                  >
-                    <FiExternalLink size={14} /> Open in Google Drive
-                  </a>
-                )}
-                <a
-                  href={getNoteDownloadUrl(selectedPdf)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <FiDownload size={14} /> Download PDF
-                </a>
-                <button onClick={() => setIsPdfModalOpen(false)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={
-                  pdfViewerMode === 'gdrive' && getNoteDrivePreviewUrl(selectedPdf)
-                    ? getNoteDrivePreviewUrl(selectedPdf)
-                    : getNoteStreamUrl(selectedPdf)
-                }
-                title={selectedPdf.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={selectedPdf}
+          onClose={() => setIsPdfModalOpen(false)}
+        />
       )}
     </div>
   );

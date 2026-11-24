@@ -45,9 +45,15 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(false);
           }
         } catch (error) {
-          localStorage.removeItem('siddToken');
-          setUser(null);
-          setIsAuthenticated(false);
+          const status = error.response?.status;
+          // Clear token on explicit auth rejection; avoid wiping valid sessions during transient cold starts
+          if (!status || status === 401 || status === 403) {
+            if (status === 401 || status === 403) {
+              localStorage.removeItem('siddToken');
+            }
+            setUser(null);
+            setIsAuthenticated(false);
+          }
         }
       } else {
         localStorage.removeItem('siddToken');
@@ -59,6 +65,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const handleAuthExpired = () => {
+      localStorage.removeItem('siddToken');
       setUser(null);
       setIsAuthenticated(false);
     };
@@ -96,16 +103,13 @@ export const AuthProvider = ({ children }) => {
     return payload;
   };
 
-  const logout = async () => {
-    try {
-      await apiLogout();
-    } catch (e) {
-      console.error(e);
-    }
+  const logout = () => {
+    // Clear client session synchronously BEFORE hitting the network so a slow logout never races with a fresh login
     localStorage.removeItem('siddToken');
     clearGetCache();
     setUser(null);
     setIsAuthenticated(false);
+    apiLogout().catch(() => {});
   };
 
   const updateUser = (userData) => {

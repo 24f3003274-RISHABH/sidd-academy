@@ -24,6 +24,14 @@ export const errorHandler = (err, req, res, next) => {
 
   let message = err.message || 'Internal Server Error';
 
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      message = 'Uploaded file exceeds the maximum allowed size (25 MB for PDFs, 5 MB for images).';
+    } else {
+      message = err.message || 'File upload failed. Please try again.';
+    }
+    statusCode = 400;
+  }
   if (err.name === 'CastError') {
     message = `Invalid ${err.path}: ${err.value}`;
     statusCode = 400;

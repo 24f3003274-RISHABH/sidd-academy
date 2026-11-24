@@ -48,6 +48,9 @@ export class ChapterService {
     return await chapterRepository.create({
       subjectId,
       title: data.title,
+      description: data.description || data.content || '',
+      content: data.content || data.description || '',
+      videoUrl: data.videoUrl || '',
       order,
     });
   }

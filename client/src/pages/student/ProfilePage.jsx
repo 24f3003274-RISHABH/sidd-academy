@@ -88,7 +88,7 @@ const ProfilePage = () => {
       title="Student Profile & Settings"
       subtitle="Manage your personal details, avatar, contact information, and security credentials."
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 290px), 1fr))', gap: '1.5rem' }}>
         {/* Left Column: Personal Information & Avatars */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* Profile Form Card */}

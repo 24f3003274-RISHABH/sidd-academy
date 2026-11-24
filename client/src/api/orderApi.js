@@ -7,7 +7,7 @@ export const getMyOrders = (params) => axiosInstance.get('/orders', { params });
 export const getOrderById = (id) => axiosInstance.get(`/orders/${id}`);
 export const retryOrder = (id) => axiosInstance.post(`/orders/${id}/retry`, {});
 export const cancelOrder = (id) => axiosInstance.patch(`/orders/${id}/cancel`, {});
-export const failOrder = (id) => axiosInstance.patch(`/orders/${id}/fail`, {});
+export const failOrder = (id, details = {}) => axiosInstance.patch(`/orders/${id}/fail`, details);
 
 export default {
   getPaymentKey,

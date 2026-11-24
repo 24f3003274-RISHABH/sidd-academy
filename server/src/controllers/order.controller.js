@@ -140,7 +140,8 @@ export class OrderController {
     try {
       const userId = req.user.id || req.user._id;
       const isAdmin = req.user.role === 'admin';
-      const order = await orderService.failOrder(req.params.id, userId, isAdmin);
+      const failureDetails = req.body && typeof req.body === 'object' ? req.body : {};
+      const order = await orderService.failOrder(req.params.id, userId, isAdmin, failureDetails);
       return sendSuccess(res, 200, 'Payment marked as failed', { order });
     } catch (error) {
       next(error);

@@ -1,6 +1,7 @@
 import express from 'express';
 import * as authController from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
 import { registerValidator, loginValidator } from '../validators/auth.validator.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
 
@@ -8,13 +9,14 @@ const router = express.Router();
 
 /**
  * Public Authentication Endpoints
+ * Rate-limit only credential submission endpoints (not /me, /logout, /profile).
  */
 
 // POST /api/v1/auth/register - Register a new student
-router.post('/register', registerValidator, validateRequest, authController.register);
+router.post('/register', authLimiter, registerValidator, validateRequest, authController.register);
 
 // POST /api/v1/auth/login - User login with email & password
-router.post('/login', loginValidator, validateRequest, authController.login);
+router.post('/login', authLimiter, loginValidator, validateRequest, authController.login);
 
 // POST /api/v1/auth/refresh-token - Refresh expired access token
 router.post('/refresh-token', authController.refreshToken);

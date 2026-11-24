@@ -2,36 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCourseById } from '../../api/courseApi';
 import { getAllNotes, getSecureAccess } from '../../api/noteApi';
-import { createOrder, verifyPayment, cancelOrder, failOrder, getPaymentKey } from '../../api/orderApi';
+import { createOrder, retryOrder } from '../../api/orderApi';
 import { clearGetCache } from '../../api/axiosInstance';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
 import VideoModal from '../../components/video/VideoModal';
+import PdfPreviewModal from '../../components/notes/PdfPreviewModal';
+import PaymentStatusBanner from '../../components/common/PaymentStatusBanner';
+import launchRazorpayCheckout from '../../utils/razorpayCheckout';
 import toast from 'react-hot-toast';
 import {
   formatPrice,
   getEffectivePrice,
   resolveMediaUrl,
-  getNoteStreamUrl,
-  getNoteDrivePreviewUrl,
-  getNoteDriveViewUrl,
-  getNoteDownloadUrl,
 } from '../../utils/helpers';
-import { 
-  FiClock, 
-  FiVideo, 
-  FiFileText, 
-  FiChevronDown, 
-  FiChevronUp, 
-  FiPlay, 
-  FiCalendar, 
-  FiLock, 
-  FiCheckCircle, 
+import {
+  FiClock,
+  FiVideo,
+  FiFileText,
+  FiChevronDown,
+  FiChevronUp,
+  FiPlay,
+  FiCalendar,
+  FiLock,
+  FiCheckCircle,
   FiFolder,
   FiBookOpen,
-  FiExternalLink,
-  FiDownload,
-  FiCloud,
 } from 'react-icons/fi';
 
 const CourseDetailPage = () => {
@@ -44,10 +40,9 @@ const CourseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [purchased, setPurchased] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [checkoutMessage, setCheckoutMessage] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState(null);
   const [previewVideo, setPreviewVideo] = useState(null);
   const [selectedNoteModal, setSelectedNoteModal] = useState(null);
-  const [noteViewMode, setNoteViewMode] = useState('portal'); // 'portal' | 'gdrive'
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
 
@@ -109,38 +104,22 @@ const CourseDetailPage = () => {
     setExpandedChapters(prev => ({ ...prev, [chapId]: !prev[chapId] }));
   };
 
-  const loadRazorpayScript = () => {
-    if (window.Razorpay) return Promise.resolve(true);
-    const existingScript = document.querySelector('script[data-razorpay-checkout]');
-    if (existingScript) {
-      return new Promise((resolve) => {
-        existingScript.addEventListener('load', () => resolve(true), { once: true });
-        existingScript.addEventListener('error', () => resolve(false), { once: true });
-      });
-    }
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.dataset.razorpayCheckout = 'true';
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
-  const handleEnroll = async () => {
+  const handleEnroll = async (retryOrderId = null) => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: `/courses/${id}` } });
       return;
     }
 
     setPaymentLoading(true);
-    setCheckoutMessage('');
+    setPaymentStatus(null);
     let checkoutOpened = false;
     try {
       const courseId = course.id || course._id;
-      const orderRes = await createOrder({ items: [{ itemId: courseId, itemType: 'course' }] });
+      const orderRes = retryOrderId
+        ? await retryOrder(retryOrderId).catch(() =>
+            createOrder({ items: [{ itemId: courseId, itemType: 'course' }] })
+          )
+        : await createOrder({ items: [{ itemId: courseId, itemType: 'course' }] });
       const orderData = orderRes.data?.data || orderRes.data;
 
       // Case 1: 100% free course — access is immediately granted on backend
@@ -149,105 +128,73 @@ const CourseDetailPage = () => {
         if (refreshUser) await refreshUser();
         toast.success(orderData.message || 'Enrolled for free! Welcome to the course.');
         setPurchased(true);
+        setPaymentLoading(false);
         navigate('/student/dashboard');
         return;
       }
 
-      const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
-
-      let resolvedKey = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
-      if (!resolvedKey) {
-        try {
-          const keyRes = await getPaymentKey();
-          resolvedKey = (keyRes.data?.data?.key || keyRes.data?.key || '').trim();
-        } catch {
-          resolvedKey = '';
-        }
-      }
-
-      if (isMock || !razorpayOrderId || razorpayOrderId.startsWith('order_mock_') || !resolvedKey) {
-        if (orderId) {
-          cancelOrder(orderId).catch(() => {});
-        }
-        throw new Error(
-          'Razorpay payment gateway keys are not configured yet. Please add your live RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env to accept payments.'
-        );
-      }
-
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded || typeof window.Razorpay === 'undefined') {
-        throw new Error('Razorpay checkout could not be loaded. Please check your connection and try again.');
-      }
-
-      const options = {
-        key: resolvedKey,
-        amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
-        currency: currency || 'INR',
-        name: 'Sidd Academy',
+      await launchRazorpayCheckout({
+        orderData,
+        fallbackOrderId: retryOrderId,
         description: `Enrollment in ${course.title}`,
-        order_id: razorpayOrderId,
-        handler: async (response) => {
-          try {
-            await verifyPayment({
-              orderId,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            clearGetCache();
-            if (refreshUser) await refreshUser();
-            toast.success('Payment verified! Course added to your dashboard.');
-            setPurchased(true);
-            setPaymentLoading(false);
-            navigate('/student/dashboard');
-          } catch (err) {
-            setPaymentLoading(false);
-            toast.error(err.response?.data?.message || 'Payment verification failed. Please contact support.');
+        user,
+        refreshUser,
+        onVerifying: ({ orderId, razorpayPaymentId }) => {
+          setPaymentStatus({
+            status: 'verifying',
+            title: 'Verifying Your Payment…',
+            message: 'Please wait a moment while we confirm your enrollment.',
+            orderId,
+            paymentId: razorpayPaymentId,
+          });
+        },
+        onSuccess: ({ orderId }) => {
+          setPaymentStatus({
+            status: 'success',
+            title: 'Enrollment Confirmed!',
+            message: 'Your payment has been verified and this course is now unlocked.',
+            orderId,
+          });
+          toast.success('Payment verified! Course added to your dashboard.');
+          setPurchased(true);
+          navigate('/student/dashboard');
+        },
+        onFailed: ({ orderId, description, paymentId, modalClosed }) => {
+          setPaymentStatus({
+            status: 'failed',
+            title: 'Payment Failed',
+            message: description || 'Your transaction was declined. No course access was activated.',
+            orderId,
+            paymentId,
+          });
+          if (!modalClosed) {
+            toast.error(`Payment failed: ${description || 'Transaction declined'}`);
           }
         },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || '',
+        onCancelled: ({ orderId, message }) => {
+          setPaymentStatus({
+            status: 'cancelled',
+            title: 'Checkout Cancelled',
+            message: message || 'Checkout was closed before completing payment. No amount was deducted.',
+            orderId,
+          });
+          toast('Checkout cancelled. No payment was charged.', { icon: 'ℹ️' });
         },
-        theme: {
-          color: '#2563eb'
+        onVerificationError: ({ orderId, razorpayPaymentId, message }) => {
+          setPaymentStatus({
+            status: 'verification_error',
+            title: 'Payment Verification Issue',
+            message,
+            orderId,
+            paymentId: razorpayPaymentId,
+          });
+          toast.error(message);
         },
-        modal: {
-          escape: true,
-          backdropclose: false,
+        onDone: () => {
+          setPaymentLoading(false);
         },
-      };
-
-      const paymentObject = new window.Razorpay(options);
-      const finishCheckout = () => {
-        setPaymentLoading(false);
-      };
-
-      paymentObject.on('payment.failed', function (resp) {
-        finishCheckout();
-        failOrder(orderId).catch(() => {});
-        setCheckoutMessage('Payment was declined or failed. You can try again.');
-        toast.error(`Payment failed: ${resp.error?.description || 'Transaction declined'}`);
       });
-
-      paymentObject.on('modal.ondismiss', async () => {
-        finishCheckout();
-        try {
-          await cancelOrder(orderId);
-          setCheckoutMessage('Checkout closed. You can enroll whenever you are ready.');
-          toast('Checkout closed. No payment was recorded.', { icon: 'ℹ️' });
-        } catch (err) {
-          setCheckoutMessage('Checkout closed. You can retry whenever you are ready.');
-        }
-      });
-
-      paymentObject.open();
       checkoutOpened = true;
-
-      window.setTimeout(() => {
-        finishCheckout();
-      }, 60000);
     } catch (err) {
       setPaymentLoading(false);
       const status = err.response?.status;
@@ -261,7 +208,13 @@ const CourseDetailPage = () => {
         toast.success('You are already enrolled in this course!');
         setPurchased(true);
       } else {
-        toast.error(serverMsg || err.message || 'Failed to initiate enrollment. Please try again.');
+        const msg = serverMsg || err.message || 'Failed to initiate enrollment. Please try again.';
+        setPaymentStatus({
+          status: 'failed',
+          title: 'Could Not Start Checkout',
+          message: msg,
+        });
+        toast.error(msg);
       }
       console.error('[Enroll Error]', err);
     } finally {
@@ -296,12 +249,11 @@ const CourseDetailPage = () => {
       return;
     }
     try {
-      toast.loading('Accessing Google Drive study material...', { id: 'course-note-open' });
+      toast.loading('Opening study material PDF...', { id: 'course-note-open' });
       const res = await getSecureAccess(note.id || note._id);
       const accessData = res.data?.data || res.data;
       setSelectedNoteModal(accessData);
-      setNoteViewMode('portal');
-      toast.success('Google Drive study material ready', { id: 'course-note-open' });
+      toast.dismiss('course-note-open');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Enroll in this course to unlock this study material.', { id: 'course-note-open' });
     }
@@ -357,17 +309,17 @@ const CourseDetailPage = () => {
                 </span>
               )}
               <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                <FiCloud size={12} /> Google Drive Study Materials Included
+                <FiFileText size={12} /> Study PDFs Included
               </span>
             </div>
-            <h1 style={{ fontSize: '2.4rem', marginBottom: '1rem', fontWeight: 800 }}>{course.title}</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+            <h1 style={{ fontSize: 'clamp(1.6rem, 4.5vw, 2.4rem)', marginBottom: '0.85rem', fontWeight: 800 }}>{course.title}</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: 'clamp(0.95rem, 2.5vw, 1.05rem)', marginBottom: '1.35rem', lineHeight: 1.6 }}>
               {course.description}
             </p>
-            <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.85rem 1.5rem', marginBottom: '1.5rem', color: 'var(--text-muted)', flexWrap: 'wrap', fontSize: '0.9rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiClock /> {course.duration || '6 Months'}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiBookOpen /> {subjects.length} Subjects</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiFileText /> {courseNotes.length} Google Drive PDFs</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiFileText /> {courseNotes.length} Study PDFs</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><FiVideo /> Interactive Live & Recorded Classes</div>
             </div>
           </div>
@@ -378,7 +330,7 @@ const CourseDetailPage = () => {
                 alt={course.title} 
                 style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '10px', marginBottom: '1.5rem' }} 
               />
-              <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFree ? '#43e97b' : 'var(--primary)', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFree ? '#10b981' : 'var(--primary)', marginBottom: '1.5rem' }}>
                 {priceLabel}
                 {hasDiscount && (
                   <span style={{ fontSize: '1.1rem', textDecoration: 'line-through', color: 'var(--text-muted)', marginLeft: '0.75rem' }}>
@@ -390,7 +342,7 @@ const CourseDetailPage = () => {
               {purchased ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <Link to={`/courses/${id}/watch`} className="btn btn-primary btn-full btn-lg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <FiPlay /> Open Course Classroom & GDrive Notes
+                    <FiPlay /> Open Course Classroom & Notes
                   </Link>
                   <Link to={`/student/dashboard`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                     <FiCheckCircle /> Go to Student Dashboard
@@ -399,7 +351,7 @@ const CourseDetailPage = () => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <button 
-                    onClick={handleEnroll} 
+                    onClick={() => handleEnroll()} 
                     disabled={paymentLoading}
                     className="btn btn-primary btn-full btn-lg"
                     aria-busy={paymentLoading}
@@ -419,7 +371,24 @@ const CourseDetailPage = () => {
                       </span>
                     ) : isFree ? 'Enroll for Free' : `Enroll — ${priceLabel}`}
                   </button>
-                  {checkoutMessage && <p role="status" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>{checkoutMessage}</p>}
+                  {paymentStatus && (
+                    <PaymentStatusBanner
+                      compact
+                      status={paymentStatus.status}
+                      title={paymentStatus.title}
+                      message={paymentStatus.message}
+                      orderId={paymentStatus.orderId}
+                      paymentId={paymentStatus.paymentId}
+                      retrying={paymentLoading}
+                      onRetry={
+                        paymentStatus.status === 'failed' || paymentStatus.status === 'cancelled'
+                          ? () => handleEnroll(paymentStatus.orderId || null)
+                          : undefined
+                      }
+                      retryLabel={paymentStatus.status === 'failed' ? 'Retry Payment' : 'Resume Checkout'}
+                      onDismiss={() => setPaymentStatus(null)}
+                    />
+                  )}
                   <Link to={`/courses/${id}/watch`} className="btn btn-outline btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                     <FiPlay /> Preview Course Lectures & Notes
                   </Link>
@@ -437,7 +406,7 @@ const CourseDetailPage = () => {
             <div>
               <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>Course Syllabus & Academic Hierarchy</h2>
               <p style={{ color: 'var(--text-muted)' }}>
-                Structured curriculum from Subjects down to Chapters, Scheduled Video Lectures, and Google Drive Study Materials.
+                Structured curriculum from Subjects down to Chapters, Scheduled Video Lectures, and Study PDF Materials.
               </p>
             </div>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -567,7 +536,7 @@ const CourseDetailPage = () => {
                                                 )}
                                                 {lessonNotes.length > 0 && (
                                                   <span className="badge badge-success" style={{ fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                    <FiCloud size={11} /> {lessonNotes.length} GDrive PDF
+                                                    <FiFileText size={11} /> {lessonNotes.length} Study PDF
                                                   </span>
                                                 )}
                                               </div>
@@ -615,9 +584,9 @@ const CourseDetailPage = () => {
                                                       className="btn btn-sm btn-outline"
                                                       style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                                                     >
-                                                      {canViewNote ? <FiCloud size={12} /> : <FiLock size={12} />}
+                                                      {canViewNote ? <FiFileText size={12} /> : <FiLock size={12} />}
                                                       <span>{ln.title}</span>
-                                                      <span style={{ opacity: 0.7 }}>(Google Drive PDF)</span>
+                                                      <span style={{ opacity: 0.7 }}>(PDF)</span>
                                                     </button>
                                                   );
                                                 })}
@@ -642,15 +611,15 @@ const CourseDetailPage = () => {
             </div>
           )}
 
-          {/* Dedicated Course Study Materials (Google Drive) Section */}
+          {/* Dedicated Course Study Materials Section */}
           <div style={{ marginTop: '3.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h2 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FiCloud style={{ color: 'var(--primary)' }} /> Course Study Materials (Google Drive)
+                  <FiFileText style={{ color: 'var(--primary)' }} /> Course Study Materials (PDF)
                 </h2>
                 <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.95rem' }}>
-                  Access admin-uploaded study notes, formula sheets, and chapter PDFs directly from Google Drive inside the Course Portal.
+                  Access study notes, formula sheets, and chapter PDFs directly inside the Course Portal.
                 </p>
               </div>
               <Link to={`/courses/${id}/watch`} className="btn btn-sm btn-outline">
@@ -664,7 +633,7 @@ const CourseDetailPage = () => {
                 <p style={{ margin: 0 }}>No study materials uploaded for this course yet.</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 270px), 1fr))', gap: '1.15rem' }}>
                 {courseNotes.map((note) => {
                   const canAccessNote = purchased || note.isFree || !note.isLocked;
                   return (
@@ -684,7 +653,7 @@ const CourseDetailPage = () => {
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
                           <span className="badge badge-success" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <FiCloud size={11} /> Google Drive PDF
+                            <FiFileText size={11} /> Study PDF
                           </span>
                           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: note.isFree ? '#10b981' : 'var(--primary)' }}>
                             {note.isFree ? 'FREE' : purchased ? 'INCLUDED IN COURSE' : formatPrice(note.price)}
@@ -706,7 +675,7 @@ const CourseDetailPage = () => {
                           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
                         >
                           {canAccessNote ? <FiFileText size={14} /> : <FiLock size={14} />}
-                          {canAccessNote ? 'Access GDrive Content' : 'Enroll to Unlock'}
+                          {canAccessNote ? 'Open Study PDF' : 'Enroll to Unlock'}
                         </button>
                       </div>
                     </div>
@@ -729,101 +698,12 @@ const CourseDetailPage = () => {
         />
       )}
 
-      {/* Google Drive Study Material Viewer Modal */}
+      {/* Unified Authenticated PDF Study Material Modal */}
       {selectedNoteModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-          onClick={() => setSelectedNoteModal(null)}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '940px',
-              height: '86vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              border: '1px solid var(--border)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: '1rem 1.5rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--border)',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{selectedNoteModal.title}</h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {selectedNoteModal.fileName || 'Study Material'} • Stored in Google Drive ({selectedNoteModal.fileSize || '2.5 MB'})
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {getNoteDrivePreviewUrl(selectedNoteModal) && (
-                  <button
-                    type="button"
-                    onClick={() => setNoteViewMode(noteViewMode === 'portal' ? 'gdrive' : 'portal')}
-                    className="btn btn-sm btn-outline"
-                  >
-                    {noteViewMode === 'portal' ? 'Switch to GDrive Embed' : 'Switch to Portal Stream'}
-                  </button>
-                )}
-                {getNoteDriveViewUrl(selectedNoteModal) && (
-                  <a
-                    href={getNoteDriveViewUrl(selectedNoteModal)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm btn-primary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <FiExternalLink size={14} /> Open in Google Drive
-                  </a>
-                )}
-                <a
-                  href={getNoteDownloadUrl(selectedNoteModal)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <FiDownload size={14} /> Download PDF
-                </a>
-                <button type="button" onClick={() => setSelectedNoteModal(null)} className="btn btn-sm btn-outline">
-                  Close
-                </button>
-              </div>
-            </div>
-            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
-              <iframe
-                src={
-                  noteViewMode === 'gdrive' && getNoteDrivePreviewUrl(selectedNoteModal)
-                    ? getNoteDrivePreviewUrl(selectedNoteModal)
-                    : getNoteStreamUrl(selectedNoteModal)
-                }
-                title={selectedNoteModal.title}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-          </div>
-        </div>
+        <PdfPreviewModal
+          note={selectedNoteModal}
+          onClose={() => setSelectedNoteModal(null)}
+        />
       )}
     </div>
   );

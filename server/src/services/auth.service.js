@@ -147,8 +147,8 @@ export class AuthService {
     const normalizedRole = (user.role || 'student').toLowerCase();
     const role = normalizedRole === 'user' ? 'student' : normalizedRole;
 
-    // Update last login timestamp asynchronously
-    await authRepository.updateLastLogin(userId);
+    // Update last login timestamp asynchronously without blocking response
+    authRepository.updateLastLogin(userId).catch(() => {});
 
     // Generate signed JWT tokens
     const token = generateAccessToken(userId, role);

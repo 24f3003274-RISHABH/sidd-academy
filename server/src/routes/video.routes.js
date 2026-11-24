@@ -7,8 +7,8 @@ const router = express.Router();
 
 // Public & Student Endpoints
 router.get('/', optionalAuth, videoController.getAllVideos);
-router.get('/:id', optionalAuth, videoController.getVideoById);
 router.get('/lesson/:lessonId', optionalAuth, videoController.getVideosByLesson);
+router.get('/:id', optionalAuth, videoController.getVideoById);
 
 // Admin Management Endpoints
 router.post('/', protect, authorize('ADMIN'), validateCreateVideo, videoController.createVideo);

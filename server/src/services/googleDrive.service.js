@@ -20,6 +20,64 @@ const DEFAULT_GDRIVE_FOLDER_ID = '1axziJZcQmDY1Ptbkm8s3c1ZJYStrL7Rf';
 export class GoogleDriveService {
   constructor() {
     this.folderId = process.env.GOOGLE_DRIVE_FOLDER_ID || ENV.GOOGLE_DRIVE_FOLDER_ID || DEFAULT_GDRIVE_FOLDER_ID;
+    this.pdfMemoryCache = new Map();
+  }
+
+  /**
+   * Fetch a publicly shared Google Drive PDF directly over HTTPS on the server.
+   * This avoids embedding Google Drive's /preview iframe in the browser, which fails
+   * with "Allow Google Drive access to your necessary cookies" when third-party cookies are blocked.
+   */
+  async fetchPublicDrivePdfBuffer(driveFileId) {
+    if (!driveFileId) return null;
+
+    // 1. Bounded in-memory cache (up to 15 PDFs, 30 min TTL)
+    const cached = this.pdfMemoryCache.get(driveFileId);
+    if (cached && Date.now() - cached.cachedAt < 30 * 60 * 1000 && cached.buffer?.length > 5) {
+      return cached.buffer;
+    }
+
+    const candidateUrls = [
+      `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveFileId)}&export=download&confirm=t`,
+      `https://drive.google.com/uc?export=download&id=${encodeURIComponent(driveFileId)}&confirm=t`,
+    ];
+
+    const isPdfBuf = (buf) => Buffer.isBuffer(buf) && buf.length >= 5 && buf.subarray(0, 5).toString('utf8').startsWith('%PDF-');
+
+    for (const url of candidateUrls) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      try {
+        const resp = await fetch(url, {
+          method: 'GET',
+          redirect: 'follow',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; SiddAcademyServer/1.0)',
+            Accept: 'application/pdf,application/octet-stream,*/*;q=0.8',
+          },
+        });
+        clearTimeout(timer);
+
+        if (!resp.ok) continue;
+
+        const arrayBuf = await resp.arrayBuffer();
+        const buf = Buffer.from(arrayBuf);
+        if (isPdfBuf(buf)) {
+          if (this.pdfMemoryCache.size >= 15) {
+            const oldestKey = this.pdfMemoryCache.keys().next().value;
+            if (oldestKey) this.pdfMemoryCache.delete(oldestKey);
+          }
+          this.pdfMemoryCache.set(driveFileId, { buffer: buf, cachedAt: Date.now() });
+          return buf;
+        }
+      } catch (err) {
+        clearTimeout(timer);
+        console.warn('⚠️ [GoogleDrive] Public HTTPS PDF proxy notice:', err.message);
+      }
+    }
+
+    return null;
   }
 
   /**

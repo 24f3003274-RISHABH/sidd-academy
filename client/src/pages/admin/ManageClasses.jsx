@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
 import { getSubjectsByCourse, getChaptersBySubject, createClass, updateClass, deleteClass } from '../../api/adminApi';
 import axiosInstance from '../../api/axiosInstance';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
-import { FiEdit2, FiTrash2, FiPlus, FiVideo, FiYoutube, FiFileText, FiClock, FiCheck, FiExternalLink } from 'react-icons/fi';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import { FiEdit2, FiTrash2, FiPlus, FiVideo, FiYoutube, FiFileText, FiClock, FiExternalLink, FiFolder } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const ManageClasses = () => {
@@ -22,6 +24,7 @@ const ManageClasses = () => {
   const [classesLoading, setClassesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -43,7 +46,7 @@ const ManageClasses = () => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
-        const res = await getAllCourses();
+        const res = await getAllCourses({ limit: 100 });
         const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
         setCourses(list);
         if (list.length > 0 && !selectedCourse) {
@@ -192,41 +195,55 @@ const ManageClasses = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (cls) => {
+    const id = cls.id || cls._id;
     if (deletingId) return;
-    if (window.confirm('Are you sure you want to remove this video lecture?')) {
-      setDeletingId(id);
-      try {
-        await deleteClass(id);
-        toast.success('Video lecture removed');
-        fetchClasses(selectedChapter);
-      } catch (err) {
-        toast.error(err.response?.data?.message || 'Error deleting video lecture');
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Video Lecture?',
+      message: `Remove "${cls.title}" from this chapter?`,
+      confirmText: 'Remove Lecture',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteClass(id);
+          toast.success('Video lecture removed');
+          fetchClasses(selectedChapter);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Error deleting video lecture');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
 
   if (loading) return <Loader fullPage />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Manage Video Lectures & Classes</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Add YouTube video lectures, set durations, attach chapter PDFs, and manage free previews.
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>Manage Daily Classes &amp; Lectures</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '0.25rem 0 0 0' }}>
+            Add YouTube video lectures, set durations, and manage free previews per chapter.
           </p>
         </div>
-        <button 
-          onClick={() => openModal()} 
-          className="btn btn-primary"
-          disabled={!selectedChapter}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-        >
-          <FiPlus /> Add New Video Lecture
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <Link to={selectedCourse ? `/admin/curriculum?courseId=${selectedCourse}` : '/admin/curriculum'} className="btn btn-outline btn-sm">
+            <FiFolder size={14} /> Open in Course Studio
+          </Link>
+          <button
+            type="button"
+            onClick={() => openModal()}
+            className="btn btn-primary btn-sm"
+            disabled={!selectedChapter}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <FiPlus /> Add Video Lecture
+          </button>
+        </div>
       </div>
 
       {/* Hierarchical Selector: Course -> Subject -> Chapter */}
@@ -391,9 +408,10 @@ const ManageClasses = () => {
                     >
                       <FiEdit2 /> Edit
                     </button>
-                    <button 
-                              onClick={() => handleDelete(clsId)}
-                              disabled={deletingId === clsId}
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(cls)}
+                      disabled={deletingId === clsId}
                       className="btn btn-sm btn-danger"
                       title="Delete lecture"
                     >
@@ -505,6 +523,17 @@ const ManageClasses = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant="danger"
+        loading={Boolean(deletingId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !deletingId && setConfirmState(null)}
+      />
     </div>
   );
 };

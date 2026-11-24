@@ -68,7 +68,15 @@ export class BannerRepository {
         sql += ` ORDER BY order_num ASC, created_at DESC`;
 
         const res = await query(sql, params);
-        return res.rows.map(row => this.normalizeBanner(row));
+        const rows = res.rows
+          .map(row => this.normalizeBanner(row))
+          .filter(b =>
+            !/Crack Top Tech Interviews/i.test(b.title || '') &&
+            !/Data Structures, Web Development, and DBMS/i.test(b.subtitle || '')
+          );
+        if (rows.length > 0 || !activeOnly) {
+          return rows;
+        }
       } catch (err) {
         console.warn('BannerRepository findAll fallback to mockStore:', err.message);
       }
@@ -268,6 +276,24 @@ export class BannerRepository {
     if (idx === -1) return false;
     mockData.banners.splice(idx, 1);
     return true;
+  }
+
+  /**
+   * Count total or active banners
+   */
+  async count({ activeOnly = false } = {}) {
+    if (ENV.DATABASE_URL) {
+      try {
+        const sql = activeOnly ? `SELECT COUNT(*) FROM banners WHERE is_active = true` : `SELECT COUNT(*) FROM banners`;
+        const res = await query(sql);
+        return parseInt(res.rows[0]?.count || 0, 10);
+      } catch (err) {
+        console.warn('BannerRepository count fallback to mockStore:', err.message);
+      }
+    }
+
+    const list = mockData.banners || [];
+    return activeOnly ? list.filter(b => b.isActive !== false && b.is_active !== false).length : list.length;
   }
 }
 

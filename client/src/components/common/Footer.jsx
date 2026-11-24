@@ -29,9 +29,9 @@ const Footer = () => {
         <div>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>कक्षाएं (Classes)</h3>
           <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            <li><Link to="/courses" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 10th (High School)</Link></li>
-            <li><Link to="/courses" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 11th (Science / Arts)</Link></li>
-            <li><Link to="/courses" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 12th (Board & Entrance)</Link></li>
+            <li><Link to="/courses?level=Class%2010" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 10th (High School)</Link></li>
+            <li><Link to="/courses?level=Class%2011" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 11th (Science / Arts)</Link></li>
+            <li><Link to="/courses?level=Class%2012" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Class 12th (Board &amp; Entrance)</Link></li>
             <li><Link to="/courses" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>All Online Courses</Link></li>
           </ul>
         </div>

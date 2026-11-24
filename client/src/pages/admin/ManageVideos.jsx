@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getAllVideos, createVideo, updateVideo, deleteVideo } from '../../api/videoApi';
 import { getAllCourses } from '../../api/courseApi';
 import { getSubjectsByCourse, getChaptersBySubject } from '../../api/adminApi';
-import axiosInstance from '../../api/axiosInstance';
+import axiosInstance, { clearGetCache } from '../../api/axiosInstance';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
 import VideoPlayerEmbed from '../../components/video/VideoPlayerEmbed';
-import { FiVideo, FiYoutube, FiPlus, FiTrash2, FiEdit2, FiCheckCircle } from 'react-icons/fi';
+import { FiVideo, FiYoutube, FiPlus, FiTrash2, FiEdit2, FiSearch } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 const ManageVideos = () => {
@@ -16,6 +17,9 @@ const ManageVideos = () => {
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [accessFilter, setAccessFilter] = useState('all'); // 'all' | 'free' | 'paid'
 
   // Cascading hierarchy dropdowns
   const [courses, setCourses] = useState([]);
@@ -59,7 +63,7 @@ const ManageVideos = () => {
 
   const fetchCourses = async () => {
     try {
-      const res = await getAllCourses();
+      const res = await getAllCourses({ limit: 100 });
       const list = res.data?.data?.courses || res.data?.courses || (Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
       setCourses(list);
     } catch (err) {
@@ -200,6 +204,7 @@ const ManageVideos = () => {
         toast.success('Video created successfully');
       }
 
+      clearGetCache();
       setIsModalOpen(false);
       fetchVideos();
     } catch (err) {
@@ -209,21 +214,43 @@ const ManageVideos = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (vid) => {
+    const id = vid.id || vid._id;
     if (deletingId) return;
-    if (window.confirm('Are you sure you want to delete this video?')) {
-      setDeletingId(id);
-      try {
-        await deleteVideo(id);
-        toast.success('Video deleted successfully');
-        fetchVideos();
-      } catch (err) {
-        toast.error('Failed to delete video');
-      } finally {
-        setDeletingId(null);
-      }
-    }
+    setConfirmState({
+      title: 'Delete Video Stream?',
+      message: `Remove "${vid.title}" from the video library?`,
+      confirmText: 'Delete Video',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setDeletingId(id);
+        try {
+          await deleteVideo(id);
+          clearGetCache();
+          toast.success('Video deleted successfully');
+          fetchVideos();
+        } catch (err) {
+          toast.error('Failed to delete video');
+        } finally {
+          setDeletingId(null);
+          setConfirmState(null);
+        }
+      },
+    });
   };
+
+  const filteredVideos = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return videos.filter((vid) => {
+      if (accessFilter === 'free' && !vid.isFree) return false;
+      if (accessFilter === 'paid' && vid.isFree) return false;
+      if (q) {
+        const hay = `${vid.title || ''} ${vid.courseTitle || ''} ${vid.lessonTitle || ''} ${vid.videoUrl || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [videos, searchQuery, accessFilter]);
 
   if (loading) return <Loader fullPage />;
 
@@ -241,6 +268,34 @@ const ManageVideos = () => {
         </button>
       </div>
 
+      {/* Search & Access Filter Toolbar */}
+      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'relative', flex: '1 1 250px', maxWidth: '400px' }}>
+          <FiSearch style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingLeft: '2.35rem' }}
+            placeholder="Search videos by title, course, or URL..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+          {['all', 'free', 'paid'].map((af) => (
+            <button
+              key={af}
+              type="button"
+              onClick={() => setAccessFilter(af)}
+              className={`btn btn-sm ${accessFilter === af ? 'btn-primary' : 'btn-outline'}`}
+              style={{ borderRadius: '999px', padding: '0.32rem 0.78rem', fontSize: '0.78rem', textTransform: 'capitalize' }}
+            >
+              {af === 'all' ? `All (${videos.length})` : af === 'free' ? 'Free Preview' : 'Enrolled Only'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Videos List Table */}
       <div className="card" style={{ padding: '1.25rem' }}>
         <div className="table-wrapper">
@@ -248,7 +303,7 @@ const ManageVideos = () => {
             <thead>
               <tr>
                 <th>Thumbnail</th>
-                <th>Video Title</th>
+                <th>Video Title ({filteredVideos.length})</th>
                 <th>Hierarchy / Link</th>
                 <th>Provider</th>
                 <th>Status</th>
@@ -256,15 +311,19 @@ const ManageVideos = () => {
               </tr>
             </thead>
             <tbody>
-              {videos.length === 0 ? (
+              {filteredVideos.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)' }}>
                     <FiVideo size={36} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
-                    <p>No video streams added yet. Click "Add Video Stream" to begin.</p>
+                    <p style={{ margin: 0 }}>
+                      {videos.length === 0
+                        ? 'No video streams added yet. Click "Add Video Stream" to begin.'
+                        : 'No videos match your search or filter.'}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                videos.map((vid) => {
+                filteredVideos.map((vid) => {
                   const id = vid.id || vid._id;
                   return (
                     <tr key={id}>
@@ -313,7 +372,8 @@ const ManageVideos = () => {
                             <FiEdit2 size={13} />
                           </button>
                           <button
-                            onClick={() => handleDelete(id)}
+                            type="button"
+                            onClick={() => handleDelete(vid)}
                             disabled={deletingId === id}
                             className="btn btn-sm btn-danger"
                             title="Delete Video"
@@ -410,7 +470,12 @@ const ManageVideos = () => {
                 <select
                   className="form-input"
                   value={selectedCourse}
-                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedCourse(e.target.value);
+                    setSelectedSubject('');
+                    setSelectedChapter('');
+                    setSelectedLesson('');
+                  }}
                 >
                   <option value="">-- Select Course --</option>
                   {courses.map((c) => (
@@ -424,7 +489,11 @@ const ManageVideos = () => {
                 <select
                   className="form-input"
                   value={selectedSubject}
-                  onChange={(e) => setSelectedSubject(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedSubject(e.target.value);
+                    setSelectedChapter('');
+                    setSelectedLesson('');
+                  }}
                   disabled={!selectedCourse}
                 >
                   <option value="">-- Select Subject --</option>
@@ -441,7 +510,10 @@ const ManageVideos = () => {
                 <select
                   className="form-input"
                   value={selectedChapter}
-                  onChange={(e) => setSelectedChapter(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedChapter(e.target.value);
+                    setSelectedLesson('');
+                  }}
                   disabled={!selectedSubject}
                 >
                   <option value="">-- Select Chapter --</option>
@@ -507,6 +579,17 @@ const ManageVideos = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmText={confirmState?.confirmText}
+        confirmVariant={confirmState?.confirmVariant || 'danger'}
+        loading={Boolean(deletingId)}
+        onConfirm={confirmState?.onConfirm}
+        onCancel={() => !deletingId && setConfirmState(null)}
+      />
     </div>
   );
 };

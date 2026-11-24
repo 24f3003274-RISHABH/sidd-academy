@@ -49,6 +49,7 @@ export class SubjectService {
     return await subjectRepository.create({
       courseId,
       name: subjectName,
+      description: data.description || '',
       order,
     });
   }

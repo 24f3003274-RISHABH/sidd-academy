@@ -22,13 +22,13 @@ const ContactPage = () => {
   };
 
   return (
-    <div className="container" style={{ padding: '4rem 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-        <h1 className="text-gradient" style={{ fontSize: '3rem', marginBottom: '1rem' }}>Contact Us</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Have a question? We'd love to hear from you.</p>
+    <div className="container" style={{ padding: 'clamp(2rem, 5vw, 4rem) 0' }}>
+      <div style={{ textAlign: 'center', marginBottom: 'clamp(2rem, 4vw, 3.5rem)' }}>
+        <h1 className="text-gradient" style={{ fontSize: 'clamp(1.85rem, 5vw, 3rem)', marginBottom: '0.75rem' }}>Contact Us</h1>
+        <p style={{ color: 'var(--text-muted)' }}>Have a question? We&apos;d love to hear from you.</p>
       </div>
 
-      <div className="grid-2" style={{ gap: '4rem' }}>
+      <div className="grid-2" style={{ gap: 'clamp(1.75rem, 4vw, 4rem)' }}>
         <div className="card-glass" style={{ padding: '2rem' }}>
           <h2 style={{ marginBottom: '1.5rem' }}>Send us a Message</h2>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
