@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllNotes, getSecureAccess, downloadNote } from '../../api/noteApi';
-import { createOrder, verifyPayment, cancelOrder, failOrder } from '../../api/orderApi';
+import { createOrder, verifyPayment, cancelOrder, failOrder, getPaymentKey } from '../../api/orderApi';
 import { useAuth } from '../../hooks/useAuth';
 import Loader from '../../components/common/Loader';
 import NoteCard from '../../components/notes/NoteCard';
@@ -27,6 +27,7 @@ const NotesPage = () => {
   const [loading, setLoading] = useState(true);
   const { isAuthenticated, user, refreshUser } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [purchasingNoteId, setPurchasingNoteId] = useState(null);
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'modular'
   const [filterType, setFilterType] = useState('all'); // 'all' | 'free' | 'paid'
@@ -154,11 +155,12 @@ const NotesPage = () => {
       navigate('/login', { state: { from: '/notes' } });
       return;
     }
+    const noteId = note.id || note._id;
     setPaymentLoading(true);
+    setPurchasingNoteId(noteId);
     setCheckoutMessage('');
     let checkoutOpened = false;
     try {
-      const noteId = note.id || note._id;
       const orderRes = await createOrder({
         items: [{ itemId: noteId, itemType: 'note' }],
       });
@@ -171,24 +173,29 @@ const NotesPage = () => {
         toast.success(orderData.message || 'Digital note added to your library!');
         fetchNotes();
         setPaymentLoading(false);
+        setPurchasingNoteId(null);
         return;
       }
 
       const { orderId, razorpayOrderId, amount, currency, keyId, isMock } = orderData;
 
-      if (isMock) {
-        await verifyPayment({
-          orderId,
-          razorpayOrderId: razorpayOrderId || `order_mock_${Date.now()}`,
-          razorpayPaymentId: `pay_mock_${Date.now()}`,
-          razorpaySignature: `sig_mock_verified_${Date.now()}`,
-        });
-        clearGetCache();
-        if (refreshUser) await refreshUser();
-        toast.success('Payment verified! Google Drive digital note unlocked.');
-        setPaymentLoading(false);
-        fetchNotes();
-        return;
+      let resolvedKey = (keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '').trim();
+      if (!resolvedKey) {
+        try {
+          const keyRes = await getPaymentKey();
+          resolvedKey = (keyRes.data?.data?.key || keyRes.data?.key || '').trim();
+        } catch {
+          resolvedKey = '';
+        }
+      }
+
+      if (isMock || !razorpayOrderId || razorpayOrderId.startsWith('order_mock_') || !resolvedKey) {
+        if (orderId) {
+          cancelOrder(orderId).catch(() => {});
+        }
+        throw new Error(
+          'Razorpay payment gateway keys are not configured yet. Please add your live RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env to accept payments.'
+        );
       }
 
       const scriptLoaded = await loadRazorpayScript();
@@ -197,7 +204,7 @@ const NotesPage = () => {
       }
 
       const options = {
-        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: resolvedKey,
         amount: orderData.amountInPaise ? String(orderData.amountInPaise) : Math.round(Number(amount) * 100).toString(),
         currency: currency || 'INR',
         name: 'Sidd Academy',
@@ -215,9 +222,11 @@ const NotesPage = () => {
             if (refreshUser) await refreshUser();
             toast.success('Payment verified! Digital note unlocked.');
             setPaymentLoading(false);
+            setPurchasingNoteId(null);
             fetchNotes();
           } catch (err) {
             setPaymentLoading(false);
+            setPurchasingNoteId(null);
             toast.error(err.response?.data?.message || 'Payment verification failed');
           }
         },
@@ -226,12 +235,17 @@ const NotesPage = () => {
           email: user?.email || '',
           contact: user?.phone || '',
         },
-        theme: { color: '#6c63ff' },
+        theme: { color: '#2563eb' },
+        modal: {
+          escape: true,
+          backdropclose: false,
+        },
       };
 
       const paymentObject = new window.Razorpay(options);
       const finishCheckout = () => {
         setPaymentLoading(false);
+        setPurchasingNoteId(null);
       };
 
       paymentObject.on('payment.failed', function (resp) {
@@ -262,6 +276,7 @@ const NotesPage = () => {
       }, 60000);
     } catch (err) {
       setPaymentLoading(false);
+      setPurchasingNoteId(null);
       const status = err.response?.status;
       const serverMsg = err.response?.data?.message;
       if (status === 401) {
@@ -274,7 +289,10 @@ const NotesPage = () => {
         toast.error(serverMsg || err.message || 'Failed to initiate purchase order');
       }
     } finally {
-      if (!checkoutOpened) setPaymentLoading(false);
+      if (!checkoutOpened) {
+        setPaymentLoading(false);
+        setPurchasingNoteId(null);
+      }
     }
   };
 
@@ -359,7 +377,7 @@ const NotesPage = () => {
         </div>
 
         {/* View Mode Toggle */}
-        <div style={{ display: 'flex', gap: '0.4rem', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', borderLeft: '1px solid var(--border)', paddingLeft: '1rem' }}>
           <button
             onClick={() => setViewMode('grid')}
             className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-outline'}`}
@@ -397,6 +415,7 @@ const NotesPage = () => {
           isAuthenticated={isAuthenticated}
           user={user}
           isPurchasing={paymentLoading}
+          purchasingNoteId={purchasingNoteId}
         />
       ) : (
         <div>
@@ -418,6 +437,7 @@ const NotesPage = () => {
                   isAuthenticated={isAuthenticated}
                   user={user}
                   isPurchasing={paymentLoading}
+                  purchasingNoteId={purchasingNoteId}
                 />
               ))}
             </div>

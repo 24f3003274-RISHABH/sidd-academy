@@ -74,7 +74,7 @@ const VideoPlayerEmbed = ({
           backgroundColor: 'var(--bg-card)',
           borderRadius: '12px',
           overflow: 'hidden',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          border: '1px solid var(--border)',
         }}
       >
         {poster && (
@@ -115,9 +115,9 @@ const VideoPlayerEmbed = ({
               width: '64px',
               height: '64px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(255, 117, 140, 0.15)',
-              border: '1px solid rgba(255, 117, 140, 0.3)',
-              color: '#ff758c',
+              backgroundColor: 'var(--danger-subtle)',
+              border: '1px solid #fecaca',
+              color: 'var(--danger)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -132,13 +132,13 @@ const VideoPlayerEmbed = ({
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '1px',
-              color: '#ff758c',
+              color: 'var(--danger)',
               marginBottom: '0.5rem',
             }}
           >
             Premium Video Lecture
           </span>
-          <h3 style={{ margin: '0 0 0.5rem 0', color: '#fff', fontSize: '1.25rem', maxWidth: '500px' }}>
+          <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)', fontSize: '1.25rem', maxWidth: '500px' }}>
             {title}
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '450px', marginBottom: '1.5rem' }}>
@@ -178,8 +178,8 @@ const VideoPlayerEmbed = ({
         backgroundColor: 'var(--bg-card)',
         borderRadius: '12px',
         overflow: 'hidden',
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: 'var(--shadow-md)',
+        border: '1px solid var(--border)',
       }}
     >
       {embedUrl ? (

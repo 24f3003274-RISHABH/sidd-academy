@@ -3,6 +3,9 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
+
 /**
  * Video Repository - PostgreSQL Data Access Layer with MockStore Resilient Fallback
  */
@@ -66,18 +69,18 @@ export class VideoRepository {
         const params = [];
         let pIndex = 1;
 
-        if (lessonId) {
+        if (lessonId && isUuid(lessonId)) {
           sql += ` AND v.lesson_id = $${pIndex++}`;
           params.push(lessonId);
         }
 
-        if (chapterId) {
+        if (chapterId && isUuid(chapterId)) {
           sql += ` AND (v.chapter_id = $${pIndex} OR l.chapter_id = $${pIndex})`;
           params.push(chapterId);
           pIndex++;
         }
 
-        if (subjectId) {
+        if (subjectId && isUuid(subjectId)) {
           sql += ` AND (v.subject_id = $${pIndex} OR ch.subject_id = $${pIndex})`;
           params.push(subjectId);
           pIndex++;
@@ -150,7 +153,7 @@ export class VideoRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           SELECT v.id, v.lesson_id, v.course_id, v.subject_id, v.chapter_id,
@@ -191,7 +194,7 @@ export class VideoRepository {
   async findByLessonId(lessonId) {
     if (!lessonId) return [];
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(lessonId)) {
       try {
         const sql = `
           SELECT v.id, v.lesson_id, v.course_id, v.subject_id, v.chapter_id,
@@ -234,10 +237,10 @@ export class VideoRepository {
         `;
         const params = [
           id,
-          data.lessonId || null,
-          data.courseId || null,
-          data.subjectId || null,
-          data.chapterId || null,
+          isUuid(data.lessonId) ? data.lessonId : null,
+          isUuid(data.courseId) ? data.courseId : null,
+          isUuid(data.subjectId) ? data.subjectId : null,
+          isUuid(data.chapterId) ? data.chapterId : null,
           data.title,
           data.description || '',
           data.videoUrl,
@@ -291,16 +294,16 @@ export class VideoRepository {
   async update(id, data) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
         const params = [];
         let pIndex = 1;
 
-        if (data.lessonId !== undefined) { fields.push(`lesson_id = $${pIndex++}`); params.push(data.lessonId || null); }
-        if (data.courseId !== undefined) { fields.push(`course_id = $${pIndex++}`); params.push(data.courseId || null); }
-        if (data.subjectId !== undefined) { fields.push(`subject_id = $${pIndex++}`); params.push(data.subjectId || null); }
-        if (data.chapterId !== undefined) { fields.push(`chapter_id = $${pIndex++}`); params.push(data.chapterId || null); }
+        if (data.lessonId !== undefined) { fields.push(`lesson_id = $${pIndex++}`); params.push(isUuid(data.lessonId) ? data.lessonId : null); }
+        if (data.courseId !== undefined) { fields.push(`course_id = $${pIndex++}`); params.push(isUuid(data.courseId) ? data.courseId : null); }
+        if (data.subjectId !== undefined) { fields.push(`subject_id = $${pIndex++}`); params.push(isUuid(data.subjectId) ? data.subjectId : null); }
+        if (data.chapterId !== undefined) { fields.push(`chapter_id = $${pIndex++}`); params.push(isUuid(data.chapterId) ? data.chapterId : null); }
         if (data.title !== undefined) { fields.push(`title = $${pIndex++}`); params.push(data.title); }
         if (data.description !== undefined) { fields.push(`description = $${pIndex++}`); params.push(data.description); }
         if (data.videoUrl !== undefined) { fields.push(`video_url = $${pIndex++}`); params.push(data.videoUrl); }
@@ -347,7 +350,7 @@ export class VideoRepository {
   async delete(id) {
     if (!id) return false;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `DELETE FROM videos WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);

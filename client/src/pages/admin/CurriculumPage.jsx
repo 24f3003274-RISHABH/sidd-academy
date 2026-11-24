@@ -6,7 +6,11 @@ import {
   getChaptersBySubject,
   getClassesByChapter,
   createSubject,
+  updateSubject,
+  deleteSubject,
   createChapter,
+  updateChapter,
+  deleteChapter,
   createClass,
   updateClass,
   deleteClass,
@@ -20,6 +24,7 @@ import {
   FiFolder,
   FiList,
   FiPlus,
+  FiEdit2,
   FiTrash2,
   FiSave,
   FiAlertCircle,
@@ -78,6 +83,7 @@ const CurriculumPage = () => {
   const [loadingSection, setLoadingSection] = useState('');
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
+  const [editingEntity, setEditingEntity] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [lessonSaving, setLessonSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -364,8 +370,41 @@ const CurriculumPage = () => {
   };
 
   const openCreate = (type) => {
+    setEditingEntity(null);
     setFormValue({ title: '', description: '' });
     setModal(type);
+  };
+
+  const openEditEntity = (type, item) => {
+    if (!item) return;
+    setEditingEntity({ type, id: getId(item) });
+    setFormValue({
+      title: item.name || item.title || '',
+      description: item.description || item.content || '',
+    });
+    setModal(type);
+  };
+
+  const handleDeleteEntity = async (type, id) => {
+    if (!id || deletingId) return;
+    const label = type === 'subject' ? 'subject and its chapters' : 'chapter and its lessons';
+    if (!window.confirm(`Are you sure you want to delete this ${label}?`)) return;
+    setDeletingId(id);
+    try {
+      if (type === 'subject') {
+        await deleteSubject(id);
+        toast.success('Subject deleted');
+        await loadSubjects(selectedCourse);
+      } else {
+        await deleteChapter(id);
+        toast.success('Chapter deleted');
+        await loadChapters(selectedSubject);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || `Could not delete ${type}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const submitCreate = async (event) => {
@@ -374,24 +413,45 @@ const CurriculumPage = () => {
     setSubmitting(true);
     try {
       if (modal === 'subject') {
-        const response = await createSubject({
-          name: formValue.title.trim(),
-          description: formValue.description,
-          courseId: selectedCourse,
-        });
-        await loadSubjects(selectedCourse, getId(response.data?.data?.subject));
+        if (editingEntity?.type === 'subject' && editingEntity.id) {
+          await updateSubject(editingEntity.id, {
+            name: formValue.title.trim(),
+            title: formValue.title.trim(),
+            description: formValue.description,
+          });
+          await loadSubjects(selectedCourse, editingEntity.id);
+          toast.success('Subject updated');
+        } else {
+          const response = await createSubject({
+            name: formValue.title.trim(),
+            description: formValue.description,
+            courseId: selectedCourse,
+          });
+          await loadSubjects(selectedCourse, getId(response.data?.data?.subject));
+          toast.success('Subject created');
+        }
       } else {
-        const response = await createChapter({
-          title: formValue.title.trim(),
-          content: formValue.description,
-          subjectId: selectedSubject,
-        });
-        await loadChapters(selectedSubject, getId(response.data?.data?.chapter));
+        if (editingEntity?.type === 'chapter' && editingEntity.id) {
+          await updateChapter(editingEntity.id, {
+            title: formValue.title.trim(),
+            content: formValue.description,
+          });
+          await loadChapters(selectedSubject, editingEntity.id);
+          toast.success('Chapter updated');
+        } else {
+          const response = await createChapter({
+            title: formValue.title.trim(),
+            content: formValue.description,
+            subjectId: selectedSubject,
+          });
+          await loadChapters(selectedSubject, getId(response.data?.data?.chapter));
+          toast.success('Chapter created');
+        }
       }
-      toast.success(`${modal} created`);
       setModal(null);
+      setEditingEntity(null);
     } catch (err) {
-      toast.error(err.response?.data?.message || `Could not create ${modal}`);
+      toast.error(err.response?.data?.message || `Could not save ${modal}`);
     } finally {
       setSubmitting(false);
     }
@@ -519,14 +579,40 @@ const CurriculumPage = () => {
           <div className="studio-tree-section">
             <div className="studio-tree-label">
               <FiFolder /> Subjects{' '}
-              <button
-                type="button"
-                onClick={() => openCreate('subject')}
-                disabled={!selectedCourse}
-                title="Add subject"
-              >
-                <FiPlus />
-              </button>
+              <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: '0.25rem' }}>
+                {selectedSubject && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openEditEntity(
+                          'subject',
+                          subjects.find((s) => getId(s) === selectedSubject)
+                        )
+                      }
+                      title="Rename selected subject"
+                    >
+                      <FiEdit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEntity('subject', selectedSubject)}
+                      disabled={Boolean(deletingId)}
+                      title="Delete selected subject"
+                    >
+                      <FiTrash2 size={13} />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openCreate('subject')}
+                  disabled={!selectedCourse}
+                  title="Add subject"
+                >
+                  <FiPlus />
+                </button>
+              </div>
             </div>
             {loadingSection === 'subjects' && <p className="studio-muted">Loading subjects...</p>}
             {subjects.map((subject) => (
@@ -547,14 +633,40 @@ const CurriculumPage = () => {
           <div className="studio-tree-section">
             <div className="studio-tree-label">
               <FiList /> Chapters{' '}
-              <button
-                type="button"
-                onClick={() => openCreate('chapter')}
-                disabled={!selectedSubject}
-                title="Add chapter"
-              >
-                <FiPlus />
-              </button>
+              <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: '0.25rem' }}>
+                {selectedChapter && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openEditEntity(
+                          'chapter',
+                          chapters.find((c) => getId(c) === selectedChapter)
+                        )
+                      }
+                      title="Rename selected chapter"
+                    >
+                      <FiEdit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEntity('chapter', selectedChapter)}
+                      disabled={Boolean(deletingId)}
+                      title="Delete selected chapter"
+                    >
+                      <FiTrash2 size={13} />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openCreate('chapter')}
+                  disabled={!selectedSubject}
+                  title="Add chapter"
+                >
+                  <FiPlus />
+                </button>
+              </div>
             </div>
             {loadingSection === 'chapters' && <p className="studio-muted">Loading chapters...</p>}
             {chapters.map((chapter) => (
@@ -992,13 +1104,16 @@ const CurriculumPage = () => {
         </section>
       </div>
 
-      {/* Add Subject / Chapter Modal */}
+      {/* Add / Edit Subject / Chapter Modal */}
       {modal && (
         <Modal
           isOpen
           closeDisabled={submitting}
-          title={`Add ${modal}`}
-          onClose={() => setModal(null)}
+          title={editingEntity ? `Edit ${modal}` : `Add ${modal}`}
+          onClose={() => {
+            setModal(null);
+            setEditingEntity(null);
+          }}
         >
           <form onSubmit={submitCreate} className="curriculum-form">
             <div className="form-group">
@@ -1024,13 +1139,16 @@ const CurriculumPage = () => {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => setModal(null)}
+                onClick={() => {
+                  setModal(null);
+                  setEditingEntity(null);
+                }}
                 disabled={submitting}
               >
                 Cancel
               </button>
               <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Creating...' : `Create ${modal}`}
+                {submitting ? 'Saving...' : editingEntity ? `Update ${modal}` : `Create ${modal}`}
               </button>
             </div>
           </form>

@@ -45,12 +45,18 @@ export class LessonService {
     const existing = await lessonRepository.findByChapterId(chapterId);
     const order = data.order !== undefined ? Number(data.order) : existing.length + 1;
 
+    const rawDuration = data.duration;
+    const duration =
+      typeof rawDuration === 'string' && rawDuration.includes(':')
+        ? rawDuration.trim()
+        : Number(rawDuration) || 60;
+
     return await lessonRepository.create({
       chapterId,
       title: data.title,
       description: data.description || data.content || '',
       classDate: data.classDate || new Date().toISOString(),
-      duration: Number(data.duration) || 60,
+      duration,
       order,
       isLive: Boolean(data.isLive),
       isFree: data.isFree === true || data.isFree === 'true',

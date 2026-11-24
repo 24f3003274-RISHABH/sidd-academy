@@ -159,6 +159,7 @@ export class OrderService {
     return {
       order: pendingOrder,
       orderId: pendingOrder.id,
+      order_id: gatewayOrder.gatewayOrderId,
       razorpayOrderId: gatewayOrder.gatewayOrderId,
       amount: calculatedTotal,
       amountInPaise: gatewayOrder.amountInPaise,
@@ -304,6 +305,119 @@ export class OrderService {
 
   async failOrder(orderId, userId, isAdmin = false) {
     return orderRepository.failOrder(orderId, userId, isAdmin);
+  }
+
+  /**
+   * Retry payment for an existing PENDING, FAILED, or CANCELLED order
+   * Re-initializes a fresh Razorpay order without creating duplicate order records.
+   */
+  async retryOrder(orderId, userId) {
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      throw new AppError('Order not found', 404);
+    }
+
+    if (order.userId !== userId && order.user?.id !== userId && order.user?._id !== userId) {
+      throw new AppError('Unauthorized: You can only retry payments for your own orders', 403);
+    }
+
+    if (order.status === ORDER_STATUS.PAID) {
+      throw new AppError('This order has already been paid.', 400);
+    }
+
+    const totalAmount = Number(order.totalAmount || 0);
+    if (totalAmount <= 0) {
+      const verified = await orderRepository.executePaymentVerificationTransaction({
+        orderId: order.id,
+        userId,
+        razorpayPaymentId: `free_retry_${Date.now()}`,
+        razorpaySignature: 'free_order',
+      });
+      return {
+        order: verified,
+        orderId: verified.id,
+        isFree: true,
+        amount: 0,
+        currency: 'INR',
+        status: ORDER_STATUS.PAID,
+        message: 'Enrolled successfully for free!',
+      };
+    }
+
+    const gatewayOrder = await paymentGatewayService.createGatewayOrder({
+      amount: totalAmount,
+      currency: order.currency || 'INR',
+      receipt: `retry_${String(userId).substring(0, 6)}_${Date.now()}`,
+      notes: { userId, orderId: order.id, retry: 'true' },
+    });
+
+    const refreshedOrder = await orderRepository.refreshOrderForRetry(order.id, gatewayOrder.gatewayOrderId);
+
+    return {
+      order: refreshedOrder,
+      orderId: refreshedOrder.id,
+      order_id: gatewayOrder.gatewayOrderId,
+      razorpayOrderId: gatewayOrder.gatewayOrderId,
+      amount: totalAmount,
+      amountInPaise: gatewayOrder.amountInPaise,
+      currency: refreshedOrder.currency || 'INR',
+      keyId: paymentGatewayService.getPublicKey(),
+      status: ORDER_STATUS.PENDING,
+      isMock: gatewayOrder.isMock,
+      paymentMode: gatewayOrder.mode,
+      items: refreshedOrder.items || [],
+    };
+  }
+
+  /**
+   * Handle Razorpay Server-to-Server Webhook for asynchronous reconciliation
+   */
+  async handleWebhook(rawBody, signatureHeader, payload) {
+    if (!paymentGatewayService.verifyWebhookSignature(rawBody, signatureHeader)) {
+      throw new AppError('Invalid Razorpay webhook signature', 400);
+    }
+
+    const event = payload?.event || '';
+    const paymentEntity = payload?.payload?.payment?.entity || {};
+    const orderEntity = payload?.payload?.order?.entity || {};
+    const rzpOrderId = paymentEntity.order_id || orderEntity.id;
+    const rzpPaymentId = paymentEntity.id;
+
+    if (!rzpOrderId) {
+      return { received: true, action: 'ignored_no_order_id' };
+    }
+
+    const order = await orderRepository.findByRazorpayOrderId(rzpOrderId);
+    if (!order) {
+      return { received: true, action: 'order_not_found' };
+    }
+
+    if (event === 'payment.captured' || event === 'order.paid') {
+      if (order.status === ORDER_STATUS.PAID) {
+        return { received: true, action: 'already_paid', orderId: order.id };
+      }
+      const verifiedOrder = await orderRepository.executePaymentVerificationTransaction({
+        orderId: order.id,
+        userId: order.userId,
+        razorpayPaymentId: rzpPaymentId || `webhook_pay_${Date.now()}`,
+        razorpaySignature: `webhook_verified_${event}`,
+        gatewayResponse: {
+          verifiedAt: new Date().toISOString(),
+          gateway: 'razorpay_webhook',
+          event,
+        },
+      });
+      return { received: true, action: 'marked_paid', orderId: verifiedOrder.id };
+    }
+
+    if (event === 'payment.failed') {
+      if (order.status !== ORDER_STATUS.PAID) {
+        await orderRepository.failOrder(order.id, order.userId, true);
+        return { received: true, action: 'marked_failed', orderId: order.id };
+      }
+    }
+
+    return { received: true, action: 'unhandled_event', event };
   }
 }
 

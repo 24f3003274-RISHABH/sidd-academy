@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllCourses } from '../../api/courseApi';
 import { useAuth } from '../../hooks/useAuth';
-import { formatPrice, getEffectivePrice } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice, resolveMediaUrl } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
 import { FiSearch, FiClock, FiBook, FiStar, FiFilter, FiArrowRight, FiCheckCircle } from 'react-icons/fi';
 
@@ -204,7 +204,7 @@ const CoursesPage = () => {
                     <article key={id} className="course-card card-glass">
                       <div className="course-card-media">
                         <img 
-                          src={course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'} 
+                          src={resolveMediaUrl(course.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'} 
                           alt={course.title} 
                           className="course-card-image"
                         />
@@ -245,7 +245,7 @@ const CoursesPage = () => {
 
                         <div className="course-card-footer">
                           <div>
-                            <span style={{ fontWeight: 800, color: isFree ? '#43e97b' : 'var(--primary)', fontSize: '1.3rem' }}>
+                            <span style={{ fontWeight: 800, color: isFree ? 'var(--accent-dark)' : 'var(--primary)', fontSize: '1.3rem' }}>
                               {priceLabel}
                             </span>
                             {hasDiscount && (

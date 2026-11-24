@@ -106,7 +106,7 @@ const MyNotesPage = () => {
         style={{
           padding: '1rem 1.25rem',
           borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid var(--border)',
           marginBottom: '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
@@ -186,7 +186,7 @@ const MyNotesPage = () => {
             padding: '4rem 2rem',
             textAlign: 'center',
             borderRadius: '16px',
-            border: '1px dashed rgba(255, 255, 255, 0.15)',
+            border: '1px dashed var(--border)',
           }}
         >
           <div
@@ -226,7 +226,7 @@ const MyNotesPage = () => {
               className="card-glass hover-scale"
               style={{
                 borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                border: '1px solid var(--border)',
                 padding: '1.5rem',
                 display: 'flex',
                 flexDirection: 'column',
@@ -240,8 +240,8 @@ const MyNotesPage = () => {
                     fontWeight: 700,
                     padding: '0.25rem 0.6rem',
                     borderRadius: '6px',
-                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                    color: '#10b981',
+                    backgroundColor: 'var(--accent-subtle)',
+                    color: 'var(--accent-dark)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
@@ -270,7 +270,7 @@ const MyNotesPage = () => {
                 )}
               </div>
 
-              <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', gap: '0.5rem' }}>
+              <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: '0.5rem' }}>
                 <button
                   type="button"
                   onClick={() => setPreviewNote(note)}
@@ -316,18 +316,19 @@ const MyNotesPage = () => {
               width: '100%',
               maxWidth: '960px',
               height: '88vh',
-              backgroundColor: '#131728',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-xl)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>{previewNote.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>{previewNote.title}</h3>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -354,7 +355,7 @@ const MyNotesPage = () => {
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#0b0e17' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={getNoteStreamUrl(previewNote)}
                 title={previewNote.title}

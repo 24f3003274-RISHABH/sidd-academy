@@ -185,7 +185,7 @@ export class UserRepository extends AuthRepository {
   async toggleStatus(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           UPDATE users 

@@ -59,8 +59,8 @@ const SubpageQuickNav = () => {
   const { isAuthenticated, user } = useAuth();
   const isAdmin = (user?.role || '').toLowerCase() === 'admin';
 
-  // Hide on root homepage (homepage already has hero + full navbar)
-  if (location.pathname === '/') return null;
+  // Hide on root homepage (homepage already has hero + full navbar) and on classroom video player (which has its own dedicated sticky classroom top bar)
+  if (location.pathname === '/' || /^\/courses\/[^/]+\/watch\/?$/.test(location.pathname)) return null;
 
   return (
     <div

@@ -148,6 +148,34 @@ export class OrderController {
   };
 
   /**
+   * Retry Payment on a Pending / Failed / Cancelled Order
+   * POST /api/v1/orders/:id/retry
+   */
+  retryOrder = async (req, res, next) => {
+    try {
+      const userId = req.user.id || req.user._id;
+      const result = await orderService.retryOrder(req.params.id, userId);
+      return sendSuccess(res, 200, 'Order ready for payment retry', result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Razorpay Server Webhook Endpoint
+   * POST /api/v1/orders/webhook OR POST /api/v1/payments/webhook
+   */
+  handleWebhook = async (req, res, next) => {
+    try {
+      const signature = req.headers['x-razorpay-signature'];
+      const result = await orderService.handleWebhook(req.rawBody || req.body, signature, req.body);
+      return sendSuccess(res, 200, 'Webhook processed', result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * Admin: Get all system orders
    * GET /api/v1/admin/orders
    */

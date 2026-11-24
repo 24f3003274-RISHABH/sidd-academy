@@ -3,6 +3,9 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
+
 /**
  * Chapter Repository - Data Access Layer for Chapters
  */
@@ -13,7 +16,7 @@ export class ChapterRepository {
   async findBySubjectId(subjectId) {
     if (!subjectId) return [];
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(subjectId)) {
       try {
         const sql = `
           SELECT id, subject_id, title, order_num as order_index, created_at, updated_at
@@ -40,7 +43,7 @@ export class ChapterRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `SELECT * FROM chapters WHERE id = $1 LIMIT 1`;
         const res = await query(sql, [id]);
@@ -62,7 +65,7 @@ export class ChapterRepository {
   async create({ subjectId, title, order = 0 }) {
     const id = uuidv4();
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(subjectId)) {
       try {
         const sql = `
           INSERT INTO chapters (id, subject_id, title, order_num, order_index, created_at, updated_at)
@@ -102,7 +105,7 @@ export class ChapterRepository {
    * Update chapter
    */
   async update(id, updates) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
         const values = [id];
@@ -155,7 +158,7 @@ export class ChapterRepository {
    * Delete chapter
    */
   async delete(id) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `DELETE FROM chapters WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);

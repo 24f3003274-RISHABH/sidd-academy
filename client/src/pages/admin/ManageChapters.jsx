@@ -193,7 +193,7 @@ const ManageChapters = () => {
           <div className="table-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Title</th>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Video URL</th>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Actions</th>
@@ -206,7 +206,7 @@ const ManageChapters = () => {
                   chapters.map(chapter => {
                     const chId = chapter.id || chapter._id;
                     return (
-                      <tr key={chId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <tr key={chId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '1rem 0', fontWeight: 600 }}>{chapter.title}</td>
                         <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{chapter.videoUrl ? 'Yes' : 'No'}</td>
                         <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>

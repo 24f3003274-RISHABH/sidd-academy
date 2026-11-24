@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiClock, FiBook, FiStar, FiUsers } from 'react-icons/fi';
-import { formatPrice, getEffectivePrice } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice, resolveMediaUrl } from '../../utils/helpers';
 
 const CourseCard = ({ course }) => {
   const {
@@ -47,7 +47,7 @@ const CourseCard = ({ course }) => {
     >
       <div className="course-card-media">
         <img 
-          src={thumbnail || 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80'} 
+          src={resolveMediaUrl(thumbnail) || 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80'} 
           alt={title}
           className="course-card-image"
         />
@@ -86,7 +86,7 @@ const CourseCard = ({ course }) => {
 
         <div className="course-card-footer" style={{ marginTop: '0.25rem' }}>
           <div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isFreeCourse ? '#43e97b' : 'var(--primary)' }}>
+            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isFreeCourse ? 'var(--accent-dark)' : 'var(--primary)' }}>
               {isFreeCourse ? 'Free' : formatPrice(effectivePrice)}
             </span>
             {hasDiscount && (

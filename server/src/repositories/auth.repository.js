@@ -2,8 +2,23 @@ import { query } from '../config/db.js';
 import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
+import { AppError } from '../utils/apiResponse.js';
 
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+/**
+ * Canonicalize email for duplicate detection (handles Gmail dot-insensitivity so
+ * previously normalized rows and dotted rows resolve consistently).
+ */
+const canonicalizeEmail = (email) => {
+  const clean = String(email || '').toLowerCase().trim();
+  const [local, domain] = clean.split('@');
+  if (!local || !domain) return clean;
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    return `${local.replace(/\./g, '')}@gmail.com`;
+  }
+  return clean;
+};
 
 /**
  * SECURITY-SENSITIVE: Auth Repository
@@ -20,26 +35,38 @@ export class AuthRepository {
   async findByEmail(email) {
     if (!email) return null;
     const cleanEmail = email.toLowerCase().trim();
+    const canonical = canonicalizeEmail(cleanEmail);
 
     if (ENV.DATABASE_URL) {
       try {
         const sql = `
           SELECT id, name, email, password, role, phone, avatar, is_active, last_login, created_at, updated_at
           FROM users 
-          WHERE LOWER(email) = LOWER($1) 
+          WHERE LOWER(email) = LOWER($1)
+             OR LOWER(email) = LOWER($2)
+             OR (
+               SPLIT_PART(LOWER(email), '@', 2) IN ('gmail.com', 'googlemail.com')
+               AND SPLIT_PART(LOWER($1), '@', 2) IN ('gmail.com', 'googlemail.com')
+               AND REPLACE(SPLIT_PART(LOWER(email), '@', 1), '.', '') = REPLACE(SPLIT_PART(LOWER($1), '@', 1), '.', '')
+             )
+          ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
           LIMIT 1
         `;
-        const res = await query(sql, [cleanEmail]);
+        const res = await query(sql, [cleanEmail, canonical]);
         if (res.rows.length > 0) {
           return res.rows[0];
         }
+        return null;
       } catch (err) {
-        // Fallback to memory store if PostgreSQL connection fails
+        // Fallback to memory store only if PostgreSQL connection is unavailable in non-production
         console.warn('AuthRepository findByEmail fallback to mockStore:', err.message);
       }
     }
 
-    const memoryUser = mockData.users.find(u => u.email.toLowerCase() === cleanEmail);
+    const matches = mockData.users.filter(
+      (u) => u.email.toLowerCase() === cleanEmail || canonicalizeEmail(u.email) === canonical
+    );
+    const memoryUser = matches[matches.length - 1];
     if (!memoryUser) return null;
 
     return {
@@ -103,7 +130,7 @@ export class AuthRepository {
   async findByIdWithPassword(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           SELECT id, name, email, password, role, phone, avatar, is_active, last_login, created_at, updated_at
@@ -144,6 +171,7 @@ export class AuthRepository {
   async create(userData) {
     const { name, email, password, phone = '', role = 'student', avatar = '' } = userData;
     const cleanEmail = email.toLowerCase().trim();
+    const canonical = canonicalizeEmail(cleanEmail);
     const id = uuidv4();
 
     if (ENV.DATABASE_URL) {
@@ -158,8 +186,22 @@ export class AuthRepository {
           return res.rows[0];
         }
       } catch (err) {
+        // Never fall back to in-memory store on a unique constraint violation or SQL data error
+        if (err.code === '23505' || /unique constraint|duplicate key/i.test(err.message || '')) {
+          throw new AppError('An account with this email address already exists. Please login.', 400);
+        }
+        if (err.code && (err.code.startsWith('22') || err.code.startsWith('23'))) {
+          throw new AppError('Invalid registration details provided.', 400);
+        }
         console.warn('AuthRepository create user fallback to mockStore:', err.message);
       }
+    }
+
+    const existingInMemory = mockData.users.find(
+      (u) => u.email.toLowerCase() === cleanEmail || canonicalizeEmail(u.email) === canonical
+    );
+    if (existingInMemory) {
+      throw new AppError('An account with this email address already exists. Please login.', 400);
     }
 
     const memoryId = `user_${Date.now()}`;
@@ -188,7 +230,7 @@ export class AuthRepository {
    * Update user profile fields (name, phone, avatar).
    */
   async updateProfile(id, { name, phone, avatar }) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const updates = [];
         const values = [id];
@@ -238,7 +280,7 @@ export class AuthRepository {
    * Update user hashed password.
    */
   async updatePassword(id, hashedPassword) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`;
         await query(sql, [hashedPassword, id]);

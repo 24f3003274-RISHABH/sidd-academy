@@ -33,7 +33,8 @@ export class SubjectService {
    */
   async createSubject(data) {
     const courseId = data.courseId || data.course;
-    if (!courseId || !data.name) {
+    const subjectName = (data.name || data.title || '').trim();
+    if (!courseId || !subjectName) {
       throw new AppError('Course ID and subject name are required', HTTP_STATUS.BAD_REQUEST);
     }
 
@@ -47,7 +48,7 @@ export class SubjectService {
 
     return await subjectRepository.create({
       courseId,
-      name: data.name,
+      name: subjectName,
       order,
     });
   }

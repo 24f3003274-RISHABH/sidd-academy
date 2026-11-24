@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAllBanners, createBanner, updateBanner, deleteBanner } from '../../api/adminApi';
+import { resolveMediaUrl } from '../../utils/helpers';
 import Loader from '../../components/common/Loader';
 import Modal from '../../components/common/Modal';
 import { FiEdit2, FiTrash2, FiPlus, FiCheck, FiX, FiZap } from 'react-icons/fi';
@@ -242,7 +243,7 @@ const ManageBanners = () => {
                   <div>
                     <div style={{ position: 'relative', height: '140px', borderRadius: '6px', overflow: 'hidden', marginBottom: '1rem' }}>
                       <img 
-                        src={banner.imageUrl || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'} 
+                        src={resolveMediaUrl(banner.imageUrl) || 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'} 
                         alt={banner.title} 
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                       />

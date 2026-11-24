@@ -6,7 +6,7 @@ import { getSecureAccess } from '../../api/noteApi';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonDashboard } from '../../components/common/SkeletonLoader';
 import toast from 'react-hot-toast';
-import { formatPrice, getEffectivePrice, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice, resolveMediaUrl, getNoteStreamUrl, getNoteDriveViewUrl, getNoteDownloadUrl } from '../../utils/helpers';
 import {
   FiBook,
   FiFileText,
@@ -217,24 +217,24 @@ const DashboardPage = () => {
           style={{
             padding: '1.5rem',
             borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            border: '1px solid var(--border)',
             marginBottom: '2.5rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '1.25rem',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'var(--bg-card)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
             <img
-              src={continueLearning.thumbnail || 'https://via.placeholder.com/160x100'}
+              src={resolveMediaUrl(continueLearning.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400'}
               alt={continueLearning.title}
               style={{ width: '100px', height: '65px', borderRadius: '10px', objectFit: 'cover' }}
             />
             <div>
-              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: 700, letterSpacing: '0.05em' }}>
                 Continue Where You Left Off
               </div>
               <h3 style={{ fontSize: '1.1rem', margin: '0.2rem 0', fontWeight: 700 }}>
@@ -250,12 +250,12 @@ const DashboardPage = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '220px' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-muted)', borderRadius: '4px', overflow: 'hidden' }}>
                 <div
                   style={{
                     width: `${continueLearning.progressPercentage || 0}%`,
                     height: '100%',
-                    backgroundColor: 'var(--accent)',
+                    backgroundColor: 'var(--primary)',
                     borderRadius: '4px',
                     transition: 'width 0.4s ease',
                   }}
@@ -279,9 +279,9 @@ const DashboardPage = () => {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiBook style={{ color: 'var(--accent)' }} /> Enrolled Courses
+              <FiBook style={{ color: 'var(--primary)' }} /> Enrolled Courses
             </h2>
-            <Link to="/student/my-courses" style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/student/my-courses" style={{ color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
               View All ({enrolledCourses.length})
             </Link>
           </div>
@@ -293,7 +293,7 @@ const DashboardPage = () => {
                 padding: '2.5rem 1.5rem',
                 textAlign: 'center',
                 borderRadius: '16px',
-                border: '1px dashed rgba(255, 255, 255, 0.15)',
+                border: '1px dashed var(--border)',
               }}
             >
               <FiBook size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
@@ -314,7 +314,7 @@ const DashboardPage = () => {
                   style={{
                     padding: '1.25rem',
                     borderRadius: '14px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    border: '1px solid var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
@@ -322,7 +322,7 @@ const DashboardPage = () => {
                 >
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <img
-                      src={course.thumbnail || 'https://via.placeholder.com/120x80'}
+                      src={resolveMediaUrl(course.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300'}
                       alt={course.title}
                       style={{ width: '80px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
                     />
@@ -341,12 +341,12 @@ const DashboardPage = () => {
                     <span>{course.completedLessons || 0}/{course.totalLessons || 12} Lessons</span>
                   </div>
 
-                  <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-muted)', borderRadius: '3px', overflow: 'hidden' }}>
                     <div
                       style={{
                         width: `${course.progressPercentage || 0}%`,
                         height: '100%',
-                        backgroundColor: course.progressPercentage === 100 ? '#10b981' : 'var(--accent)',
+                        backgroundColor: course.progressPercentage === 100 ? '#10b981' : 'var(--primary)',
                         borderRadius: '3px',
                       }}
                     />
@@ -385,7 +385,7 @@ const DashboardPage = () => {
                 padding: '2.5rem 1.5rem',
                 textAlign: 'center',
                 borderRadius: '16px',
-                border: '1px dashed rgba(255, 255, 255, 0.15)',
+                border: '1px dashed var(--border)',
               }}
             >
               <FiFileText size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
@@ -406,7 +406,7 @@ const DashboardPage = () => {
                   style={{
                     padding: '1.25rem',
                     borderRadius: '14px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    border: '1px solid var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
@@ -478,14 +478,14 @@ const DashboardPage = () => {
                 style={{
                   padding: '1.25rem',
                   borderRadius: '14px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid var(--border)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '0.75rem',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
                     {cls.subjectName}
                   </span>
                   {cls.isCompleted ? (
@@ -522,9 +522,9 @@ const DashboardPage = () => {
         <div style={{ marginBottom: '2.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiCompass style={{ color: 'var(--accent)' }} /> Explore Available Courses
+              <FiCompass style={{ color: 'var(--primary)' }} /> Explore Available Courses
             </h2>
-            <Link to="/courses" style={{ color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/courses" style={{ color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>
               Browse Full Catalog
             </Link>
           </div>
@@ -536,20 +536,20 @@ const DashboardPage = () => {
                 className="card-glass hover-scale"
                 style={{
                   borderRadius: '14px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid var(--border)',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
                 }}
               >
                 <img
-                  src={c.thumbnail || 'https://via.placeholder.com/300x160'}
+                  src={resolveMediaUrl(c.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400'}
                   alt={c.title}
                   style={{ width: '100%', height: '130px', objectFit: 'cover' }}
                 />
                 <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>{c.level}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{c.level}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', color: '#f59e0b' }}>
                       <FiStar size={12} fill="#f59e0b" /> {c.rating || '4.9'}
                     </span>
@@ -559,10 +559,10 @@ const DashboardPage = () => {
                     {c.title}
                   </h4>
 
-                  <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       {c.isFree ? (
-                        <span style={{ fontWeight: 800, color: '#10b981' }}>FREE</span>
+                        <span style={{ fontWeight: 800, color: 'var(--accent-dark)' }}>FREE</span>
                       ) : (
                         <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{formatPrice(getEffectivePrice(c))}</span>
                       )}
@@ -581,9 +581,9 @@ const DashboardPage = () => {
       {/* 6. RECENT ACTIVITY & PROFILE SUMMARY FOOTER */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         {/* Activity Feed */}
-        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FiActivity style={{ color: 'var(--accent)' }} /> Recent Activity
+            <FiActivity style={{ color: 'var(--primary)' }} /> Recent Activity
           </h3>
           {recentActivities.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No recent activity logged.</p>
@@ -596,8 +596,8 @@ const DashboardPage = () => {
                       width: '28px',
                       height: '28px',
                       borderRadius: '50%',
-                      backgroundColor: act.badge === 'Course' ? 'rgba(108, 99, 255, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                      color: act.badge === 'Course' ? 'var(--accent)' : '#10b981',
+                      backgroundColor: act.badge === 'Course' ? 'var(--primary-subtle)' : 'var(--accent-subtle)',
+                      color: act.badge === 'Course' ? 'var(--primary)' : 'var(--accent-dark)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -618,9 +618,9 @@ const DashboardPage = () => {
         </div>
 
         {/* Profile Card */}
-        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <div className="card-glass" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border)' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FiUser style={{ color: 'var(--accent)' }} /> Student Profile
+            <FiUser style={{ color: 'var(--primary)' }} /> Student Profile
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
             <div
@@ -628,8 +628,8 @@ const DashboardPage = () => {
                 width: '52px',
                 height: '52px',
                 borderRadius: '50%',
-                backgroundColor: 'rgba(108, 99, 255, 0.2)',
-                color: 'var(--accent)',
+                backgroundColor: 'var(--primary-subtle)',
+                color: 'var(--primary-dark)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -646,7 +646,7 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status: Active Student</span>
             <Link to="/student/profile" className="btn btn-sm btn-outline">
               Edit Profile
@@ -677,18 +677,19 @@ const DashboardPage = () => {
               width: '100%',
               maxWidth: '900px',
               height: '85vh',
-              backgroundColor: '#131728',
+              backgroundColor: 'var(--bg-card)',
               borderRadius: '16px',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-xl)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>{previewNote.title}</h3>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{previewNote.title}</h3>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Subject: {previewNote.subjectName}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -715,7 +716,7 @@ const DashboardPage = () => {
                 </button>
               </div>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#0b0e17' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-muted)' }}>
               <iframe
                 src={getNoteStreamUrl(previewNote)}
                 title={previewNote.title}

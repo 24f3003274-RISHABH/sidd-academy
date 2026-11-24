@@ -35,6 +35,9 @@ initDB();
 
 export const app = express();
 
+// Trust first reverse proxy hop (Render / Cloudflare / Vercel) for accurate client IPs in rate-limiting and secure cookies
+app.set('trust proxy', 1);
+
 /**
  * WHY: CORS Configuration
  * Moved to the absolute top of the middleware chain to catch preflight requests early.
@@ -44,7 +47,14 @@ const parseAllowedOrigins = () => {
   if (!ENV.CORS_ORIGIN || ENV.CORS_ORIGIN === '*') {
     return null;
   }
-  return ENV.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/$/, ''));
+  const origins = ENV.CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
+  if (ENV.CLIENT_URL) {
+    const clientOrigin = ENV.CLIENT_URL.trim().replace(/\/$/, '');
+    if (clientOrigin && !origins.includes(clientOrigin)) {
+      origins.push(clientOrigin);
+    }
+  }
+  return origins;
 };
 
 const allowedOrigins = parseAllowedOrigins();
@@ -86,7 +96,14 @@ app.use((req, res, next) => {
  * WHY: Body Parsers & Cookie Processing
  * Placed directly below the CORS configuration pipeline.
  */
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+      req.rawBody = buf.toString('utf8');
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 

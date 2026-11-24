@@ -62,7 +62,7 @@ const Footer = () => {
       </div>
 
       <div className="container" style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-        <div>&copy; {new Date().getFullYear()} Sidd Academy. All rights reserved. (PERN Stack)</div>
+        <div>&copy; {new Date().getFullYear()} Sidd Academy Prayagraj. All rights reserved.</div>
         <div style={{ display: 'flex', gap: '1.5rem' }}>
           <span>Privacy Policy</span>
           <span>Terms of Service</span>

@@ -28,7 +28,7 @@ import {
   FiPlay,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { formatPrice, getEffectivePrice, getNoteDriveViewUrl } from '../../utils/helpers';
+import { formatPrice, getEffectivePrice, getNoteDriveViewUrl, resolveMediaUrl } from '../../utils/helpers';
 
 const OFFICIAL_CHANNEL_PLAYLISTS = [
   { id: 'PLKsilHHi-1ZQ', title: 'Class 12 Chemistry — CHEMICAL KINETICS (रासायनिक बलगतिकी)', level: 'Class 12', subject: 'Class 12 Chemistry' },
@@ -487,7 +487,7 @@ const ManageCourses = () => {
         <div className="table-wrapper">
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Course</th>
                 <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Instructor</th>
                 <th style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>Level</th>
@@ -506,12 +506,12 @@ const ManageCourses = () => {
                 courses.map((course) => {
                   const cId = course.id || course._id;
                   return (
-                    <tr key={cId} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr key={cId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       <td style={{ padding: '1rem 0.5rem', fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                           {course.thumbnail && (
                             <img
-                              src={course.thumbnail}
+                              src={resolveMediaUrl(course.thumbnail)}
                               alt={course.title}
                               style={{ width: '56px', height: '36px', objectFit: 'cover', borderRadius: '6px' }}
                             />

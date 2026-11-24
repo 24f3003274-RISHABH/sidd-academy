@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getStudentCourses } from '../../api/studentApi';
+import { resolveMediaUrl } from '../../utils/helpers';
 import StudentLayout from '../../components/student/StudentLayout';
 import { SkeletonCard } from '../../components/common/SkeletonLoader';
 import {
@@ -79,7 +80,7 @@ const MyCoursesPage = () => {
         style={{
           padding: '1rem 1.25rem',
           borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid var(--border)',
           marginBottom: '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
@@ -164,7 +165,7 @@ const MyCoursesPage = () => {
             padding: '4rem 2rem',
             textAlign: 'center',
             borderRadius: '16px',
-            border: '1px dashed rgba(255, 255, 255, 0.15)',
+            border: '1px dashed var(--border)',
           }}
         >
           <div
@@ -228,7 +229,7 @@ const MyCoursesPage = () => {
                 className="card-glass hover-scale"
                 style={{
                   borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid var(--border)',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
@@ -237,7 +238,7 @@ const MyCoursesPage = () => {
                 {/* Thumbnail with overlay badge */}
                 <div style={{ position: 'relative', height: '170px' }}>
                   <img
-                    src={course.thumbnail || 'https://via.placeholder.com/400x220'}
+                    src={resolveMediaUrl(course.thumbnail) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'}
                     alt={course.title}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
@@ -248,11 +249,11 @@ const MyCoursesPage = () => {
                       left: '12px',
                       padding: '0.25rem 0.6rem',
                       borderRadius: '6px',
-                      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                      backgroundColor: 'rgba(15, 23, 42, 0.85)',
                       backdropFilter: 'blur(4px)',
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      color: 'var(--accent)',
+                      color: '#fff',
                     }}
                   >
                     {course.level || 'Class 12'}
@@ -299,13 +300,13 @@ const MyCoursesPage = () => {
                       alignItems: 'center',
                       padding: '0.6rem 0.85rem',
                       borderRadius: '8px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                      backgroundColor: 'var(--bg-muted)',
                       fontSize: '0.8rem',
                       color: 'var(--text-muted)',
                     }}
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <FiLayers color="var(--accent)" /> {course.totalSubjects || 1} Subject(s)
+                      <FiLayers color="var(--primary)" /> {course.totalSubjects || 1} Subject(s)
                     </span>
                     <span>•</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -317,16 +318,16 @@ const MyCoursesPage = () => {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Syllabus Completion</span>
-                      <span style={{ fontWeight: 700, color: isCompleted ? '#10b981' : 'var(--accent)' }}>
+                      <span style={{ fontWeight: 700, color: isCompleted ? 'var(--accent-dark)' : 'var(--primary)' }}>
                         {course.progressPercentage || 0}%
                       </span>
                     </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-muted)', borderRadius: '4px', overflow: 'hidden' }}>
                       <div
                         style={{
                           width: `${course.progressPercentage || 0}%`,
                           height: '100%',
-                          backgroundColor: isCompleted ? '#10b981' : 'var(--accent)',
+                          backgroundColor: isCompleted ? '#10b981' : 'var(--primary)',
                           borderRadius: '4px',
                           transition: 'width 0.4s ease',
                         }}

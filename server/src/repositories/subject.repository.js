@@ -3,6 +3,9 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
+
 /**
  * Subject Repository - Data Access Layer for Academic Subjects
  */
@@ -67,7 +70,7 @@ export class SubjectRepository {
     const id = uuidv4();
     const subjectName = (name || title || '').trim();
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(courseId)) {
       try {
         const sql = `
           INSERT INTO subjects (id, course_id, title, name, order_num, order_index, created_at, updated_at)
@@ -107,7 +110,7 @@ export class SubjectRepository {
    * Update subject
    */
   async update(id, updates) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
         const values = [id];
@@ -168,7 +171,7 @@ export class SubjectRepository {
    * Delete subject
    */
   async delete(id) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `DELETE FROM subjects WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);

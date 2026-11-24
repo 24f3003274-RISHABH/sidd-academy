@@ -1,5 +1,6 @@
 import express from 'express';
 import { checkDatabaseHealth } from '../config/db.js';
+import { paymentGatewayService } from '../services/paymentGateway.service.js';
 import ENV from '../config/env.js';
 
 const router = express.Router();
@@ -30,6 +31,10 @@ router.get('/', async (req, res) => {
       connected: Boolean(dbHealth.isConnected),
       latencyMs: dbHealth.latencyMs ?? null,
       ...(safeError && { error: safeError }),
+    },
+    paymentGateway: {
+      configured: paymentGatewayService.isConfigured(),
+      mode: paymentGatewayService.getMode(),
     },
   });
 });

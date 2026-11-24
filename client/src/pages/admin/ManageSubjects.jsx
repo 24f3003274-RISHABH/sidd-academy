@@ -153,7 +153,7 @@ const ManageSubjects = () => {
           <div className="table-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Name</th>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Description</th>
                   <th style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>Actions</th>
@@ -166,7 +166,7 @@ const ManageSubjects = () => {
                   subjects.map(subject => {
                     const sId = subject.id || subject._id;
                     return (
-                      <tr key={sId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <tr key={sId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '1rem 0', fontWeight: 600 }}>{subject.name || subject.title}</td>
                         <td style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>{subject.description ? `${subject.description.substring(0, 60)}...` : '—'}</td>
                         <td style={{ padding: '1rem 0', display: 'flex', gap: '0.5rem' }}>

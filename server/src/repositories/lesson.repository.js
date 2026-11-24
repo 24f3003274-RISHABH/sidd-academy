@@ -3,6 +3,9 @@ import { mockData } from '../data/mockStore.js';
 import ENV from '../config/env.js';
 import { v4 as uuidv4 } from 'uuid';
 
+const isUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || ''));
+
 /**
  * Lesson / Daily Class Repository - Data Access Layer for Lessons
  */
@@ -13,7 +16,7 @@ export class LessonRepository {
   async findByChapterId(chapterId) {
     if (!chapterId) return [];
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(chapterId)) {
       try {
         const sql = `
           SELECT l.id, l.chapter_id, l.title, l.description, l.class_date, l.duration, l.class_number, l.is_free, l.is_protected, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
@@ -42,7 +45,7 @@ export class LessonRepository {
   async findById(id) {
     if (!id) return null;
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `
           SELECT l.id, l.chapter_id, l.title, l.description, l.class_date, l.duration, l.class_number, l.is_free, l.is_protected, l.order_num as order_index, false as is_live, l.created_at, l.updated_at,
@@ -74,7 +77,7 @@ export class LessonRepository {
     const ord = Number(order) || 0;
     const durationVal = typeof duration === 'string' && duration.includes(':') ? duration : (Number(duration) || 60);
 
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(chapterId)) {
       try {
         const sql = `
           INSERT INTO lessons (id, chapter_id, title, description, class_date, class_number, duration, order_num, order_index, is_free, is_protected, created_at, updated_at)
@@ -135,7 +138,7 @@ export class LessonRepository {
    * Update lesson
    */
   async update(id, updates) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const fields = [];
         const values = [id];
@@ -149,13 +152,18 @@ export class LessonRepository {
           fields.push(`description = $${pIndex++}`);
           values.push(String(updates.description ?? updates.content ?? '').trim());
         }
-        if (updates.classDate !== undefined) {
+        if (updates.classDate && !Number.isNaN(new Date(updates.classDate).getTime())) {
           fields.push(`class_date = $${pIndex++}`);
           values.push(new Date(updates.classDate).toISOString());
         }
         if (updates.duration !== undefined) {
+          const rawDur = updates.duration;
+          const durStr =
+            typeof rawDur === 'string' && rawDur.includes(':')
+              ? rawDur.trim()
+              : `${Number(rawDur) || 60} mins`;
           fields.push(`duration = $${pIndex++}`);
-          values.push(`${Number(updates.duration)} mins`);
+          values.push(durStr);
         }
         if (updates.order !== undefined || updates.order_index !== undefined || updates.orderNum !== undefined) {
           const ord = Number(updates.order ?? updates.order_index ?? updates.orderNum);
@@ -210,8 +218,15 @@ export class LessonRepository {
 
     if (updates.title !== undefined) dc.title = updates.title.trim();
     if (updates.description !== undefined || updates.content !== undefined) dc.description = String(updates.description ?? updates.content ?? '').trim();
-    if (updates.classDate !== undefined) dc.classDate = new Date(updates.classDate).toISOString();
-    if (updates.duration !== undefined) dc.duration = Number(updates.duration);
+    if (updates.classDate && !Number.isNaN(new Date(updates.classDate).getTime())) {
+      dc.classDate = new Date(updates.classDate).toISOString();
+    }
+    if (updates.duration !== undefined) {
+      dc.duration =
+        typeof updates.duration === 'string' && updates.duration.includes(':')
+          ? updates.duration.trim()
+          : Number(updates.duration) || 60;
+    }
     if (updates.order !== undefined) dc.order = Number(updates.order);
     if (updates.isLive !== undefined) dc.isLive = Boolean(updates.isLive);
     if (updates.classNumber !== undefined) dc.classNumber = Number(updates.classNumber) || 1;
@@ -237,7 +252,7 @@ export class LessonRepository {
    * Delete lesson
    */
   async delete(id) {
-    if (ENV.DATABASE_URL) {
+    if (ENV.DATABASE_URL && isUuid(id)) {
       try {
         const sql = `DELETE FROM lessons WHERE id = $1 RETURNING id`;
         const res = await query(sql, [id]);
@@ -259,8 +274,14 @@ export class LessonRepository {
     if (!l) return null;
     const id = l.id || l._id;
     const chapterId = l.chapter_id || l.chapterId || l.chapter;
-    const rawDuration = l.duration !== undefined ? l.duration : 60;
+    const rawDuration = l.duration !== undefined && l.duration !== null ? l.duration : 60;
     const parsedDuration = Number.parseInt(rawDuration, 10);
+    const normalizedDuration =
+      typeof rawDuration === 'string' && rawDuration.includes(':')
+        ? rawDuration.trim()
+        : Number.isFinite(parsedDuration)
+        ? parsedDuration
+        : 60;
     return {
       id,
       _id: id,
@@ -271,7 +292,7 @@ export class LessonRepository {
       content: l.description || l.content || '',
       classNumber: l.class_number !== undefined ? Number(l.class_number) : (l.classNumber !== undefined ? Number(l.classNumber) : 1),
       classDate: l.class_date || l.classDate || new Date().toISOString(),
-      duration: Number.isFinite(parsedDuration) ? parsedDuration : 60,
+      duration: normalizedDuration,
       order: l.order_index !== undefined ? Number(l.order_index) : (l.order !== undefined ? Number(l.order) : 0),
       order_index: l.order_index !== undefined ? Number(l.order_index) : (l.order !== undefined ? Number(l.order) : 0),
       isLive: l.is_live !== undefined ? Boolean(l.is_live) : (l.isLive !== undefined ? Boolean(l.isLive) : false),
